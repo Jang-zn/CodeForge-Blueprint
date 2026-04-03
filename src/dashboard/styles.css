@@ -304,9 +304,9 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 
 /* === Init 화면 === */
 .init-screen {
-  max-width: 720px;
-  margin: 40px auto;
-  padding: 0 24px;
+  max-width: 100%;
+  margin: 24px 0;
+  padding: 0;
 }
 .init-screen h2 { font-size: 22px; margin-bottom: 8px; }
 .init-screen .subtitle { color: var(--text-secondary); margin-bottom: 32px; }

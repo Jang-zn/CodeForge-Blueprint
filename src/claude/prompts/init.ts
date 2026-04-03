@@ -2,29 +2,51 @@ export interface InitFormData {
   projectName: string;
   tagline: string;
   serviceType: string;
+  deployTargets: string[];
   targets: string[];
   revenues: string[];
   features: string[];
   feTech: string[];
   beTech: string[];
-  dbTech: string[];
+  storageTech: string[];
   detail: string;
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
-  web: '웹 서비스',
-  mobile: '모바일 앱',
-  desktop: '데스크톱 프로그램',
-  cli: 'CLI 도구',
-  api: 'API 서비스',
-  extension: '브라우저 확장',
+  'web-fullstack': '웹 서비스 (풀스택)',
+  'web-frontend': '웹 서비스 (FE 단독 — 서버 없음)',
+  'pwa': 'PWA (Progressive Web App)',
+  'mobile': '모바일 앱 (iOS + Android)',
+  'ios': 'iOS 앱',
+  'android': 'Android 앱',
+  'desktop': '데스크톱 앱',
+  'cli': 'CLI / 터미널 도구',
+  'script': '스크립트 / 매크로',
+  'api': 'API / 백엔드 단독',
+  'extension': '브라우저 확장',
+  'sdk': 'SDK / 라이브러리',
+  'game': '게임',
+  'unknown': '미정',
+};
+
+const DEPLOY_TARGET_LABELS: Record<string, string> = {
+  'web-browser': '웹 브라우저 (OS 무관)',
+  'ios': 'iOS',
+  'android': 'Android',
+  'windows': 'Windows',
+  'macos': 'macOS',
+  'linux': 'Linux',
+  'cross-platform': '크로스 플랫폼',
+  'server-only': '서버 전용',
+  'unknown': '미정',
 };
 
 const TARGET_LABELS: Record<string, string> = {
   b2c: '일반 소비자 (B2C)',
-  b2b: '기업 (B2B)',
+  b2b: '기업 고객 (B2B)',
   developer: '개발자',
   internal: '내부 운영용',
+  personal: '개인 도구 (혼자 사용)',
 };
 
 const REVENUE_LABELS: Record<string, string> = {
@@ -34,6 +56,8 @@ const REVENUE_LABELS: Record<string, string> = {
   ads: '광고 기반',
   commission: '커미션/수수료',
   opensource: '오픈소스 (무료)',
+  donation: '기부/후원',
+  undecided: '미정',
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -46,6 +70,56 @@ const FEATURE_LABELS: Record<string, string> = {
   ai: 'AI/자동화',
   files: '파일/미디어 관리',
   scheduling: '일정/예약',
+  auth: '인증/보안',
+  location: '위치/지도',
+  settings: '설정/개인화',
+  offline: '오프라인 지원',
+};
+
+const STORAGE_LABELS: Record<string, string> = {
+  localstorage: 'LocalStorage / SessionStorage',
+  indexeddb: 'IndexedDB',
+  filesystem: '파일 시스템',
+  'sqlite-local': 'SQLite (로컬)',
+  postgresql: 'PostgreSQL',
+  mysql: 'MySQL',
+  mongodb: 'MongoDB',
+  redis: 'Redis',
+  firebase: 'Firebase / Firestore',
+  supabase: 'Supabase',
+  'no-storage': '저장소 불필요',
+  'storage-unknown': '미정',
+};
+
+const FE_TECH_LABELS: Record<string, string> = {
+  react: 'React / Next.js',
+  vue: 'Vue / Nuxt',
+  svelte: 'Svelte / SvelteKit',
+  angular: 'Angular',
+  vanilla: 'Vanilla JS / HTML',
+  flutter: 'Flutter',
+  swift: 'Swift / SwiftUI',
+  kotlin: 'Kotlin / Jetpack Compose',
+  'react-native': 'React Native',
+  electron: 'Electron',
+  tauri: 'Tauri',
+  'fe-unknown': '미정',
+};
+
+const BE_TECH_LABELS: Record<string, string> = {
+  'no-backend': '백엔드 없음 (FE 단독)',
+  nodejs: 'Node.js / Express',
+  fastify: 'Node.js / Fastify',
+  python: 'Python / FastAPI',
+  django: 'Python / Django',
+  java: 'Java / Spring',
+  go: 'Go',
+  rust: 'Rust',
+  dotnet: '.NET / C#',
+  ruby: 'Ruby on Rails',
+  php: 'PHP / Laravel',
+  serverless: 'Serverless (Lambda 등)',
+  'be-unknown': '미정',
 };
 
 function labels(map: Record<string, string>, keys: string[]): string {
@@ -53,6 +127,23 @@ function labels(map: Record<string, string>, keys: string[]): string {
 }
 
 export function buildInitPrompt(data: InitFormData): string {
+  const noBackend = data.beTech.includes('no-backend') || data.serviceType === 'web-frontend';
+  const isClientOnly = noBackend || ['cli', 'script', 'sdk'].includes(data.serviceType);
+
+  const techSection = isClientOnly
+    ? `**클라이언트 기술**: ${labels(FE_TECH_LABELS, data.feTech)}
+**데이터 저장 방식**: ${labels(STORAGE_LABELS, data.storageTech)}
+**백엔드**: 없음 (클라이언트 단독 동작)`
+    : `**프론트엔드 기술**: ${labels(FE_TECH_LABELS, data.feTech)}
+**백엔드 기술**: ${labels(BE_TECH_LABELS, data.beTech.filter(t => t !== 'no-backend'))}
+**데이터 저장소**: ${labels(STORAGE_LABELS, data.storageTech)}`;
+
+  const techStackSection = isClientOnly
+    ? `## 6. 기술 스택 (안)
+[클라이언트 기술 스택 및 데이터 저장 전략 — LocalStorage/IndexedDB/파일시스템 등 로컬 저장 방식 포함]`
+    : `## 6. 기술 스택 (안)
+[선택한 기술 스택 및 선택 이유 — 프론트엔드, 백엔드, DB 각각 기술하고 배포 대상 OS/환경 고려사항 포함]`;
+
   return `당신은 시니어 프로덕트 매니저입니다. 아래 서비스 아이디어를 바탕으로 구조화된 PRD(Product Requirements Document) 초안을 작성하세요.
 
 ## 입력 정보
@@ -60,12 +151,11 @@ export function buildInitPrompt(data: InitFormData): string {
 **프로젝트명**: ${data.projectName || '미정'}
 **서비스 한 줄 설명**: ${data.tagline || '미작성'}
 **서비스 유형**: ${(SERVICE_TYPE_LABELS[data.serviceType] ?? data.serviceType) || '미선택'}
+**배포 대상**: ${labels(DEPLOY_TARGET_LABELS, data.deployTargets)}
 **주요 사용자**: ${labels(TARGET_LABELS, data.targets)}
 **수익 모델**: ${labels(REVENUE_LABELS, data.revenues)}
 **핵심 기능 영역**: ${labels(FEATURE_LABELS, data.features)}
-**프론트엔드 기술**: ${data.feTech.join(', ') || '미정'}
-**백엔드 기술**: ${data.beTech.join(', ') || '미정'}
-**데이터베이스**: ${data.dbTech.join(', ') || '미정'}
+${techSection}
 
 **상세 기획**:
 ${data.detail}
@@ -73,6 +163,8 @@ ${data.detail}
 ## PRD 작성 지침
 
 아래 구조로 PRD 마크다운 문서를 작성하세요. 각 섹션은 입력 정보를 바탕으로 구체적으로 작성하되, 불명확한 부분은 TBD로 표시하세요.
+배포 대상 OS/플랫폼이 여러 개인 경우 플랫폼별 차이점(UI/UX, 권한, 배포 방식 등)을 제약 사항에 반영하세요.
+${isClientOnly ? '백엔드가 없는 클라이언트 단독 서비스이므로 로컬 데이터 관리, 오프라인 지원, 보안(클라이언트 사이드) 등을 기술하세요.' : ''}
 
 \`\`\`markdown
 # ${data.projectName || '프로젝트명'} PRD v0.1.0
@@ -107,13 +199,15 @@ ${data.detail}
 ## 5. 수익 모델
 [구체적인 과금 구조, 무료/유료 경계, 가격 정책]
 
-## 6. 기술 스택 (안)
-[선택한 기술 스택 및 선택 이유]
+${techStackSection}
 
-## 7. 제약 사항 및 리스크
-[기술적/비즈니스적 제약, 주요 리스크]
+## 7. 배포 및 운영 환경
+[배포 대상 OS/플랫폼별 고려사항, 설치/배포 방식, 업데이트 전략]
 
-## 8. 성공 지표 (KPI)
+## 8. 제약 사항 및 리스크
+[기술적/비즈니스적 제약, 플랫폼별 제한사항, 주요 리스크]
+
+## 9. 성공 지표 (KPI)
 [서비스 성공을 측정할 핵심 지표]
 \`\`\`
 

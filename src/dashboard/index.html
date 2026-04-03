@@ -69,33 +69,60 @@
     <br><br>
     <label>서비스 유형</label>
     <div class="init-option-group" id="service-type">
-      <label><input type="radio" name="service-type" value="web"> <span>웹 서비스</span></label>
-      <label><input type="radio" name="service-type" value="mobile"> <span>모바일 앱</span></label>
-      <label><input type="radio" name="service-type" value="desktop"> <span>데스크톱 프로그램</span></label>
-      <label><input type="radio" name="service-type" value="cli"> <span>CLI 도구</span></label>
-      <label><input type="radio" name="service-type" value="api"> <span>API 서비스</span></label>
+      <label><input type="radio" name="service-type" value="web-fullstack"> <span>웹 서비스 (풀스택)</span></label>
+      <label><input type="radio" name="service-type" value="web-frontend"> <span>웹 서비스 (FE 단독)</span></label>
+      <label><input type="radio" name="service-type" value="pwa"> <span>PWA</span></label>
+      <label><input type="radio" name="service-type" value="mobile"> <span>모바일 앱 (iOS+Android)</span></label>
+      <label><input type="radio" name="service-type" value="ios"> <span>iOS 앱</span></label>
+      <label><input type="radio" name="service-type" value="android"> <span>Android 앱</span></label>
+      <label><input type="radio" name="service-type" value="desktop"> <span>데스크톱 앱</span></label>
+      <label><input type="radio" name="service-type" value="cli"> <span>CLI / 터미널 도구</span></label>
+      <label><input type="radio" name="service-type" value="script"> <span>스크립트 / 매크로</span></label>
+      <label><input type="radio" name="service-type" value="api"> <span>API / 백엔드 단독</span></label>
       <label><input type="radio" name="service-type" value="extension"> <span>브라우저 확장</span></label>
+      <label><input type="radio" name="service-type" value="sdk"> <span>SDK / 라이브러리</span></label>
+      <label><input type="radio" name="service-type" value="game"> <span>게임</span></label>
+      <label><input type="radio" name="service-type" value="unknown"> <span>잘 모름</span></label>
     </div>
   </div>
 
-  <!-- Step 2: 서비스 성격 -->
+  <!-- Step 2: 배포 환경 -->
+  <div class="init-step">
+    <h3>배포 대상 <small style="font-weight:normal;color:#9ca3af">(복수 선택 가능)</small></h3>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="deploy-target" value="web-browser"> <span>웹 브라우저 (OS 무관)</span></label>
+      <label><input type="checkbox" name="deploy-target" value="ios"> <span>iOS</span></label>
+      <label><input type="checkbox" name="deploy-target" value="android"> <span>Android</span></label>
+      <label><input type="checkbox" name="deploy-target" value="windows"> <span>Windows</span></label>
+      <label><input type="checkbox" name="deploy-target" value="macos"> <span>macOS</span></label>
+      <label><input type="checkbox" name="deploy-target" value="linux"> <span>Linux</span></label>
+      <label><input type="checkbox" name="deploy-target" value="cross-platform"> <span>크로스 플랫폼</span></label>
+      <label><input type="checkbox" name="deploy-target" value="server-only"> <span>서버 전용</span></label>
+      <label><input type="checkbox" name="deploy-target" value="unknown"> <span>잘 모름</span></label>
+    </div>
+  </div>
+
+  <!-- Step 3: 서비스 성격 -->
   <div class="init-step">
     <h3>서비스 성격</h3>
     <label>주요 사용자</label>
     <div class="init-option-group">
       <label><input type="checkbox" name="target" value="b2c"> <span>일반 소비자 (B2C)</span></label>
-      <label><input type="checkbox" name="target" value="b2b"> <span>기업 (B2B)</span></label>
+      <label><input type="checkbox" name="target" value="b2b"> <span>기업 고객 (B2B)</span></label>
       <label><input type="checkbox" name="target" value="developer"> <span>개발자</span></label>
       <label><input type="checkbox" name="target" value="internal"> <span>내부 운영용</span></label>
+      <label><input type="checkbox" name="target" value="personal"> <span>개인 도구 (혼자 사용)</span></label>
     </div>
     <label>수익 모델</label>
     <div class="init-option-group">
-      <label><input type="checkbox" name="revenue" value="freemium"> <span>프리미엄</span></label>
+      <label><input type="checkbox" name="revenue" value="freemium"> <span>프리미엄 (무료+유료)</span></label>
       <label><input type="checkbox" name="revenue" value="subscription"> <span>구독제</span></label>
       <label><input type="checkbox" name="revenue" value="onetime"> <span>일회성 결제</span></label>
       <label><input type="checkbox" name="revenue" value="ads"> <span>광고 기반</span></label>
       <label><input type="checkbox" name="revenue" value="commission"> <span>커미션/수수료</span></label>
       <label><input type="checkbox" name="revenue" value="opensource"> <span>오픈소스 (무료)</span></label>
+      <label><input type="checkbox" name="revenue" value="donation"> <span>기부/후원</span></label>
+      <label><input type="checkbox" name="revenue" value="undecided"> <span>미정 / 잘 모름</span></label>
     </div>
     <label>핵심 기능 영역</label>
     <div class="init-option-group">
@@ -108,39 +135,65 @@
       <label><input type="checkbox" name="feature" value="ai"> <span>AI/자동화</span></label>
       <label><input type="checkbox" name="feature" value="files"> <span>파일/미디어 관리</span></label>
       <label><input type="checkbox" name="feature" value="scheduling"> <span>일정/예약</span></label>
+      <label><input type="checkbox" name="feature" value="auth"> <span>인증/보안</span></label>
+      <label><input type="checkbox" name="feature" value="location"> <span>위치/지도</span></label>
+      <label><input type="checkbox" name="feature" value="settings"> <span>설정/개인화</span></label>
+      <label><input type="checkbox" name="feature" value="offline"> <span>오프라인 지원</span></label>
     </div>
   </div>
 
-  <!-- Step 3: 기술 스택 (선택) -->
+  <!-- Step 4: 기술 선호도 (선택) -->
   <div class="init-step">
     <h3>기술 선호도 <small style="font-weight:normal;color:#9ca3af">(선택사항)</small></h3>
-    <label>프론트엔드</label>
+    <label>프론트엔드 / 클라이언트</label>
     <div class="init-option-group">
-      <label><input type="checkbox" name="fe-tech" value="react"> <span>React/Next.js</span></label>
-      <label><input type="checkbox" name="fe-tech" value="vue"> <span>Vue/Nuxt</span></label>
+      <label><input type="checkbox" name="fe-tech" value="react"> <span>React / Next.js</span></label>
+      <label><input type="checkbox" name="fe-tech" value="vue"> <span>Vue / Nuxt</span></label>
+      <label><input type="checkbox" name="fe-tech" value="svelte"> <span>Svelte / SvelteKit</span></label>
+      <label><input type="checkbox" name="fe-tech" value="angular"> <span>Angular</span></label>
+      <label><input type="checkbox" name="fe-tech" value="vanilla"> <span>Vanilla JS / HTML</span></label>
       <label><input type="checkbox" name="fe-tech" value="flutter"> <span>Flutter</span></label>
-      <label><input type="checkbox" name="fe-tech" value="swift"> <span>Swift (iOS)</span></label>
-      <label><input type="checkbox" name="fe-tech" value="kotlin"> <span>Kotlin (Android)</span></label>
+      <label><input type="checkbox" name="fe-tech" value="swift"> <span>Swift / SwiftUI</span></label>
+      <label><input type="checkbox" name="fe-tech" value="kotlin"> <span>Kotlin / Jetpack Compose</span></label>
+      <label><input type="checkbox" name="fe-tech" value="react-native"> <span>React Native</span></label>
       <label><input type="checkbox" name="fe-tech" value="electron"> <span>Electron</span></label>
+      <label><input type="checkbox" name="fe-tech" value="tauri"> <span>Tauri</span></label>
+      <label><input type="checkbox" name="fe-tech" value="fe-unknown"> <span>잘 모름</span></label>
     </div>
-    <label>백엔드</label>
+    <label>백엔드 <small style="font-weight:normal;color:#9ca3af">— 없으면 "백엔드 없음" 선택</small></label>
     <div class="init-option-group">
-      <label><input type="checkbox" name="be-tech" value="nodejs"> <span>Node.js</span></label>
-      <label><input type="checkbox" name="be-tech" value="python"> <span>Python</span></label>
-      <label><input type="checkbox" name="be-tech" value="java"> <span>Java/Spring</span></label>
+      <label><input type="checkbox" name="be-tech" value="no-backend"> <span>백엔드 없음 (FE 단독)</span></label>
+      <label><input type="checkbox" name="be-tech" value="nodejs"> <span>Node.js / Express</span></label>
+      <label><input type="checkbox" name="be-tech" value="fastify"> <span>Node.js / Fastify</span></label>
+      <label><input type="checkbox" name="be-tech" value="python"> <span>Python / FastAPI</span></label>
+      <label><input type="checkbox" name="be-tech" value="django"> <span>Python / Django</span></label>
+      <label><input type="checkbox" name="be-tech" value="java"> <span>Java / Spring</span></label>
       <label><input type="checkbox" name="be-tech" value="go"> <span>Go</span></label>
-      <label><input type="checkbox" name="be-tech" value="serverless"> <span>Serverless</span></label>
+      <label><input type="checkbox" name="be-tech" value="rust"> <span>Rust</span></label>
+      <label><input type="checkbox" name="be-tech" value="dotnet"> <span>.NET / C#</span></label>
+      <label><input type="checkbox" name="be-tech" value="ruby"> <span>Ruby on Rails</span></label>
+      <label><input type="checkbox" name="be-tech" value="php"> <span>PHP / Laravel</span></label>
+      <label><input type="checkbox" name="be-tech" value="serverless"> <span>Serverless (Lambda 등)</span></label>
+      <label><input type="checkbox" name="be-tech" value="be-unknown"> <span>잘 모름</span></label>
     </div>
-    <label>데이터베이스</label>
+    <label>데이터 저장소</label>
     <div class="init-option-group">
-      <label><input type="checkbox" name="db-tech" value="postgresql"> <span>PostgreSQL</span></label>
-      <label><input type="checkbox" name="db-tech" value="mysql"> <span>MySQL</span></label>
-      <label><input type="checkbox" name="db-tech" value="mongodb"> <span>MongoDB</span></label>
-      <label><input type="checkbox" name="db-tech" value="sqlite"> <span>SQLite</span></label>
+      <label><input type="checkbox" name="storage-tech" value="localstorage"> <span>LocalStorage / SessionStorage</span></label>
+      <label><input type="checkbox" name="storage-tech" value="indexeddb"> <span>IndexedDB</span></label>
+      <label><input type="checkbox" name="storage-tech" value="filesystem"> <span>파일 시스템</span></label>
+      <label><input type="checkbox" name="storage-tech" value="sqlite-local"> <span>SQLite (로컬)</span></label>
+      <label><input type="checkbox" name="storage-tech" value="postgresql"> <span>PostgreSQL</span></label>
+      <label><input type="checkbox" name="storage-tech" value="mysql"> <span>MySQL</span></label>
+      <label><input type="checkbox" name="storage-tech" value="mongodb"> <span>MongoDB</span></label>
+      <label><input type="checkbox" name="storage-tech" value="redis"> <span>Redis</span></label>
+      <label><input type="checkbox" name="storage-tech" value="firebase"> <span>Firebase / Firestore</span></label>
+      <label><input type="checkbox" name="storage-tech" value="supabase"> <span>Supabase</span></label>
+      <label><input type="checkbox" name="storage-tech" value="no-storage"> <span>저장소 불필요</span></label>
+      <label><input type="checkbox" name="storage-tech" value="storage-unknown"> <span>잘 모름</span></label>
     </div>
   </div>
 
-  <!-- Step 4: 상세 기획 (필수) -->
+  <!-- Step 5: 상세 기획 (필수) -->
   <div class="init-step">
     <h3>상세 기획 <span class="required">*필수</span></h3>
     <p style="font-size:13px;color:#9ca3af;margin-bottom:12px">서비스의 핵심 기능, 사용자 시나리오, 차별점 등을 구체적으로 작성하세요. 상세할수록 더 정확한 PRD가 생성됩니다.</p>

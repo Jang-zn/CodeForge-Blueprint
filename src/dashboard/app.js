@@ -436,12 +436,13 @@ document.getElementById('btn-generate-prd')?.addEventListener('click', async () 
     projectName: document.getElementById('init-project-name').value,
     tagline: document.getElementById('init-tagline').value,
     serviceType: document.querySelector('input[name="service-type"]:checked')?.value,
+    deployTargets: [...document.querySelectorAll('input[name="deploy-target"]:checked')].map(el => el.value),
     targets: [...document.querySelectorAll('input[name="target"]:checked')].map(el => el.value),
     revenues: [...document.querySelectorAll('input[name="revenue"]:checked')].map(el => el.value),
     features: [...document.querySelectorAll('input[name="feature"]:checked')].map(el => el.value),
     feTech: [...document.querySelectorAll('input[name="fe-tech"]:checked')].map(el => el.value),
     beTech: [...document.querySelectorAll('input[name="be-tech"]:checked')].map(el => el.value),
-    dbTech: [...document.querySelectorAll('input[name="db-tech"]:checked')].map(el => el.value),
+    storageTech: [...document.querySelectorAll('input[name="storage-tech"]:checked')].map(el => el.value),
     detail,
   };
   const btn = document.getElementById('btn-generate-prd');
