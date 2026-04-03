@@ -45,6 +45,12 @@ describe('getProviderModel', () => {
     assert.deepEqual(result, { provider: 'codex', model: 'o4-mini' });
   });
 
+  test('workspace 행 없이도 setProviderModel 실행 후 값 유지 (UPSERT)', () => {
+    setProviderModel(db, 'codex', 'o4-mini');
+    const result = getProviderModel(db);
+    assert.deepEqual(result, { provider: 'codex', model: 'o4-mini' });
+  });
+
   test('claude provider 저장/읽기', () => {
     upsertWorkspaceMeta(db, { name: 'test' });
     setProviderModel(db, 'claude', 'claude-opus-4-6');

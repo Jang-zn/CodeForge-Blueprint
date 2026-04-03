@@ -86,6 +86,8 @@ export async function startServer(workspace: WorkspaceContext, port: number): Pr
         }
         if (codexStatus.available) {
           console.log(`🤖 Codex CLI:  ✓ ${codexStatus.version ?? codexStatus.path}`);
+        } else {
+          console.log(`🤖 Codex CLI:  ✗ 미설치 → npm install -g @openai/codex`);
         }
         console.log('');
         resolve(p);

@@ -95,8 +95,10 @@ export function getProviderModel(db: any): ProviderModel {
 }
 
 export function setProviderModel(db: any, provider: ProviderType, model: string): void {
-  db.prepare("UPDATE workspace SET provider_model = ?, updated_at = datetime('now') WHERE id = 1")
-    .run(`${provider}:${model}`);
+  db.prepare(`
+    INSERT INTO workspace (id, name, provider_model) VALUES (1, 'Untitled', ?)
+    ON CONFLICT(id) DO UPDATE SET provider_model = excluded.provider_model, updated_at = datetime('now')
+  `).run(`${provider}:${model}`);
 }
 
 // ===== Issues =====
