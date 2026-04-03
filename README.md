@@ -47,12 +47,9 @@ Init (PRD 생성) → 기획 리뷰 → BE 설계 → FE 설계 → 다음버전
 **Claude 모델** (Claude Code CLI 필요):
 - Claude Sonnet 4.6 *(기본값)*
 - Claude Opus 4.6
-- Claude Haiku 4.5
 
 **Codex 모델** (Codex CLI 필요):
-- o4-mini
-- o3
-- GPT-4.1
+- GPT-5.4
 
 설치되지 않은 CLI의 옵션은 자동으로 비활성화됩니다.
 
