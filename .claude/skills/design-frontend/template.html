@@ -1,0 +1,93 @@
+<!--
+  TEMPLATE GUIDE — design-frontend
+  =================================
+  This is the panel-frontend fragment template for the design-frontend skill.
+  It generates content for the FE 설계 tab in the 4-tab dashboard shell.
+
+  When the shell (index.html) already exists:
+    Replace the <div class="tab-panel" id="panel-frontend">...</div> block
+    and the <script type="application/json" id="state-frontend">...</script> block.
+
+  When the shell does NOT exist:
+    Use the review-plan template.html to generate the full shell,
+    then inject this panel content into the panel-frontend slot.
+
+  Placeholders:
+    {{FE_TITLE}}                    — FE 설계 report title (e.g., "{프로젝트명} FE 아키텍처 설계")
+    {{FE_META_LINE}}                — Meta info (date, item count, version, platform, etc.)
+    {{FE_SIDEBAR_NAV}}              — Sidebar navigation links for panel-frontend sections
+    {{FE_MAIN_CONTENT}}             — All design item content (h2 parts, h3 items)
+    {{FE_SUMMARY_TABLE}}            — Section-by-section summary table
+    {{INITIAL_STATE_FRONTEND_JSON}} — JSON object for state-frontend script block
+
+  Issue ID pattern: /^fe-[a-z]+\d+$/
+    - fe-comp1, fe-comp2, ...   (화면/컴포넌트 계층)
+    - fe-state1, fe-state2, ... (상태 관리)
+    - fe-route1, fe-route2, ... (네비게이션/라우팅)
+    - fe-api1, fe-api2, ...     (API 연동 레이어)
+    - fe-token1, fe-token2, ... (디자인 시스템)
+
+  Tag classes:
+    .tag-decision     — 설계 결정 (확정된 아키텍처 선택)
+    .tag-trade-off    — 트레이드오프 (대안 비교가 필요한 결정)
+    .tag-dependency   — 의존성 (BE/외부 시스템 의존)
+
+  Badge classes:
+    .badge-confirmed    — 확정됨
+    .badge-proposed     — 제안 (검토 필요)
+    .badge-alternative  — 대안 (비교용)
+
+  Each h3 design item structure:
+    <h3 id="fe-{cat}{N}">fe-{cat}{N}. 설계 결정 제목</h3>
+    <span class="tag tag-{decision|trade-off|dependency}">태그</span>
+    <span class="badge badge-{confirmed|proposed|alternative}">상태</span>
+    <p>설명 — 설계 결정 내용 2~3문장</p>
+    <h4>근거</h4>
+    <p>왜 이 결정인지. 선택한 플랫폼/라이브러리와의 연관성.</p>
+    <div class="diagram-container"><pre class="mermaid">...</pre></div>  (optional)
+    <table>...</table>  (optional)
+    <div class="callout callout-{blue|orange|red}">
+      <strong>트레이드오프:</strong> 대안과 비교한 선택 이유
+    </div>
+
+  Panel structure (sections in order):
+    A. 화면/컴포넌트 계층  (id="part-fe-comp")
+    B. 상태 관리           (id="part-fe-state")
+    C. 네비게이션/라우팅    (id="part-fe-route")
+    D. API 연동 레이어     (id="part-fe-api")
+    E. 디자인 시스템       (id="part-fe-token")
+    요약                   (id="fe-summary")
+    Changelog              (id="fe-changelog")
+-->
+
+<!-- panel-frontend content fragment -->
+<div class="tab-panel" id="panel-frontend">
+
+<h1>{{FE_TITLE}}</h1>
+<div class="meta">{{FE_META_LINE}}</div>
+
+<div class="filter-bar" id="filterBar-frontend">
+  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">Filter:</span>
+  <button class="filter-btn filter-active" data-filter="all" data-tab="frontend">All <span class="count" id="count-fe-all"></span></button>
+  <button class="filter-btn" data-filter="pending" data-tab="frontend">Pending <span class="count" id="count-fe-pending"></span></button>
+  <button class="filter-btn" data-filter="reviewing" data-tab="frontend">Reviewing <span class="count" id="count-fe-reviewing"></span></button>
+  <button class="filter-btn" data-filter="resolved" data-tab="frontend">Resolved <span class="count" id="count-fe-resolved"></span></button>
+  <button class="filter-btn" data-filter="deferred" data-tab="frontend">Deferred <span class="count" id="count-fe-deferred"></span></button>
+  <button class="filter-btn" data-filter="dismissed" data-tab="frontend">Dismissed <span class="count" id="count-fe-dismissed"></span></button>
+  <button class="filter-btn" data-filter="has-memo" data-tab="frontend">Has Memo <span class="count" id="count-fe-has-memo"></span></button>
+  <button class="filter-btn" style="margin-left:auto;" id="exportBtn-frontend">Export</button>
+  <button class="filter-btn" id="importBtn-frontend">Import</button>
+  <input type="file" id="importFile-frontend" accept=".json" style="display:none">
+</div>
+
+<!-- Replace {{FE_MAIN_CONTENT}} with all generated design item content -->
+{{FE_MAIN_CONTENT}}
+
+<!-- Replace {{FE_SUMMARY_TABLE}} with section-by-section summary -->
+{{FE_SUMMARY_TABLE}}
+
+</div><!-- panel-frontend -->
+
+<!-- State data for frontend tab -->
+<!-- Replace {{INITIAL_STATE_FRONTEND_JSON}} with the state JSON -->
+<!-- <script type="application/json" id="state-frontend">{{INITIAL_STATE_FRONTEND_JSON}}</script> -->

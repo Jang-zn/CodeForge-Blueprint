@@ -1,0 +1,123 @@
+<!--
+  TEMPLATE GUIDE — design-backend
+  ================================
+  This is the panel-backend fragment template for the design-backend skill.
+  It defines the content structure for the BE 설계 tab in the 4-tab dashboard.
+
+  When generating, replace {{PLACEHOLDER}} values with actual content.
+  If index.html already exists, replace only the panel-backend div and state-backend script block.
+  If index.html does not exist, use the review-plan template.html to generate the full shell,
+  then inject this panel content into the panel-backend slot.
+
+  Placeholders:
+    {{BE_TITLE}}                    — BE design report title (e.g., "{프로젝트명} BE 설계")
+    {{BE_META_LINE}}                — Meta info (date, version, item count)
+    {{BE_SIDEBAR_NAV}}              — Sidebar navigation links for panel-backend sections
+    {{BE_MAIN_CONTENT}}             — All design item content (h2 parts, h3 items)
+    {{BE_SUMMARY_TABLE}}            — Category-by-category summary table
+    {{INITIAL_STATE_BACKEND_JSON}}  — JSON object for state-backend script block
+
+  Issue ID pattern: /^be-[a-z]+\d+$/
+    - API Design:    be-api1, be-api2, ...
+    - DB Schema:     be-db1, be-db2, ...
+    - Infrastructure: be-infra1, be-infra2, ...
+    - Libraries:     be-lib1, be-lib2, ...
+    - Service Layer: be-svc1, be-svc2, ...
+
+  Tag classes:
+    .tag-decision     — Confirmed design decision
+    .tag-trade-off    — Trade-off analysis between alternatives
+    .tag-dependency   — External dependency or constraint
+
+  Badge classes:
+    .badge-confirmed    — Decision is finalized
+    .badge-proposed     — Proposed but not yet confirmed
+    .badge-alternative  — Alternative option documented for comparison
+
+  Design item HTML structure (each h3 item):
+    <h3 id="be-{cat}{N}">be-{cat}{N}. Design Decision Title</h3>
+    <span class="tag tag-{decision|trade-off|dependency}">Tag Label</span>
+    <span class="badge badge-{confirmed|proposed|alternative}">Badge Label</span>
+    <p>Description — design decision content in 2-3 sentences.</p>
+    <h4>근거</h4>
+    <p>Why this decision. How it connects to tech-stack or PRD decisions.</p>
+    <div class="diagram-container"><pre class="mermaid">...</pre></div>  (if applicable)
+    <table>...</table>  (if applicable)
+    <div class="callout callout-{blue|orange|red}">
+      <strong>트레이드오프:</strong> Why this choice over the alternatives
+    </div>
+
+  Status controls (appended to each item for review cycle):
+    <div class="issue-controls" data-id="be-{cat}{N}">
+      <select class="status-select">
+        <option value="pending">Pending</option>
+        <option value="reviewing">Reviewing</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="revised">Revised</option>
+        <option value="deferred">Deferred</option>
+      </select>
+      <input type="text" class="memo-input" placeholder="메모...">
+      <button class="save-memo-btn">저장</button>
+    </div>
+
+  Decision log (added after JSON apply):
+    <div class="decision-log">
+      <div class="decision-log-title">결정 이력</div>
+      <div class="decision-entry">
+        <span class="decision-date">YYYY-MM-DD</span>
+        <span class="decision-status decision-status-{status}">Status Label</span>
+        <span class="decision-memo">Memo content</span>
+      </div>
+    </div>
+
+  Part headings use h2 with ids:
+    #part-be-api, #part-be-db, #part-be-infra, #part-be-lib, #part-be-svc
+  Summary section: #be-summary
+  Changelog section: #be-changelog
+-->
+
+<!-- panel-backend content fragment -->
+<div class="tab-panel" id="panel-backend">
+
+<h1>{{BE_TITLE}}</h1>
+<div class="meta">{{BE_META_LINE}}</div>
+
+<div class="filter-bar" id="filterBar-backend">
+  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">Filter:</span>
+  <button class="filter-btn filter-active" data-filter="all" data-tab="backend">All <span class="count" id="count-be-all"></span></button>
+  <button class="filter-btn" data-filter="pending" data-tab="backend">Pending <span class="count" id="count-be-pending"></span></button>
+  <button class="filter-btn" data-filter="reviewing" data-tab="backend">Reviewing <span class="count" id="count-be-reviewing"></span></button>
+  <button class="filter-btn" data-filter="confirmed" data-tab="backend">Confirmed <span class="count" id="count-be-confirmed"></span></button>
+  <button class="filter-btn" data-filter="revised" data-tab="backend">Revised <span class="count" id="count-be-revised"></span></button>
+  <button class="filter-btn" data-filter="deferred" data-tab="backend">Deferred <span class="count" id="count-be-deferred"></span></button>
+  <button class="filter-btn" data-filter="has-memo" data-tab="backend">Has Memo <span class="count" id="count-be-has-memo"></span></button>
+  <button class="filter-btn" style="margin-left:auto;" id="exportBtn-backend">Export</button>
+  <button class="filter-btn" id="importBtn-backend">Import</button>
+  <input type="file" id="importFile-backend" accept=".json" style="display:none">
+</div>
+
+<!-- Sidebar navigation for backend tab -->
+<!-- {{BE_SIDEBAR_NAV}} is injected into the sidebar's statusSidebar div when backend tab is active -->
+
+<!-- Main design content -->
+{{BE_MAIN_CONTENT}}
+
+<!-- Summary -->
+<h2 id="be-summary">요약</h2>
+{{BE_SUMMARY_TABLE}}
+
+<!-- Changelog -->
+<h2 id="be-changelog">Changelog</h2>
+<table class="changelog-table">
+  <thead>
+    <tr><th>버전</th><th>날짜</th><th>변경 내용</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>v1.0.0</td><td>—</td><td>초기 BE 설계 작성</td></tr>
+  </tbody>
+</table>
+
+</div><!-- panel-backend -->
+
+<!-- State data for backend tab -->
+<script type="application/json" id="state-backend">{{INITIAL_STATE_BACKEND_JSON}}</script>
