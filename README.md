@@ -1,68 +1,68 @@
 # CodeForge Blueprint
 
-Turn an idea into a structured PRD, backend/frontend architecture, and next-version feature proposals — all in a local browser dashboard powered by your choice of AI backend.
+아이디어를 구조화된 PRD, 백엔드/프론트엔드 아키텍처, 다음 버전 기능 제안서로 만들어주는 로컬 브라우저 대시보드. AI CLI를 백엔드로 사용합니다.
 
-## Requirements
+## 요구사항
 
 - Node.js 18+
-- At least one AI CLI installed:
+- AI CLI 중 하나 이상 설치:
 
-| CLI | Install |
-|-----|---------|
+| CLI | 설치 |
+|-----|------|
 | [Claude Code CLI](https://docs.anthropic.com/en/claude-code) | `npm install -g @anthropic-ai/claude-code` |
 | [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` |
 
-## Usage
+## 사용법
 
 ```bash
-# Run against a project folder (workspace)
+# 프로젝트 폴더를 워크스페이스로 지정
 npx codeforge-blueprint ~/projects/my-app
 
-# Use current directory
+# 현재 디렉토리 사용
 npx codeforge-blueprint .
 
-# Specify port
+# 포트 지정
 npx codeforge-blueprint ~/projects/my-app --port 4000
 ```
 
-The dashboard opens automatically in your browser. All artifacts are saved under `{workspace}/docs/`.
+대시보드가 자동으로 브라우저에서 열립니다. 생성된 파일은 모두 `{workspace}/docs/` 에 저장됩니다.
 
-## Pipeline
+## 파이프라인
 
 ```
 Init (PRD 생성) → 기획 리뷰 → BE 설계 → FE 설계 → 다음버전 기능 제안 → 문서 생성
 ```
 
-1. **Init** — Fill in a structured form (service type, target users, revenue model, tech stack, detailed description) → AI generates a PRD draft
-2. **기획 리뷰** — AI analyzes the PRD across 6 perspectives: planning consistency, revenue, user acquisition, implementation feasibility, operational scalability, legal/compliance. Review each issue in the browser and set status/memo
-3. **BE / FE 설계** — Architecture analysis for backend (API, DB, infra, libraries, service layer) and frontend (components, state, routing, API integration, design system)
-4. **다음버전** — Next-version feature proposals from 4 angles (marketing, ops, service, tech). Deferred items from 기획 리뷰 are automatically included
-5. **반영하기** — Applies review results: records decision logs, moves deferred items to the features tab, bumps the version
-6. **문서 생성하기** — Generates a final Markdown document in `docs/`
+1. **Init** — 서비스 유형, 타겟 사용자, 수익 모델, 기술 스택, 상세 기획을 폼에 입력하면 AI가 PRD 초안을 생성
+2. **기획 리뷰** — AI가 PRD를 6가지 관점(기획 정합성, 수익/과금, 사용자 획득/유지, 구현 가능성, 운영 확장성, 법적/규제)으로 분석. 브라우저에서 각 이슈의 상태와 메모를 직접 관리
+3. **BE / FE 설계** — 백엔드(API, DB, 인프라, 라이브러리, 서비스 레이어)와 프론트엔드(컴포넌트, 상태 관리, 라우팅, API 연동, 디자인 시스템) 아키텍처 분석
+4. **다음버전** — 마케팅, 운영, 서비스 기획, 기술 4가지 관점의 다음 버전 기능 제안. 기획 리뷰에서 보류된 항목이 자동으로 포함됨
+5. **반영하기** — 리뷰 결과 반영: 결정 로그 기록, 보류 항목 다음버전 탭으로 이동, 버전 업
+6. **문서 생성하기** — `docs/` 에 최종 마크다운 문서 생성
 
-## Model Selection
+## 모델 선택
 
-The header dropdown lets you switch AI backends at any time. The selection persists across server restarts.
+헤더 드롭다운에서 AI 백엔드를 언제든 전환할 수 있습니다. 선택 사항은 서버 재시작 후에도 유지됩니다.
 
-**Claude models** (requires Claude Code CLI):
-- Claude Sonnet 4.6 *(default)*
+**Claude 모델** (Claude Code CLI 필요):
+- Claude Sonnet 4.6 *(기본값)*
 - Claude Opus 4.6
 - Claude Haiku 4.5
 
-**Codex models** (requires Codex CLI):
+**Codex 모델** (Codex CLI 필요):
 - o4-mini
 - o3
 - GPT-4.1
 
-Options for uninstalled CLIs are disabled automatically.
+설치되지 않은 CLI의 옵션은 자동으로 비활성화됩니다.
 
-## Workspace Structure
+## 워크스페이스 구조
 
 ```
-~/projects/my-app/           ← workspace root
+~/projects/my-app/           ← 워크스페이스 루트
 ├── docs/
 │   ├── .codeforge/
-│   │   └── data.db          ← SQLite (issues, decision logs, versions, provider preference)
+│   │   └── data.db          ← SQLite (이슈, 결정 로그, 버전, 모델 설정)
 │   ├── prd-v0.1.0.md
 │   ├── review-1.1.0.md
 │   ├── backend-1.0.0.md
@@ -71,40 +71,40 @@ Options for uninstalled CLIs are disabled automatically.
 └── ...
 ```
 
-## Development
+## 개발
 
 ```bash
 git clone https://github.com/your-org/codeforge-blueprint
 cd codeforge-blueprint
 npm install
 
-# Run in dev mode (tsx, no build required)
+# dev 모드 실행 (빌드 불필요)
 npm run dev -- ~/projects/my-app
 
-# Build
+# 빌드
 npm run build
 
-# Test
+# 테스트
 npm test
 ```
 
-## Architecture
+## 아키텍처
 
 ```
-Local Server (Hono + @hono/node-server)
-├── Static file server (dashboard)
-├── REST API (workspace, issues CRUD, jobs polling)
+로컬 서버 (Hono + @hono/node-server)
+├── 정적 파일 서빙 (대시보드)
+├── REST API (워크스페이스, 이슈 CRUD, 잡 폴링)
 ├── Provider Spawner
 │   ├── Claude CLI  (claude -p --output-format json)
 │   └── Codex CLI   (codex exec --json --full-auto --ephemeral)
 └── SQLite (better-sqlite3)
         ↕ REST API                    ↕ child_process.spawn
-  Browser Dashboard              AI CLI (Claude / Codex)
-  (review / monitor)             (analysis & generation)
+  브라우저 대시보드               AI CLI (Claude / Codex)
+  (리뷰 / 상태 관리)              (분석 및 문서 생성)
 ```
 
-**Runtime dependencies (4 only):** `hono`, `@hono/node-server`, `better-sqlite3`, `open`
+**런타임 의존성 (4개):** `hono`, `@hono/node-server`, `better-sqlite3`, `open`
 
-## License
+## 라이선스
 
 MIT
