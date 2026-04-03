@@ -9,10 +9,11 @@ import {
   getTabVersion,
   createJob,
   updateJob,
+  getProviderModel,
   type Tab,
 } from '../../db/repository.js';
 import { getWorkspace } from '../../workspace.js';
-import { spawnClaude } from '../../claude/spawner.js';
+import { spawnProvider } from '../../claude/provider.js';
 
 const generateRoute = new Hono();
 
@@ -76,7 +77,7 @@ generateRoute.post('/', async (c) => {
       const version = getTabVersion(db, tab);
 
       const prompt = buildWriteDocPrompt(tab, issues, prdContent, version);
-      const result = await spawnClaude(prompt);
+      const result = await spawnProvider(prompt, getProviderModel(db));
 
       if (!result.success) {
         updateJob(db, jobId, 'failed', result.error);

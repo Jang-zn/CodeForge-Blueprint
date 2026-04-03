@@ -9,18 +9,27 @@ export interface ClaudeStatus {
   version?: string;
 }
 
+export type CodexStatus = ClaudeStatus;
+
 /**
  * Claude CLI 바이너리 자동 감지.
  * 탐색 순서: which/where -> npm root -g -> 플랫폼별 알려진 경로 -> null
- * (vsc-secondbrain spawnHelper.ts 패턴 기반 ESM 포팅)
  */
 export async function findClaudeBinary(): Promise<string | null> {
+  return findBinary('claude');
+}
+
+export async function findCodexBinary(): Promise<string | null> {
+  return findBinary('codex');
+}
+
+async function findBinary(name: string): Promise<string | null> {
   const isWin = process.platform === 'win32';
 
   const strategies: Array<() => Promise<string | null>> = [
-    () => tryWhich(isWin),
-    () => tryNpmRoot(isWin),
-    () => tryKnownPaths(isWin),
+    () => tryWhich(name, isWin),
+    () => tryNpmRoot(name, isWin),
+    () => tryKnownPaths(name, isWin),
   ];
 
   for (const strategy of strategies) {
@@ -32,54 +41,54 @@ export async function findClaudeBinary(): Promise<string | null> {
 }
 
 export async function checkClaude(): Promise<ClaudeStatus> {
-  const claudePath = await findClaudeBinary();
-  if (!claudePath) return { available: false, path: null };
+  return checkBinary(await findClaudeBinary());
+}
+
+export async function checkCodex(): Promise<CodexStatus> {
+  return checkBinary(await findCodexBinary());
+}
+
+async function checkBinary(binPath: string | null): Promise<ClaudeStatus> {
+  if (!binPath) return { available: false, path: null };
 
   try {
     const version = await new Promise<string>((resolve, reject) => {
-      execFile(claudePath, ['--version'], { timeout: 5000 }, (err, stdout) => {
+      execFile(binPath, ['--version'], { timeout: 5000 }, (err, stdout) => {
         if (err) return reject(err);
         resolve(stdout.trim());
       });
     });
-    return { available: true, path: claudePath, version };
+    return { available: true, path: binPath, version };
   } catch {
-    return { available: true, path: claudePath };
+    return { available: true, path: binPath };
   }
 }
 
-function tryWhich(isWin: boolean): Promise<string | null> {
+function tryWhich(name: string, isWin: boolean): Promise<string | null> {
   return new Promise((resolve) => {
     const cmd = isWin ? 'where' : 'which';
-    const target = isWin ? 'claude.cmd' : 'claude';
+    const target = isWin ? `${name}.cmd` : name;
     execFile(cmd, [target], { shell: isWin, timeout: 3000 }, (err, stdout) => {
-      if (err || !stdout.trim()) {
-        resolve(null);
-        return;
-      }
+      if (err || !stdout.trim()) { resolve(null); return; }
       resolve(stdout.trim().split('\n')[0].trim());
     });
   });
 }
 
-function tryNpmRoot(isWin: boolean): Promise<string | null> {
+function tryNpmRoot(name: string, isWin: boolean): Promise<string | null> {
   return new Promise((resolve) => {
     execFile('npm', ['root', '-g'], { shell: isWin, timeout: 5000 }, (err, stdout) => {
-      if (err || !stdout.trim()) {
-        resolve(null);
-        return;
-      }
+      if (err || !stdout.trim()) { resolve(null); return; }
       const npmRoot = stdout.trim();
       const candidate = isWin
-        ? path.join(path.dirname(npmRoot), 'claude.cmd')
-        : path.join(npmRoot, '..', 'bin', 'claude');
-
+        ? path.join(path.dirname(npmRoot), `${name}.cmd`)
+        : path.join(npmRoot, '..', 'bin', name);
       resolve(fs.existsSync(candidate) ? candidate : null);
     });
   });
 }
 
-function tryKnownPaths(isWin: boolean): Promise<string | null> {
+function tryKnownPaths(name: string, isWin: boolean): Promise<string | null> {
   const home = os.homedir();
   let candidates: string[];
 
@@ -87,8 +96,8 @@ function tryKnownPaths(isWin: boolean): Promise<string | null> {
     const appData = process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming');
     const localAppData = process.env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local');
     candidates = [
-      path.join(appData, 'npm', 'claude.cmd'),
-      path.join(localAppData, 'npm', 'claude.cmd'),
+      path.join(appData, 'npm', `${name}.cmd`),
+      path.join(localAppData, 'npm', `${name}.cmd`),
     ];
   } else {
     const nvmVersionsDir = path.join(home, '.nvm', 'versions', 'node');
@@ -99,15 +108,15 @@ function tryKnownPaths(isWin: boolean): Promise<string | null> {
           .filter(v => v.startsWith('v'))
           .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
         for (const v of versions) {
-          nvmCandidates.push(path.join(nvmVersionsDir, v, 'bin', 'claude'));
+          nvmCandidates.push(path.join(nvmVersionsDir, v, 'bin', name));
         }
       } catch { /* ignore */ }
     }
     candidates = [
       ...nvmCandidates,
-      '/usr/local/bin/claude',
-      '/opt/homebrew/bin/claude',
-      '/usr/bin/claude',
+      `/usr/local/bin/${name}`,
+      `/opt/homebrew/bin/${name}`,
+      `/usr/bin/${name}`,
     ];
   }
 

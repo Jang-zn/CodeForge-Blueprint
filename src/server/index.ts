@@ -5,8 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { WorkspaceContext } from '../workspace.js';
 import { openDb } from '../db/index.js';
-import { getWorkspaceMeta, getJob } from '../db/repository.js';
-import { checkClaude } from '../claude/finder.js';
+import { getWorkspaceMeta, getJob, getProviderModel, setProviderModel, type ProviderType } from '../db/repository.js';
+import { checkClaude, checkCodex } from '../claude/finder.js';
 import workspaceRoute from './routes/workspace.js';
 import issuesRoute from './routes/issues.js';
 import initRoute from './routes/init.js';
@@ -20,8 +20,8 @@ export async function startServer(workspace: WorkspaceContext, port: number): Pr
   // DB 초기화
   const db = openDb(workspace.dbPath);
 
-  // Claude 연결 확인
-  const claudeStatus = await checkClaude();
+  // AI 바이너리 연결 확인
+  const [claudeStatus, codexStatus] = await Promise.all([checkClaude(), checkCodex()]);
 
   const app = new Hono();
 
@@ -38,7 +38,19 @@ export async function startServer(workspace: WorkspaceContext, port: number): Pr
       prd_path: meta?.prd_path ?? null,
       claudeAvailable: claudeStatus.available,
       claudeVersion: claudeStatus.version,
+      codexAvailable: codexStatus.available,
+      codexVersion: codexStatus.version,
+      providerModel: getProviderModel(db),
     });
+  });
+
+  // provider 선택 변경
+  api.put('/workspace/provider', async (c) => {
+    const body = await c.req.json<{ provider: ProviderType; model: string }>().catch(() => null);
+    if (!body?.provider || !body?.model) return c.json({ error: 'provider와 model이 필요합니다.' }, 400);
+    if (body.provider !== 'claude' && body.provider !== 'codex') return c.json({ error: '유효하지 않은 provider입니다.' }, 400);
+    setProviderModel(db, body.provider, body.model);
+    return c.json({ ok: true });
   });
 
   // Job 폴링
@@ -71,6 +83,9 @@ export async function startServer(workspace: WorkspaceContext, port: number): Pr
           console.log(`🤖 Claude CLI: ✓ ${claudeStatus.version ?? claudeStatus.path}`);
         } else {
           console.log(`🤖 Claude CLI: ✗ 미설치 → npm install -g @anthropic-ai/claude-code`);
+        }
+        if (codexStatus.available) {
+          console.log(`🤖 Codex CLI:  ✓ ${codexStatus.version ?? codexStatus.path}`);
         }
         console.log('');
         resolve(p);

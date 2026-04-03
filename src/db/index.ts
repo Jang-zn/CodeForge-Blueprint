@@ -1,5 +1,5 @@
 import { createRequire } from 'module';
-import { SCHEMA_SQL } from './schema.js';
+import { SCHEMA_SQL, MIGRATION_V2_SQL } from './schema.js';
 
 const require = createRequire(import.meta.url);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -12,6 +12,7 @@ export function openDb(dbPath: string): any {
   _db = new BetterSqlite3(dbPath);
   _db.pragma('journal_mode = WAL');
   _db.exec(SCHEMA_SQL);
+  try { _db.exec(MIGRATION_V2_SQL); } catch { /* 컬럼 이미 존재 시 무시 */ }
   return _db;
 }
 

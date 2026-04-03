@@ -10,6 +10,7 @@
   "files": ["dist/", "skills/"],
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
+    "test": "node --import tsx/esm --test tests/**/*.test.ts",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js"
   },

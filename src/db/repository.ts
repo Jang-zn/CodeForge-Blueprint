@@ -71,6 +71,34 @@ export function upsertWorkspaceMeta(db: any, data: Partial<WorkspaceMeta>): void
   }
 }
 
+// ===== Provider Model =====
+
+export type ProviderType = 'claude' | 'codex';
+
+export interface ProviderModel {
+  provider: ProviderType;
+  model: string;
+}
+
+const DEFAULT_PROVIDER: ProviderModel = { provider: 'claude', model: 'claude-sonnet-4-6' };
+
+export function getProviderModel(db: any): ProviderModel {
+  const row = db.prepare('SELECT provider_model FROM workspace WHERE id = 1').get() as { provider_model: string | null } | undefined;
+  const raw = row?.provider_model;
+  if (!raw) return DEFAULT_PROVIDER;
+  const [provider, ...rest] = raw.split(':');
+  const model = rest.join(':');
+  if ((provider === 'claude' || provider === 'codex') && model) {
+    return { provider, model };
+  }
+  return DEFAULT_PROVIDER;
+}
+
+export function setProviderModel(db: any, provider: ProviderType, model: string): void {
+  db.prepare("UPDATE workspace SET provider_model = ?, updated_at = datetime('now') WHERE id = 1")
+    .run(`${provider}:${model}`);
+}
+
 // ===== Issues =====
 
 export function getIssues(db: any, tab?: Tab): Issue[] {

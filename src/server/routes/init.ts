@@ -3,9 +3,9 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { getDb } from '../../db/index.js';
-import { upsertWorkspaceMeta, createJob, updateJob } from '../../db/repository.js';
+import { upsertWorkspaceMeta, createJob, updateJob, getProviderModel } from '../../db/repository.js';
 import { getWorkspace } from '../../workspace.js';
-import { spawnClaude } from '../../claude/spawner.js';
+import { spawnProvider } from '../../claude/provider.js';
 import { buildInitPrompt, type InitFormData } from '../../claude/prompts/init.js';
 
 const initRoute = new Hono();
@@ -27,7 +27,7 @@ initRoute.post('/', async (c) => {
   (async () => {
     try {
       const prompt = buildInitPrompt(body);
-      const result = await spawnClaude(prompt);
+      const result = await spawnProvider(prompt, getProviderModel(db));
 
       if (!result.success) {
         updateJob(db, jobId, 'failed', result.error);

@@ -12,7 +12,19 @@
 <!-- 워크스페이스 헤더 -->
 <div class="workspace-header">
   <span id="workspace-name" class="workspace-name">Loading...</span>
-  <span id="claude-status" class="claude-status checking">Claude Code 연결 확인 중...</span>
+  <select id="provider-select" class="provider-select" disabled title="로딩 중...">
+    <optgroup label="Claude" id="claude-models">
+      <option value="claude:claude-sonnet-4-6">Claude Sonnet 4.6</option>
+      <option value="claude:claude-opus-4-6">Claude Opus 4.6</option>
+      <option value="claude:claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+    </optgroup>
+    <optgroup label="Codex" id="codex-models">
+      <option value="codex:o4-mini">Codex o4-mini</option>
+      <option value="codex:o3">Codex o3</option>
+      <option value="codex:gpt-4.1">Codex GPT-4.1</option>
+    </optgroup>
+  </select>
+  <span id="claude-status" class="claude-status checking">AI 연결 확인 중...</span>
 </div>
 
 <!-- SIDEBAR -->

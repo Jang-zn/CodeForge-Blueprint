@@ -9,10 +9,11 @@ import {
   updateJob,
   bulkUpsertIssues,
   bulkSetRefItems,
+  getProviderModel,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
-import { spawnClaude } from '../../claude/spawner.js';
+import { spawnProvider } from '../../claude/provider.js';
 import { buildReviewPlanPrompt } from '../../claude/prompts/review-plan.js';
 import { buildBackendPrompt } from '../../claude/prompts/design-backend.js';
 import { buildFrontendPrompt } from '../../claude/prompts/design-frontend.js';
@@ -93,7 +94,7 @@ analyzeRoute.post('/', async (c) => {
         return;
       }
 
-      const result = await spawnClaude(prompt);
+      const result = await spawnProvider(prompt, getProviderModel(db));
       if (!result.success) {
         updateJob(db, jobId, 'failed', result.error);
         return;

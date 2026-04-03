@@ -551,6 +551,53 @@ function setClaudeStatus(available, text) {
   el.textContent = text;
 }
 
+function providerLabel(provider) {
+  return provider === 'codex' ? 'Codex' : 'Claude';
+}
+
+function initProviderSelect(workspace) {
+  const sel = document.getElementById('provider-select');
+  if (!sel) return;
+
+  document.querySelectorAll('#claude-models option').forEach(opt => {
+    opt.disabled = !workspace.claudeAvailable;
+    if (!workspace.claudeAvailable) opt.title = 'Claude CLI가 설치되지 않았습니다.';
+  });
+  document.querySelectorAll('#codex-models option').forEach(opt => {
+    opt.disabled = !workspace.codexAvailable;
+    if (!workspace.codexAvailable) opt.title = 'Codex CLI가 설치되지 않았습니다. (npm install -g @openai/codex)';
+  });
+
+  const { provider, model } = workspace.providerModel ?? { provider: 'claude', model: 'claude-sonnet-4-6' };
+  const val = `${provider}:${model}`;
+  if (!sel.querySelector(`option[value="${val}"]`)) {
+    const grp = document.getElementById(provider === 'codex' ? 'codex-models' : 'claude-models');
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = `${providerLabel(provider)} ${model}`;
+    grp?.appendChild(opt);
+  }
+  sel.value = val;
+  sel.disabled = false;
+
+  const label = providerLabel(provider);
+  const isConnected = provider === 'codex' ? workspace.codexAvailable : workspace.claudeAvailable;
+  setClaudeStatus(isConnected, isConnected ? `${label} 연결됨 (${model})` : `${label} 연결 안 됨`);
+}
+
+document.getElementById('provider-select')?.addEventListener('change', async (e) => {
+  const [provider, ...rest] = e.target.value.split(':');
+  const model = rest.join(':');
+  try {
+    await API.put('/workspace/provider', { provider, model });
+    const label = providerLabel(provider);
+    setClaudeStatus(true, `${label} 연결됨 (${model})`);
+    showToast(`AI 백엔드: ${label} / ${model}`);
+  } catch (err) {
+    showToast('모델 변경 실패: ' + err.message, 'error');
+  }
+});
+
 // ========== Initial Load ==========
 async function loadInitialState() {
   try {
@@ -559,7 +606,7 @@ async function loadInitialState() {
     const nameEl = document.getElementById('workspace-name');
     if (nameEl) nameEl.textContent = workspace.name || 'CodeForge Blueprint';
 
-    setClaudeStatus(workspace.claudeAvailable, workspace.claudeAvailable ? 'Claude Code 연결됨' : 'Claude Code 연결 안 됨');
+    initProviderSelect(workspace);
 
     if (workspace.prd_path) {
       document.getElementById('init-screen').classList.add('hidden');

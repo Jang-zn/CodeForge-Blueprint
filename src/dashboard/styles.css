@@ -250,6 +250,18 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
   font-size: 13px;
 }
 .workspace-name { font-weight: 600; color: var(--text-primary); }
+.provider-select {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+.provider-select:focus { border-color: var(--accent); }
+.provider-select:disabled { opacity: 0.5; cursor: default; }
 
 /* === 액션 버튼들 === */
 .action-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

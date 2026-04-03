@@ -1,3 +1,7 @@
+export const MIGRATION_V2_SQL = `
+ALTER TABLE workspace ADD COLUMN provider_model TEXT DEFAULT 'claude:claude-sonnet-4-6';
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
   id INTEGER PRIMARY KEY CHECK(id = 1),
