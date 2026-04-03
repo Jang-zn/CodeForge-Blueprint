@@ -1,0 +1,29 @@
+{
+  "name": "codeforge-blueprint",
+  "version": "0.1.0",
+  "description": "Transform your idea into a structured PRD with AI-powered review pipeline",
+  "type": "module",
+  "bin": {
+    "codeforge-blueprint": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": ["dist/", "skills/"],
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "hono": "^4",
+    "@hono/node-server": "^1",
+    "better-sqlite3": "^11",
+    "open": "^10"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7",
+    "@types/node": "^20",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

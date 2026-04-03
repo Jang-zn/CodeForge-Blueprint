@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeForge Blueprint</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- 워크스페이스 헤더 -->
+<div class="workspace-header">
+  <span id="workspace-name" class="workspace-name">Loading...</span>
+  <span id="claude-status" class="claude-status checking">Claude Code 연결 확인 중...</span>
+</div>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="logo">
+    CodeForge Blueprint
+    <small>기획 리뷰 대시보드</small>
+  </div>
+
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="review" onclick="switchTab('review')">기획 리뷰</button>
+    <button class="tab-btn" data-tab="features" onclick="switchTab('features')">다음버전</button>
+    <button class="tab-btn" data-tab="backend" onclick="switchTab('backend')">BE 설계</button>
+    <button class="tab-btn" data-tab="frontend" onclick="switchTab('frontend')">FE 설계</button>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-title"><span class="dot" style="background:var(--accent)"></span> Overview</div>
+    <a href="#overview">전체 요약</a>
+    <a href="#" onclick="event.preventDefault();document.getElementById('init-screen').classList.remove('hidden');document.querySelector('.tab-content')?.classList.add('hidden');document.getElementById('prd-preview').classList.add('hidden');">새 프로젝트</a>
+  </div>
+
+  <div id="statusSidebar"><!-- built by buildStatusSidebar() in app.js --></div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+
+<!-- Init 화면 (기본 표시) -->
+<div id="init-screen" class="init-screen">
+  <h2>새 프로젝트 시작</h2>
+  <p class="subtitle">서비스 아이디어를 구체화해서 PRD를 만들어 드립니다.</p>
+
+  <!-- Step 1: 기본 정보 -->
+  <div class="init-step">
+    <h3>서비스 기본 정보</h3>
+    <label>프로젝트명</label>
+    <input type="text" id="init-project-name" class="init-text-input" placeholder="예: tastenote">
+    <br><br>
+    <label>서비스 한 줄 설명</label>
+    <input type="text" id="init-tagline" class="init-text-input" placeholder="예: 음식 맛집을 친구와 공유하는 소셜 노트앱">
+    <br><br>
+    <label>서비스 유형</label>
+    <div class="init-option-group" id="service-type">
+      <label><input type="radio" name="service-type" value="web"> <span>웹 서비스</span></label>
+      <label><input type="radio" name="service-type" value="mobile"> <span>모바일 앱</span></label>
+      <label><input type="radio" name="service-type" value="desktop"> <span>데스크톱 프로그램</span></label>
+      <label><input type="radio" name="service-type" value="cli"> <span>CLI 도구</span></label>
+      <label><input type="radio" name="service-type" value="api"> <span>API 서비스</span></label>
+      <label><input type="radio" name="service-type" value="extension"> <span>브라우저 확장</span></label>
+    </div>
+  </div>
+
+  <!-- Step 2: 서비스 성격 -->
+  <div class="init-step">
+    <h3>서비스 성격</h3>
+    <label>주요 사용자</label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="target" value="b2c"> <span>일반 소비자 (B2C)</span></label>
+      <label><input type="checkbox" name="target" value="b2b"> <span>기업 (B2B)</span></label>
+      <label><input type="checkbox" name="target" value="developer"> <span>개발자</span></label>
+      <label><input type="checkbox" name="target" value="internal"> <span>내부 운영용</span></label>
+    </div>
+    <label>수익 모델</label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="revenue" value="freemium"> <span>프리미엄</span></label>
+      <label><input type="checkbox" name="revenue" value="subscription"> <span>구독제</span></label>
+      <label><input type="checkbox" name="revenue" value="onetime"> <span>일회성 결제</span></label>
+      <label><input type="checkbox" name="revenue" value="ads"> <span>광고 기반</span></label>
+      <label><input type="checkbox" name="revenue" value="commission"> <span>커미션/수수료</span></label>
+      <label><input type="checkbox" name="revenue" value="opensource"> <span>오픈소스 (무료)</span></label>
+    </div>
+    <label>핵심 기능 영역</label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="feature" value="content"> <span>콘텐츠 생성/관리</span></label>
+      <label><input type="checkbox" name="feature" value="social"> <span>소셜/커뮤니티</span></label>
+      <label><input type="checkbox" name="feature" value="search"> <span>검색/탐색</span></label>
+      <label><input type="checkbox" name="feature" value="payment"> <span>결제/거래</span></label>
+      <label><input type="checkbox" name="feature" value="messaging"> <span>알림/메시징</span></label>
+      <label><input type="checkbox" name="feature" value="analytics"> <span>분석/대시보드</span></label>
+      <label><input type="checkbox" name="feature" value="ai"> <span>AI/자동화</span></label>
+      <label><input type="checkbox" name="feature" value="files"> <span>파일/미디어 관리</span></label>
+      <label><input type="checkbox" name="feature" value="scheduling"> <span>일정/예약</span></label>
+    </div>
+  </div>
+
+  <!-- Step 3: 기술 스택 (선택) -->
+  <div class="init-step">
+    <h3>기술 선호도 <small style="font-weight:normal;color:#9ca3af">(선택사항)</small></h3>
+    <label>프론트엔드</label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="fe-tech" value="react"> <span>React/Next.js</span></label>
+      <label><input type="checkbox" name="fe-tech" value="vue"> <span>Vue/Nuxt</span></label>
+      <label><input type="checkbox" name="fe-tech" value="flutter"> <span>Flutter</span></label>
+      <label><input type="checkbox" name="fe-tech" value="swift"> <span>Swift (iOS)</span></label>
+      <label><input type="checkbox" name="fe-tech" value="kotlin"> <span>Kotlin (Android)</span></label>
+      <label><input type="checkbox" name="fe-tech" value="electron"> <span>Electron</span></label>
+    </div>
+    <label>백엔드</label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="be-tech" value="nodejs"> <span>Node.js</span></label>
+      <label><input type="checkbox" name="be-tech" value="python"> <span>Python</span></label>
+      <label><input type="checkbox" name="be-tech" value="java"> <span>Java/Spring</span></label>
+      <label><input type="checkbox" name="be-tech" value="go"> <span>Go</span></label>
+      <label><input type="checkbox" name="be-tech" value="serverless"> <span>Serverless</span></label>
+    </div>
+    <label>데이터베이스</label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="db-tech" value="postgresql"> <span>PostgreSQL</span></label>
+      <label><input type="checkbox" name="db-tech" value="mysql"> <span>MySQL</span></label>
+      <label><input type="checkbox" name="db-tech" value="mongodb"> <span>MongoDB</span></label>
+      <label><input type="checkbox" name="db-tech" value="sqlite"> <span>SQLite</span></label>
+    </div>
+  </div>
+
+  <!-- Step 4: 상세 기획 (필수) -->
+  <div class="init-step">
+    <h3>상세 기획 <span class="required">*필수</span></h3>
+    <p style="font-size:13px;color:#9ca3af;margin-bottom:12px">서비스의 핵심 기능, 사용자 시나리오, 차별점 등을 구체적으로 작성하세요. 상세할수록 더 정확한 PRD가 생성됩니다.</p>
+    <textarea id="init-detail" class="init-textarea" placeholder="예시:
+- 주요 기능: 맛집 기록, 친구와 공유, 지도 기반 탐색
+- 사용자 시나리오: 식당 방문 후 별점+메모+사진 기록 → 친구에게 공유 → 친구가 지도에서 확인
+- 차별점: 일반 리뷰 앱과 달리 신뢰하는 지인의 추천만 보여줌
+- MVP 범위: iOS 앱, 개인 기록 + 1:1 공유, 지도 뷰"></textarea>
+    <p id="init-detail-error" style="color:#f87171;font-size:12px;margin-top:4px;display:none">상세 기획을 입력해주세요.</p>
+  </div>
+
+  <button id="btn-generate-prd" class="init-btn-primary">PRD 생성하기</button>
+</div>
+
+<!-- PRD 미리보기 (hidden) -->
+<div id="prd-preview" class="prd-preview hidden">
+  <h2>PRD 초안이 생성되었습니다</h2>
+  <p class="subtitle">내용을 확인하고 기획 리뷰를 시작하세요.</p>
+  <div id="prd-content" class="prd-preview-content"></div>
+  <div class="prd-preview-actions">
+    <button id="btn-start-review" class="btn-start-review">기획 리뷰 시작 →</button>
+    <button onclick="document.getElementById('prd-preview').classList.add('hidden');document.getElementById('init-screen').classList.remove('hidden')" style="padding:10px 20px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text-secondary);cursor:pointer">다시 수정</button>
+  </div>
+</div>
+
+<!-- Tab content wrapper -->
+<div class="tab-content hidden">
+
+<!-- 공유 필터바 + 액션바 (모든 탭에서 공용) -->
+<div class="filter-bar" id="filterBar">
+  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">Filter:</span>
+  <button class="filter-btn filter-active" data-filter="all">All <span class="count" id="count-all"></span></button>
+  <button class="filter-btn" data-filter="pending">Pending <span class="count" id="count-pending"></span></button>
+  <button class="filter-btn" data-filter="reviewing">Reviewing <span class="count" id="count-reviewing"></span></button>
+  <button class="filter-btn" data-filter="resolved">Resolved <span class="count" id="count-resolved"></span></button>
+  <button class="filter-btn" data-filter="deferred">Deferred <span class="count" id="count-deferred"></span></button>
+  <button class="filter-btn" data-filter="dismissed">Dismissed <span class="count" id="count-dismissed"></span></button>
+  <button class="filter-btn" data-filter="has-memo">Has Memo <span class="count" id="count-has-memo"></span></button>
+</div>
+
+<div class="action-bar">
+  <button id="btn-analyze" class="btn-action btn-analyze" disabled>분석하기</button>
+  <button id="btn-apply" class="btn-action btn-apply" disabled>반영하기</button>
+  <button id="btn-generate" class="btn-action btn-generate" disabled>문서 생성하기</button>
+  <div id="job-status" class="job-status hidden"></div>
+</div>
+
+<!-- ===== Tab: 기획 리뷰 ===== -->
+<div class="tab-panel active" id="panel-review">
+  <h1>기획 리뷰</h1>
+  <div class="meta" id="review-meta"></div>
+  <!-- Issues will be rendered by JS -->
+</div><!-- panel-review -->
+
+<!-- ===== Tab: 다음버전 ===== -->
+<div class="tab-panel" id="panel-features">
+  <h1>다음버전</h1>
+</div>
+
+<!-- ===== Tab: BE 설계 ===== -->
+<div class="tab-panel" id="panel-backend">
+  <h1>BE 설계</h1>
+</div>
+
+<!-- ===== Tab: FE 설계 ===== -->
+<div class="tab-panel" id="panel-frontend">
+  <h1>FE 설계</h1>
+</div>
+
+</div><!-- .tab-content -->
+
+</div><!-- .main -->
+
+<script src="app.js"></script>
+</body>
+</html>
