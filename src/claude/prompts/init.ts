@@ -15,7 +15,7 @@ export interface InitFormData {
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   'web-fullstack': '웹 서비스 (풀스택)',
   'web-frontend': '웹 서비스 (FE 단독 — 서버 없음)',
-  'pwa': 'PWA (Progressive Web App)',
+  'pwa': 'PWA (웹앱 — 설치 가능, 오프라인 지원)',
   'mobile': '모바일 앱 (iOS + Android)',
   'ios': 'iOS 앱',
   'android': 'Android 앱',
