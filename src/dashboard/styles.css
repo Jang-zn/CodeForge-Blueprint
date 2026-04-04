@@ -440,6 +440,20 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 }
 .init-textarea:focus { border-color: var(--accent); }
 .init-textarea.error { border-color: #f87171; }
+.init-model-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 28px; padding: 16px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.init-model-label { font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.init-provider-select {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 13px; padding: 6px 10px;
+  cursor: pointer; flex: 1;
+}
+.init-provider-select:focus { outline: none; border-color: var(--accent); }
+.init-provider-select:disabled { opacity: 0.5; cursor: default; }
+
 .init-btn-primary {
   display: block;
   width: 100%;

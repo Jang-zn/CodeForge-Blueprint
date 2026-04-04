@@ -560,17 +560,25 @@ function initProviderSelect(workspace) {
   const sel = document.getElementById('provider-select');
   if (!sel) return;
 
-  document.querySelectorAll('#claude-models option').forEach(opt => {
-    opt.disabled = !workspace.claudeAvailable;
-    if (!workspace.claudeAvailable) opt.title = 'Claude CLI가 설치되지 않았습니다.';
+  const claudeMsg = workspace.claudeAvailable ? '' : 'Claude CLI가 설치되지 않았습니다.';
+  const codexMsg  = workspace.codexAvailable  ? '' : 'Codex CLI가 설치되지 않았습니다. (npm install -g @openai/codex)';
+
+  ['#claude-models', '#init-claude-models'].forEach(id => {
+    document.querySelectorAll(`${id} option`).forEach(opt => {
+      opt.disabled = !workspace.claudeAvailable;
+      if (claudeMsg) opt.title = claudeMsg;
+    });
   });
-  document.querySelectorAll('#codex-models option').forEach(opt => {
-    opt.disabled = !workspace.codexAvailable;
-    if (!workspace.codexAvailable) opt.title = 'Codex CLI가 설치되지 않았습니다. (npm install -g @openai/codex)';
+  ['#codex-models', '#init-codex-models'].forEach(id => {
+    document.querySelectorAll(`${id} option`).forEach(opt => {
+      opt.disabled = !workspace.codexAvailable;
+      if (codexMsg) opt.title = codexMsg;
+    });
   });
 
   const { provider, model } = workspace.providerModel ?? { provider: 'claude', model: 'claude-sonnet-4-6' };
   const val = `${provider}:${model}`;
+
   if (!sel.querySelector(`option[value="${val}"]`)) {
     const grp = document.getElementById(provider === 'codex' ? 'codex-models' : 'claude-models');
     const opt = document.createElement('option');
@@ -581,23 +589,32 @@ function initProviderSelect(workspace) {
   sel.value = val;
   sel.disabled = false;
 
+  const initSel = document.getElementById('init-provider-select');
+  if (initSel) { initSel.value = val; initSel.disabled = false; }
+
   const label = providerLabel(provider);
   const isConnected = provider === 'codex' ? workspace.codexAvailable : workspace.claudeAvailable;
   setClaudeStatus(isConnected, isConnected ? `${label} 연결됨 (${model})` : `${label} 연결 안 됨`);
 }
 
-document.getElementById('provider-select')?.addEventListener('change', async (e) => {
-  const [provider, ...rest] = e.target.value.split(':');
+async function onProviderChange(val) {
+  const [provider, ...rest] = val.split(':');
   const model = rest.join(':');
   try {
     await API.put('/workspace/provider', { provider, model });
+    document.getElementById('provider-select').value = val;
+    const initSel = document.getElementById('init-provider-select');
+    if (initSel) initSel.value = val;
     const label = providerLabel(provider);
     setClaudeStatus(true, `${label} 연결됨 (${model})`);
     showToast(`AI 백엔드: ${label} / ${model}`);
   } catch (err) {
     showToast('모델 변경 실패: ' + err.message, 'error');
   }
-});
+}
+
+document.getElementById('provider-select')?.addEventListener('change', (e) => onProviderChange(e.target.value));
+document.getElementById('init-provider-select')?.addEventListener('change', (e) => onProviderChange(e.target.value));
 
 // ========== Workspace Picker ==========
 function showWorkspacePicker(recents = []) {
