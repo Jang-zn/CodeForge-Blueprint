@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,28 @@ import applyRoute from './routes/apply.js';
 import generateRoute from './routes/generate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function pickFolderNative(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      execFile('osascript', ['-e', 'POSIX path of (choose folder)'], { timeout: 120_000 }, (err, stdout) => {
+        resolve(err ? null : stdout.trim().replace(/\/$/, '') || null);
+      });
+    } else if (platform === 'linux') {
+      execFile('zenity', ['--file-selection', '--directory', '--title=폴더 선택'], { timeout: 120_000 }, (err, stdout) => {
+        resolve(err ? null : stdout.trim() || null);
+      });
+    } else if (platform === 'win32') {
+      const ps = `Add-Type -AssemblyName System.Windows.Forms;$f=New-Object System.Windows.Forms.FolderBrowserDialog;if($f.ShowDialog() -eq 'OK'){$f.SelectedPath}`;
+      execFile('powershell', ['-NoProfile', '-Command', ps], { timeout: 120_000 }, (err, stdout) => {
+        resolve(err ? null : stdout.trim() || null);
+      });
+    } else {
+      resolve(null);
+    }
+  });
+}
 
 function buildWorkspaceResponse(
   ws: { name: string; rootPath: string; docsPath: string },
@@ -51,6 +74,13 @@ export async function startServer(port: number): Promise<number> {
     }
     const workspace = getWorkspaceOrNull()!;
     return c.json(buildWorkspaceResponse(workspace, getDb(), claudeStatus, codexStatus));
+  });
+
+  // OS 네이티브 폴더 선택 다이얼로그
+  api.post('/workspace/pick-folder', async (c) => {
+    const folderPath = await pickFolderNative();
+    if (!folderPath) return c.json({ cancelled: true, path: null });
+    return c.json({ cancelled: false, path: folderPath });
   });
 
   // 워크스페이스 열기

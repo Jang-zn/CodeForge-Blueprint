@@ -606,16 +606,20 @@ function showWorkspacePicker(recents = []) {
   document.querySelector('.sidebar').classList.add('hidden');
   document.querySelector('.main').classList.add('hidden');
 
-  const recentEl = document.getElementById('workspace-recents');
   const listEl = document.getElementById('recents-list');
+  const emptyEl = document.getElementById('recents-empty');
   if (recents.length > 0) {
-    listEl.innerHTML = recents.map(p => `<li><button class="recent-item" data-path="${p}">${p}</button></li>`).join('');
-    recentEl.classList.remove('hidden');
+    listEl.innerHTML = recents.map(p => {
+      const name = p.split('/').pop();
+      return `<li><button class="recent-item" data-path="${p}"><span class="recent-name">${name}</span><span class="recent-path">${p}</span></button></li>`;
+    }).join('');
     listEl.querySelectorAll('.recent-item').forEach(btn => {
       btn.addEventListener('click', () => doOpenWorkspace(btn.dataset.path));
     });
+    emptyEl?.classList.add('hidden');
   } else {
-    recentEl.classList.add('hidden');
+    listEl.innerHTML = '';
+    emptyEl?.classList.remove('hidden');
   }
 }
 
@@ -627,22 +631,36 @@ function hideWorkspacePicker() {
 }
 
 async function doOpenWorkspace(folderPath) {
-  const btn = document.getElementById('workspace-open-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '열는 중...'; }
   try {
     const workspace = await API.post('/workspace/open', { path: folderPath });
-    hideWorkspacePicker();
     renderApp(workspace);
   } catch (err) {
     showToast('폴더 열기 실패: ' + err.message, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '열기'; }
+    return;
   }
+  hideWorkspacePicker();
 }
 
+document.getElementById('workspace-browse-btn')?.addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = '선택 중...';
+  try {
+    const res = await API.post('/workspace/pick-folder', {});
+    if (!res.cancelled && res.path) {
+      document.getElementById('workspace-path-input').value = res.path;
+      await doOpenWorkspace(res.path);
+    }
+  } catch (err) {
+    showToast('폴더 선택 실패: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '폴더 선택...';
+  }
+});
+
 document.getElementById('workspace-open-btn')?.addEventListener('click', () => {
-  const input = document.getElementById('workspace-path-input');
-  const p = input?.value.trim();
+  const p = document.getElementById('workspace-path-input')?.value.trim();
   if (p) doOpenWorkspace(p);
 });
 

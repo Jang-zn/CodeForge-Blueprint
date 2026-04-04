@@ -258,45 +258,68 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 }
 .workspace-picker.hidden { display: none; }
 .workspace-picker-inner {
-  width: 560px; max-width: 90vw;
+  width: 820px; max-width: 95vw;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; padding: 48px 40px;
+  border-radius: 12px; padding: 40px;
 }
 .picker-logo {
-  font-size: 13px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 20px;
+  font-size: 12px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 28px;
 }
-.workspace-picker-inner h2 { font-size: 22px; margin-bottom: 8px; }
-.picker-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+.picker-columns { display: flex; gap: 0; }
+.picker-col { flex: 1; padding: 0 28px 0 0; }
+.picker-col + .picker-col { padding: 0 0 0 28px; border-left: 1px solid var(--border); }
+.picker-col-title {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px;
+}
+/* 최근 프로젝트 */
+.recents-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.recent-item {
+  display: flex; flex-direction: column; width: 100%; text-align: left;
+  background: none; border: none; border-radius: 6px;
+  padding: 8px 10px; cursor: pointer; gap: 2px;
+}
+.recent-item:hover { background: var(--surface2); }
+.recent-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.recent-path { font-size: 11px; color: var(--text-muted); font-family: 'SF Mono', 'Fira Code', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recents-empty { font-size: 13px; color: var(--text-muted); padding: 8px 10px; }
+.recents-empty.hidden { display: none; }
+/* 새 프로젝트 */
+.picker-col-new { display: flex; flex-direction: column; }
+.picker-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; }
 .picker-desc code {
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: 4px; padding: 1px 5px; font-size: 12px;
 }
-.picker-input-row { display: flex; gap: 8px; margin-bottom: 24px; }
+.picker-browse-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 6px;
+  padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+  text-align: center; margin-bottom: 20px;
+}
+.picker-browse-btn:hover { opacity: 0.85; }
+.picker-browse-btn:disabled { opacity: 0.5; cursor: default; }
+.picker-divider {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  color: var(--text-muted); font-size: 11px;
+}
+.picker-divider::before, .picker-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.picker-input-row { display: flex; gap: 8px; }
 .picker-path-input {
   flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text); font-size: 13px; padding: 8px 12px;
-  outline: none; font-family: 'SF Mono', 'Fira Code', monospace;
+  border-radius: 6px; color: var(--text); font-size: 12px; padding: 7px 10px;
+  outline: none; font-family: 'SF Mono', 'Fira Code', monospace; min-width: 0;
 }
 .picker-path-input:focus { border-color: var(--accent); }
 .picker-open-btn {
-  background: var(--accent); color: #fff; border: none; border-radius: 6px;
-  padding: 8px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
-  white-space: nowrap;
+  background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 14px; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
 }
-.picker-open-btn:hover { opacity: 0.85; }
+.picker-open-btn:hover { border-color: var(--accent); color: var(--accent); }
 .picker-open-btn:disabled { opacity: 0.5; cursor: default; }
-.workspace-recents.hidden { display: none; }
-.recents-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; margin-bottom: 8px; }
-.recents-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-.recent-item {
-  display: block; width: 100%; text-align: left;
-  background: none; border: none; border-radius: 6px;
-  color: var(--text-muted); font-size: 13px; padding: 6px 10px;
-  cursor: pointer; font-family: 'SF Mono', 'Fira Code', monospace;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.recent-item:hover { background: var(--surface2); color: var(--text); }
 .provider-select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);

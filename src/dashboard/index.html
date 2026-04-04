@@ -13,15 +13,25 @@
 <div id="workspace-picker" class="workspace-picker hidden">
   <div class="workspace-picker-inner">
     <div class="picker-logo">CodeForge Blueprint</div>
-    <h2>폴더 열기</h2>
-    <p class="picker-desc">프로젝트 폴더를 지정하면 해당 폴더의 <code>docs/</code>에 문서가 저장됩니다.</p>
-    <div class="picker-input-row">
-      <input type="text" id="workspace-path-input" class="picker-path-input" placeholder="~/projects/my-app">
-      <button id="workspace-open-btn" class="picker-open-btn">열기</button>
-    </div>
-    <div id="workspace-recents" class="workspace-recents hidden">
-      <div class="recents-title">최근 항목</div>
-      <ul id="recents-list" class="recents-list"></ul>
+    <div class="picker-columns">
+
+      <div class="picker-col">
+        <div class="picker-col-title">최근 프로젝트</div>
+        <ul id="recents-list" class="recents-list"></ul>
+        <p id="recents-empty" class="recents-empty hidden">최근 프로젝트가 없습니다.</p>
+      </div>
+
+      <div class="picker-col picker-col-new">
+        <div class="picker-col-title">새 프로젝트</div>
+        <p class="picker-desc">프로젝트 폴더를 선택하면 해당 폴더의 <code>docs/</code>에 문서가 저장됩니다.</p>
+        <button id="workspace-browse-btn" class="picker-browse-btn">폴더 선택...</button>
+        <div class="picker-divider"><span>또는 경로 직접 입력</span></div>
+        <div class="picker-input-row">
+          <input type="text" id="workspace-path-input" class="picker-path-input" placeholder="~/projects/my-app">
+          <button id="workspace-open-btn" class="picker-open-btn">열기</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
