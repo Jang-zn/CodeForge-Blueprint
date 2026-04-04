@@ -1,15 +1,13 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
-import { execFile } from 'child_process';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { openWorkspace, expandHome, getWorkspaceOrNull, hasWorkspace, getRecents } from '../workspace.js';
-import { openDb, getDb, resetDb } from '../db/index.js';
-import { getWorkspaceMeta, getJob, getProviderModel, setProviderModel, type ProviderType } from '../db/repository.js';
+import { getWorkspaceOrNull } from '../workspace.js';
+import { getDb } from '../db/index.js';
+import { getJob } from '../db/repository.js';
 import { checkClaude, checkCodex } from '../claude/finder.js';
-import workspaceRoute from './routes/workspace.js';
+import { createWorkspaceRoute } from './routes/workspace.js';
 import issuesRoute from './routes/issues.js';
 import initRoute from './routes/init.js';
 import analyzeRoute from './routes/analyze.js';
@@ -18,104 +16,21 @@ import generateRoute from './routes/generate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-function pickFolderNative(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const platform = process.platform;
-    if (platform === 'darwin') {
-      execFile('osascript', ['-e', 'POSIX path of (choose folder)'], { timeout: 120_000 }, (err, stdout) => {
-        resolve(err ? null : stdout.trim().replace(/\/$/, '') || null);
-      });
-    } else if (platform === 'linux') {
-      execFile('zenity', ['--file-selection', '--directory', '--title=폴더 선택'], { timeout: 120_000 }, (err, stdout) => {
-        resolve(err ? null : stdout.trim() || null);
-      });
-    } else if (platform === 'win32') {
-      const ps = `Add-Type -AssemblyName System.Windows.Forms;$f=New-Object System.Windows.Forms.FolderBrowserDialog;if($f.ShowDialog() -eq 'OK'){$f.SelectedPath}`;
-      execFile('powershell', ['-NoProfile', '-Command', ps], { timeout: 120_000 }, (err, stdout) => {
-        resolve(err ? null : stdout.trim() || null);
-      });
-    } else {
-      resolve(null);
-    }
-  });
-}
-
-function buildWorkspaceResponse(
-  ws: { name: string; rootPath: string; docsPath: string },
-  db: any,
-  claudeStatus: { available: boolean; version?: string },
-  codexStatus: { available: boolean; version?: string },
-) {
-  const meta = getWorkspaceMeta(db);
-  return {
-    hasWorkspace: true,
-    name: ws.name,
-    rootPath: ws.rootPath,
-    docsPath: ws.docsPath,
-    prd_path: meta?.prd_path ?? null,
-    claudeAvailable: claudeStatus.available,
-    claudeVersion: claudeStatus.version,
-    codexAvailable: codexStatus.available,
-    codexVersion: codexStatus.version,
-    providerModel: getProviderModel(db),
-  };
-}
-
 export async function startServer(port: number): Promise<number> {
   const [claudeStatus, codexStatus] = await Promise.all([checkClaude(), checkCodex()]);
 
   const app = new Hono();
   const api = new Hono();
 
-  // 워크스페이스 정보 (대시보드 초기 로드용)
-  api.get('/workspace', (c) => {
-    if (!hasWorkspace()) {
-      return c.json({ hasWorkspace: false, recents: getRecents() });
-    }
-    const workspace = getWorkspaceOrNull()!;
-    return c.json(buildWorkspaceResponse(workspace, getDb(), claudeStatus, codexStatus));
-  });
+  api.route('/workspace', createWorkspaceRoute(claudeStatus, codexStatus));
 
-  // OS 네이티브 폴더 선택 다이얼로그
-  api.post('/workspace/pick-folder', async (c) => {
-    const folderPath = await pickFolderNative();
-    if (!folderPath) return c.json({ cancelled: true, path: null });
-    return c.json({ cancelled: false, path: folderPath });
-  });
-
-  // 워크스페이스 열기
-  api.post('/workspace/open', async (c) => {
-    const body = await c.req.json<{ path: string }>().catch(() => null);
-    if (!body?.path?.trim()) return c.json({ error: 'path가 필요합니다.' }, 400);
-
-    const absPath = path.resolve(expandHome(body.path));
-    if (!fs.existsSync(absPath)) return c.json({ error: '폴더가 존재하지 않습니다.' }, 400);
-
-    resetDb();
-    const ws = openWorkspace(absPath);
-    const db = openDb(ws.dbPath);
-    return c.json(buildWorkspaceResponse(ws, db, claudeStatus, codexStatus));
-  });
-
-  // provider 선택 변경
-  api.put('/workspace/provider', async (c) => {
-    if (!hasWorkspace()) return c.json({ error: '워크스페이스가 열려있지 않습니다.' }, 400);
-    const body = await c.req.json<{ provider: ProviderType; model: string }>().catch(() => null);
-    if (!body?.provider || !body?.model) return c.json({ error: 'provider와 model이 필요합니다.' }, 400);
-    if (body.provider !== 'claude' && body.provider !== 'codex') return c.json({ error: '유효하지 않은 provider입니다.' }, 400);
-    setProviderModel(getDb(), body.provider, body.model);
-    return c.json({ ok: true });
-  });
-
-  // Job 폴링
   api.get('/jobs/:id', (c) => {
-    if (!hasWorkspace()) return c.json({ error: 'Not found' }, 404);
+    if (!getWorkspaceOrNull()) return c.json({ error: 'Not found' }, 404);
     const job = getJob(getDb(), c.req.param('id'));
     if (!job) return c.json({ error: 'Not found' }, 404);
     return c.json(job);
   });
 
-  api.route('/workspace', workspaceRoute);
   api.route('/issues', issuesRoute);
   api.route('/init', initRoute);
   api.route('/analyze', analyzeRoute);

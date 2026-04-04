@@ -13,7 +13,8 @@ const RECENTS_PATH = path.join(os.homedir(), '.codeforge-blueprint', 'recents.js
 
 export function getRecents(): string[] {
   try {
-    return JSON.parse(fs.readFileSync(RECENTS_PATH, 'utf-8'));
+    const all: string[] = JSON.parse(fs.readFileSync(RECENTS_PATH, 'utf-8'));
+    return all.filter(p => fs.existsSync(p));
   } catch {
     return [];
   }
