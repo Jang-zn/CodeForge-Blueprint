@@ -599,32 +599,93 @@ document.getElementById('provider-select')?.addEventListener('change', async (e)
   }
 });
 
+// ========== Workspace Picker ==========
+function showWorkspacePicker(recents = []) {
+  document.getElementById('workspace-picker').classList.remove('hidden');
+  document.querySelector('.workspace-header').classList.add('hidden');
+  document.querySelector('.sidebar').classList.add('hidden');
+  document.querySelector('.main').classList.add('hidden');
+
+  const recentEl = document.getElementById('workspace-recents');
+  const listEl = document.getElementById('recents-list');
+  if (recents.length > 0) {
+    listEl.innerHTML = recents.map(p => `<li><button class="recent-item" data-path="${p}">${p}</button></li>`).join('');
+    recentEl.classList.remove('hidden');
+    listEl.querySelectorAll('.recent-item').forEach(btn => {
+      btn.addEventListener('click', () => doOpenWorkspace(btn.dataset.path));
+    });
+  } else {
+    recentEl.classList.add('hidden');
+  }
+}
+
+function hideWorkspacePicker() {
+  document.getElementById('workspace-picker').classList.add('hidden');
+  document.querySelector('.workspace-header').classList.remove('hidden');
+  document.querySelector('.sidebar').classList.remove('hidden');
+  document.querySelector('.main').classList.remove('hidden');
+}
+
+async function doOpenWorkspace(folderPath) {
+  const btn = document.getElementById('workspace-open-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '열는 중...'; }
+  try {
+    const workspace = await API.post('/workspace/open', { path: folderPath });
+    hideWorkspacePicker();
+    renderApp(workspace);
+  } catch (err) {
+    showToast('폴더 열기 실패: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '열기'; }
+  }
+}
+
+document.getElementById('workspace-open-btn')?.addEventListener('click', () => {
+  const input = document.getElementById('workspace-path-input');
+  const p = input?.value.trim();
+  if (p) doOpenWorkspace(p);
+});
+
+document.getElementById('workspace-path-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const p = e.target.value.trim();
+    if (p) doOpenWorkspace(p);
+  }
+});
+
 // ========== Initial Load ==========
+function renderApp(workspace) {
+  const nameEl = document.getElementById('workspace-name');
+  if (nameEl) nameEl.textContent = workspace.name || 'CodeForge Blueprint';
+
+  initProviderSelect(workspace);
+
+  if (workspace.prd_path) {
+    document.getElementById('init-screen').classList.add('hidden');
+    document.getElementById('prd-preview').classList.add('hidden');
+    document.querySelector('.tab-content')?.classList.remove('hidden');
+    ['btn-analyze', 'btn-apply', 'btn-generate'].forEach(id => {
+      document.getElementById(id)?.removeAttribute('disabled');
+    });
+    loadIssues(activeTab);
+  } else {
+    document.getElementById('init-screen').classList.remove('hidden');
+    document.querySelector('.tab-content')?.classList.add('hidden');
+  }
+}
+
 async function loadInitialState() {
   try {
     const workspace = await API.get('/workspace');
 
-    const nameEl = document.getElementById('workspace-name');
-    if (nameEl) nameEl.textContent = workspace.name || 'CodeForge Blueprint';
-
-    initProviderSelect(workspace);
-
-    if (workspace.prd_path) {
-      document.getElementById('init-screen').classList.add('hidden');
-      document.getElementById('prd-preview').classList.add('hidden');
-      document.querySelector('.tab-content')?.classList.remove('hidden');
-      ['btn-analyze', 'btn-apply', 'btn-generate'].forEach(id => {
-        document.getElementById(id)?.removeAttribute('disabled');
-      });
-      loadIssues(activeTab);
-    } else {
-      document.getElementById('init-screen').classList.remove('hidden');
-      document.querySelector('.tab-content')?.classList.add('hidden');
+    if (!workspace.hasWorkspace) {
+      showWorkspacePicker(workspace.recents);
+      return;
     }
+
+    renderApp(workspace);
   } catch (e) {
     console.error('Failed to load workspace:', e);
-    document.getElementById('init-screen').classList.remove('hidden');
-    document.querySelector('.tab-content')?.classList.add('hidden');
     setClaudeStatus(false, '서버 연결 실패');
   }
 }

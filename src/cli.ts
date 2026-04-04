@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { initWorkspace } from './workspace.js';
+import { openWorkspace } from './workspace.js';
+import { openDb } from './db/index.js';
 import { startServer } from './server/index.js';
 import open from 'open';
 
-function parseArgs(args: string[]): { workspacePath: string; port: number } {
-  let workspacePath = process.cwd();
+function parseArgs(args: string[]): { workspacePath: string | null; port: number } {
+  let workspacePath: string | null = null;
   let port = 3456;
 
   for (let i = 0; i < args.length; i++) {
@@ -23,12 +24,13 @@ function parseArgs(args: string[]): { workspacePath: string; port: number } {
 async function main() {
   const { workspacePath, port } = parseArgs(process.argv.slice(2));
 
-  const workspace = initWorkspace(workspacePath);
+  if (workspacePath) {
+    const ws = openWorkspace(workspacePath);
+    openDb(ws.dbPath);
+  }
 
-  const actualPort = await startServer(workspace, port);
-
-  const url = `http://localhost:${actualPort}`;
-  await open(url);
+  const actualPort = await startServer(port);
+  await open(`http://localhost:${actualPort}`);
 }
 
 main().catch((err) => {

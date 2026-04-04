@@ -15,17 +15,17 @@
 ## 사용법
 
 ```bash
-# 프로젝트 폴더를 워크스페이스로 지정
+# 인자 없이 실행 — 브라우저에서 폴더 선택
+npx codeforge-blueprint
+
+# 폴더를 미리 지정해서 바로 시작
 npx codeforge-blueprint ~/projects/my-app
 
-# 현재 디렉토리 사용
-npx codeforge-blueprint .
-
 # 포트 지정
-npx codeforge-blueprint ~/projects/my-app --port 4000
+npx codeforge-blueprint --port 4000
 ```
 
-대시보드가 자동으로 브라우저에서 열립니다. 생성된 파일은 모두 `{workspace}/docs/` 에 저장됩니다.
+대시보드가 자동으로 브라우저에서 열립니다. 폴더를 지정하지 않으면 VS Code처럼 폴더 선택 화면이 표시되며, 최근 항목을 클릭하거나 경로를 직접 입력해 워크스페이스를 열 수 있습니다. 생성된 파일은 모두 `{workspace}/docs/` 에 저장됩니다.
 
 ## 파이프라인
 

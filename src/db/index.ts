@@ -20,3 +20,7 @@ export function getDb(): any {
   if (!_db) throw new Error('Database not opened');
   return _db;
 }
+
+export function resetDb(): void {
+  if (_db) { try { _db.close(); } catch { /* ignore */ } _db = null; }
+}
