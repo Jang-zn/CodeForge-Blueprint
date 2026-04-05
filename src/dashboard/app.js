@@ -582,17 +582,13 @@ function initProviderSelect(workspace) {
   const claudeMsg = workspace.claudeAvailable ? '' : 'Claude CLI가 설치되지 않았습니다.';
   const codexMsg  = workspace.codexAvailable  ? '' : 'Codex CLI가 설치되지 않았습니다. (npm install -g @openai/codex)';
 
-  ['#claude-models', '#init-claude-models'].forEach(id => {
-    document.querySelectorAll(`${id} option`).forEach(opt => {
-      opt.disabled = !workspace.claudeAvailable;
-      if (claudeMsg) opt.title = claudeMsg;
-    });
+  document.querySelectorAll('#claude-models option').forEach(opt => {
+    opt.disabled = !workspace.claudeAvailable;
+    if (claudeMsg) opt.title = claudeMsg;
   });
-  ['#codex-models', '#init-codex-models'].forEach(id => {
-    document.querySelectorAll(`${id} option`).forEach(opt => {
-      opt.disabled = !workspace.codexAvailable;
-      if (codexMsg) opt.title = codexMsg;
-    });
+  document.querySelectorAll('#codex-models option').forEach(opt => {
+    opt.disabled = !workspace.codexAvailable;
+    if (codexMsg) opt.title = codexMsg;
   });
 
   const { provider, model } = workspace.providerModel ?? { provider: 'claude', model: 'claude-sonnet-4-6' };
@@ -608,9 +604,6 @@ function initProviderSelect(workspace) {
   sel.value = val;
   sel.disabled = false;
 
-  const initSel = document.getElementById('init-provider-select');
-  if (initSel) { initSel.value = val; initSel.disabled = false; }
-
   const label = providerLabel(provider);
   const isConnected = provider === 'codex' ? workspace.codexAvailable : workspace.claudeAvailable;
   setClaudeStatus(isConnected, isConnected ? `${label} 연결됨 (${model})` : `${label} 연결 안 됨`);
@@ -622,8 +615,6 @@ async function onProviderChange(val) {
   try {
     await API.put('/workspace/provider', { provider, model });
     document.getElementById('provider-select').value = val;
-    const initSel = document.getElementById('init-provider-select');
-    if (initSel) initSel.value = val;
     const label = providerLabel(provider);
     setClaudeStatus(true, `${label} 연결됨 (${model})`);
     showToast(`AI 백엔드: ${label} / ${model}`);
@@ -633,14 +624,18 @@ async function onProviderChange(val) {
 }
 
 document.getElementById('provider-select')?.addEventListener('change', (e) => onProviderChange(e.target.value));
-document.getElementById('init-provider-select')?.addEventListener('change', (e) => onProviderChange(e.target.value));
 
 // ========== Workspace Picker ==========
-function showWorkspacePicker(recents = []) {
+function showWorkspacePicker(recents = [], canCancel = false) {
   document.getElementById('workspace-picker').classList.remove('hidden');
   document.querySelector('.workspace-header').classList.add('hidden');
   document.querySelector('.sidebar').classList.add('hidden');
   document.querySelector('.main').classList.add('hidden');
+
+  const cancelBtn = document.getElementById('workspace-picker-cancel');
+  if (cancelBtn) {
+    canCancel ? cancelBtn.classList.remove('hidden') : cancelBtn.classList.add('hidden');
+  }
 
   const listEl = document.getElementById('recents-list');
   const emptyEl = document.getElementById('recents-empty');
@@ -680,10 +675,14 @@ async function doOpenWorkspace(folderPath) {
 document.getElementById('btn-change-workspace')?.addEventListener('click', async () => {
   try {
     const workspace = await API.get('/workspace');
-    showWorkspacePicker(workspace.recents ?? []);
+    showWorkspacePicker(workspace.recents ?? [], true);
   } catch {
-    showWorkspacePicker([]);
+    showWorkspacePicker([], true);
   }
+});
+
+document.getElementById('workspace-picker-cancel')?.addEventListener('click', () => {
+  hideWorkspacePicker();
 });
 
 document.getElementById('workspace-browse-btn')?.addEventListener('click', async (e) => {

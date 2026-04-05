@@ -274,7 +274,15 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 .picker-logo {
   font-size: 12px; font-weight: 700; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 1px; margin-bottom: 28px;
+  display: flex; align-items: center; justify-content: space-between;
 }
+.picker-cancel-btn {
+  font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0;
+  background: transparent; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-muted); padding: 4px 10px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.picker-cancel-btn:hover { border-color: var(--accent); color: var(--text); }
 .picker-columns { display: flex; gap: 0; }
 .picker-col { flex: 1; padding: 0 28px 0 0; }
 .picker-col + .picker-col { padding: 0 0 0 28px; border-left: 1px solid var(--border); }
@@ -449,19 +457,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 }
 .init-textarea:focus { border-color: var(--accent); }
 .init-textarea.error { border-color: #f87171; }
-.init-model-row {
-  display: flex; align-items: center; gap: 12px;
-  margin-top: 28px; padding: 16px; background: var(--surface2);
-  border: 1px solid var(--border); border-radius: 8px;
-}
-.init-model-label { font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
-.init-provider-select {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text); font-size: 13px; padding: 6px 10px;
-  cursor: pointer; flex: 1;
-}
-.init-provider-select:focus { outline: none; border-color: var(--accent); }
-.init-provider-select:disabled { opacity: 0.5; cursor: default; }
 
 .init-btn-primary {
   display: block;
@@ -492,6 +487,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 }
 .init-import-section { margin-top: 16px; text-align: center; }
 .init-import-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+.init-import-hint { color: var(--text-muted); font-size: 12px; }
 .init-btn-secondary {
   display: inline-block;
   padding: 10px 20px;
