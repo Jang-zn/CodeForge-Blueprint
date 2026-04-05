@@ -475,6 +475,25 @@ document.getElementById('init-detail')?.addEventListener('input', () => {
   document.getElementById('init-detail-error').style.display = 'none';
 });
 
+document.getElementById('btn-import-prd')?.addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = '파일 선택 중...';
+  try {
+    const res = await API.post('/init/import-file', {});
+    if (res.cancelled) return;
+    document.getElementById('prd-content').textContent = res.content || '';
+    document.getElementById('init-screen').classList.add('hidden');
+    document.getElementById('prd-preview').classList.remove('hidden');
+    showToast(`"${res.originalName}" 파일을 불러왔습니다.`, 'success');
+  } catch (err) {
+    showToast('파일 불러오기 실패: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '기획서 파일 불러오기 (.md / .txt)...';
+  }
+});
+
 document.getElementById('btn-start-review')?.addEventListener('click', async () => {
   document.getElementById('prd-preview').classList.add('hidden');
   document.querySelector('.tab-content')?.classList.remove('hidden');

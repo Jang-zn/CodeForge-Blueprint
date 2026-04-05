@@ -471,6 +471,32 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 .init-btn-primary:hover { opacity: 0.9; }
 .init-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.init-import-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 24px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.init-import-divider::before,
+.init-import-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.init-import-section { margin-top: 16px; text-align: center; }
+.init-import-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+.init-btn-secondary {
+  display: inline-block;
+  padding: 10px 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.init-btn-secondary:hover { border-color: var(--accent); color: var(--text-primary); }
+.init-btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* === PRD 미리보기 === */
 .prd-preview {
   max-width: 720px;

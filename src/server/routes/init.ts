@@ -2,11 +2,40 @@ import { Hono } from 'hono';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { execFile } from 'child_process';
 import { getDb } from '../../db/index.js';
 import { upsertWorkspaceMeta, createJob, updateJob, getProviderModel } from '../../db/repository.js';
 import { getWorkspace } from '../../workspace.js';
 import { spawnProvider } from '../../claude/provider.js';
 import { buildInitPrompt, type InitFormData } from '../../claude/prompts/init.js';
+
+function pickFileNative(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const platform = process.platform;
+    if (platform === 'darwin') {
+      execFile(
+        'osascript',
+        ['-e', 'POSIX path of (choose file with prompt "기획서 파일 선택 (.md, .txt)" of type {"public.plain-text", "net.daringfireball.markdown", "public.text"})'],
+        { timeout: 120_000 },
+        (err, stdout) => resolve(err ? null : stdout.trim().replace(/\/$/, '') || null),
+      );
+    } else if (platform === 'linux') {
+      execFile(
+        'zenity',
+        ['--file-selection', '--title=기획서 파일 선택', '--file-filter=텍스트/마크다운 | *.md *.txt'],
+        { timeout: 120_000 },
+        (err, stdout) => resolve(err ? null : stdout.trim() || null),
+      );
+    } else if (platform === 'win32') {
+      const ps = `Add-Type -AssemblyName System.Windows.Forms;$f=New-Object System.Windows.Forms.OpenFileDialog;$f.Filter='Markdown/Text|*.md;*.txt';if($f.ShowDialog() -eq 'OK'){$f.FileName}`;
+      execFile('powershell', ['-NoProfile', '-Command', ps], { timeout: 120_000 }, (err, stdout) => {
+        resolve(err ? null : stdout.trim() || null);
+      });
+    } else {
+      resolve(null);
+    }
+  });
+}
 
 const initRoute = new Hono();
 
@@ -51,6 +80,32 @@ initRoute.post('/', async (c) => {
   })();
 
   return c.json({ jobId });
+});
+
+// POST /api/init/import-file — OS 파일 피커로 기존 기획서 불러오기
+initRoute.post('/import-file', async (c) => {
+  const filePath = await pickFileNative();
+  if (!filePath) return c.json({ cancelled: true });
+
+  if (!fs.existsSync(filePath)) return c.json({ error: '파일을 찾을 수 없습니다.' }, 400);
+
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== '.md' && ext !== '.txt') {
+    return c.json({ error: '.md 또는 .txt 파일만 지원합니다.' }, 400);
+  }
+
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const workspace = getWorkspace();
+  const db = getDb();
+
+  const destName = `prd-imported${ext}`;
+  const destPath = path.join(workspace.docsPath, destName);
+  fs.mkdirSync(workspace.docsPath, { recursive: true });
+  fs.copyFileSync(filePath, destPath);
+
+  upsertWorkspaceMeta(db, { prd_path: destPath });
+
+  return c.json({ content, path: destPath, originalName: path.basename(filePath) });
 });
 
 // GET /api/init/prd — 생성된 PRD 내용 반환
