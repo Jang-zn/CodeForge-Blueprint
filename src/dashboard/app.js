@@ -677,6 +677,15 @@ async function doOpenWorkspace(folderPath) {
   hideWorkspacePicker();
 }
 
+document.getElementById('btn-change-workspace')?.addEventListener('click', async () => {
+  try {
+    const workspace = await API.get('/workspace');
+    showWorkspacePicker(workspace.recents ?? []);
+  } catch {
+    showWorkspacePicker([]);
+  }
+});
+
 document.getElementById('workspace-browse-btn')?.addEventListener('click', async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
