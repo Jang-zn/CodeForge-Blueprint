@@ -2,31 +2,35 @@ import { Hono } from 'hono';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { getDb } from '../../db/index.js';
 import {
   getIssues,
   getWorkspaceMeta,
   getTabVersion,
   createJob,
   updateJob,
+  appendJobLog,
   getProviderModel,
+  markSupersededJobs,
+  isJobRunnable,
+  addDocumentRecord,
   type Tab,
 } from '../../db/repository.js';
-import { getWorkspace } from '../../workspace.js';
 import { spawnProvider } from '../../claude/provider.js';
+import { chunkToLogText } from '../../claude/log-extractor.js';
+import { requireRequestContext } from '../context.js';
 
 const generateRoute = new Hono();
 
 function buildWriteDocPrompt(tab: Tab, issues: ReturnType<typeof getIssues>, prdContent: string, version: string): string {
-  const resolvedIssues = issues.filter(i => i.status === 'resolved');
-  const deferredIssues = issues.filter(i => i.status === 'deferred');
+  const resolvedIssues = issues.filter(issue => issue.status === 'resolved');
+  const deferredIssues = issues.filter(issue => issue.status === 'deferred');
 
-  const issuesSummary = resolvedIssues.map(i =>
-    `- [${i.id}] ${i.title}: ${i.memo || '확정'}`
+  const issuesSummary = resolvedIssues.map(issue =>
+    `- [${issue.id}] ${issue.title}: ${issue.memo || '확정'}`
   ).join('\n');
 
-  const deferredSummary = deferredIssues.map(i =>
-    `- [${i.id}] ${i.title}: ${i.memo || '보류'}`
+  const deferredSummary = deferredIssues.map(issue =>
+    `- [${issue.id}] ${issue.title}: ${issue.memo || '보류'}`
   ).join('\n');
 
   const docType = {
@@ -55,56 +59,75 @@ ${deferredSummary || '없음'}
 - 마크다운 문서만 출력하세요 (다른 설명 없이)`;
 }
 
-// POST /api/generate
 generateRoute.post('/', async (c) => {
-  const db = getDb();
-  const workspace = getWorkspace();
+  const { db, workspace, sessionId } = requireRequestContext(c);
   const body = await c.req.json<{ tab: Tab }>().catch(() => ({ tab: 'review' as Tab }));
   const tab: Tab = body.tab ?? 'review';
 
   const meta = getWorkspaceMeta(db);
   if (!meta?.prd_path) {
-    return c.json({ error: 'PRD 경로가 설정되지 않았습니다.' }, 400);
+    return c.json({ error: 'PRD 경로가 설정되지 않았습니다.', recovery: '먼저 PRD를 생성하거나 불러오세요.' }, 400);
   }
+  const prdPath = meta.prd_path;
 
   const jobId = crypto.randomUUID();
-  createJob(db, jobId, `generate-doc-${tab}`);
+  const providerModel = getProviderModel(db);
+  const version = getTabVersion(db, tab);
+  const filename = `${tab}-${version}.md`;
+  markSupersededJobs(db, { session_id: sessionId, type: `generate-${tab}`, tab, run_key: tab }, jobId);
+  createJob(db, jobId, `generate-${tab}`, {
+    tab,
+    session_id: sessionId,
+    capability: 'generation',
+    run_key: tab,
+    source_version: version,
+    workspace_root: workspace.rootPath,
+  });
+  appendJobLog(db, jobId, `[${providerModel.provider}:${providerModel.model}] 문서 생성 시작...\n`);
 
   (async () => {
     try {
       const issues = getIssues(db, tab);
-      const prdContent = fs.readFileSync(meta.prd_path!, 'utf-8');
-      const version = getTabVersion(db, tab);
+      const prdContent = fs.readFileSync(prdPath, 'utf-8');
 
       const prompt = buildWriteDocPrompt(tab, issues, prdContent, version);
-      const result = await spawnProvider(prompt, getProviderModel(db));
+      const result = await spawnProvider(prompt, providerModel, {
+        onChunk: (chunk) => {
+          if (!isJobRunnable(db, jobId)) return;
+          const text = chunkToLogText(chunk, providerModel.provider);
+          if (text) appendJobLog(db, jobId, text);
+        },
+      });
 
+      if (!isJobRunnable(db, jobId)) return;
       if (!result.success) {
         updateJob(db, jobId, 'failed', result.error);
         return;
       }
 
-      // 파일명: {tab}-{version}.md
-      const filename = `${tab}-${version}.md`;
       const outputPath = path.join(workspace.docsPath, filename);
       fs.writeFileSync(outputPath, result.result, 'utf-8');
+      addDocumentRecord(db, { tab, version, kind: 'generated-doc', file_path: outputPath, source_version: version, source_job_id: jobId });
 
-      updateJob(db, jobId, 'completed');
+      updateJob(db, jobId, 'completed', undefined, { result_path: outputPath });
     } catch (e) {
+      if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));
     }
   })();
 
-  return c.json({ jobId });
+  return c.json({ jobId, filename, downloadUrl: `/api/generate/download/${filename}` });
 });
 
-// GET /api/generate/download/:filename — 생성된 문서 다운로드
 generateRoute.get('/download/:filename', (c) => {
-  const workspace = getWorkspace();
+  const { workspace } = requireRequestContext(c);
   const filename = c.req.param('filename');
+  if (path.basename(filename) !== filename || !filename.endsWith('.md')) {
+    return c.json({ error: '파일을 찾을 수 없습니다.' }, 404);
+  }
   const filePath = path.join(workspace.docsPath, filename);
 
-  if (!fs.existsSync(filePath) || !filename.endsWith('.md')) {
+  if (!fs.existsSync(filePath)) {
     return c.json({ error: '파일을 찾을 수 없습니다.' }, 404);
   }
 

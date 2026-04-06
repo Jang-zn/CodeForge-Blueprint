@@ -1,34 +1,25 @@
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import crypto from 'crypto';
+import {
+  createSession,
+  getSession,
+  deleteSession,
+  addRecent,
+  type SessionRow,
+} from './db/app-db.js';
 
 export interface WorkspaceContext {
+  sessionId: string;
   rootPath: string;
   docsPath: string;
   dbPath: string;
   name: string;
+  openedAt: string;
 }
 
-const RECENTS_PATH = path.join(os.homedir(), '.codeforge-blueprint', 'recents.json');
-
-export function getRecents(): string[] {
-  try {
-    const all: string[] = JSON.parse(fs.readFileSync(RECENTS_PATH, 'utf-8'));
-    return all.filter(p => fs.existsSync(p));
-  } catch {
-    return [];
-  }
-}
-
-function saveRecent(rootPath: string): void {
-  const recents = getRecents().filter(r => r !== rootPath);
-  recents.unshift(rootPath);
-  const dir = path.dirname(RECENTS_PATH);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(RECENTS_PATH, JSON.stringify(recents.slice(0, 10)));
-}
-
-let _workspace: WorkspaceContext | null = null;
+export { getRecents } from './db/app-db.js';
 
 export function expandHome(p: string): string {
   return p.replace(/^~/, os.homedir());
@@ -41,21 +32,53 @@ export function openWorkspace(rootPath: string): WorkspaceContext {
   const dbPath = path.join(dbDir, 'data.db');
 
   fs.mkdirSync(dbDir, { recursive: true });
-  saveRecent(absRoot);
+  addRecent(absRoot);
 
-  _workspace = { rootPath: absRoot, docsPath, dbPath, name: path.basename(absRoot) };
-  return _workspace;
+  const ws: WorkspaceContext = {
+    sessionId: crypto.randomUUID(),
+    rootPath: absRoot,
+    docsPath,
+    dbPath,
+    name: path.basename(absRoot),
+    openedAt: new Date().toISOString(),
+  };
+  createSession({
+    id: ws.sessionId,
+    workspaceRoot: absRoot,
+    workspaceName: ws.name,
+    docsPath,
+    dbPath,
+  });
+  return ws;
 }
 
-export function getWorkspace(): WorkspaceContext {
-  if (!_workspace) throw new Error('Workspace not initialized');
-  return _workspace;
+function rowToContext(row: SessionRow): WorkspaceContext {
+  return {
+    sessionId: row.id,
+    rootPath: row.workspace_root,
+    docsPath: row.docs_path,
+    dbPath: row.db_path,
+    name: row.workspace_name,
+    openedAt: row.created_at,
+  };
 }
 
-export function getWorkspaceOrNull(): WorkspaceContext | null {
-  return _workspace;
+export function getWorkspace(sessionId: string): WorkspaceContext {
+  const row = getSession(sessionId);
+  if (!row) throw new Error('Workspace not initialized');
+  return rowToContext(row);
 }
 
-export function hasWorkspace(): boolean {
-  return _workspace !== null;
+export function getWorkspaceOrNull(sessionId: string | null | undefined): WorkspaceContext | null {
+  if (!sessionId) return null;
+  const row = getSession(sessionId);
+  return row ? rowToContext(row) : null;
+}
+
+export function hasWorkspace(sessionId: string | null | undefined): boolean {
+  return getWorkspaceOrNull(sessionId) !== null;
+}
+
+export function closeWorkspaceSession(sessionId: string): void {
+  deleteSession(sessionId);
 }

@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { findCodexBinary } from './finder.js';
 import type { SpawnOptions, SpawnResult } from './spawner.js';
+import { pickText } from './log-extractor.js';
 
 const LARGE_PROMPT_THRESHOLD = 100_000; // 100KB
 
@@ -75,31 +76,60 @@ export async function spawnCodex(prompt: string, options: SpawnOptions = {}): Pr
 
 /**
  * Codex --json JSONL 출력 파싱.
- * type==="message" && role==="assistant" 이벤트의 마지막 텍스트를 반환.
+ * assistant 메시지 텍스트를 추출. v0.118.0+의 turn.completed/delta 형식도 지원.
  * @internal export for testing
  */
 export function parseCodexJsonl(stdout: string): string | null {
   const lines = stdout.split('\n').filter(l => l.trim());
   let lastText: string | null = null;
+  const deltaAccum: string[] = [];
 
   for (const line of lines) {
     try {
       const event = JSON.parse(line) as Record<string, unknown>;
-      if (event.type === 'message' && event.role === 'assistant') {
+      const type = String(event.type ?? '');
+
+      if (type === 'message' && event.role === 'assistant') {
         const content = event.content;
         if (Array.isArray(content)) {
           for (const part of content) {
-            if (typeof part === 'object' && part !== null && (part as Record<string, unknown>).type === 'text') {
-              const text = (part as Record<string, unknown>).text;
-              if (typeof text === 'string') lastText = text;
+            if (typeof part === 'object' && part !== null) {
+              const p = part as Record<string, unknown>;
+              if (p.type === 'text' && typeof p.text === 'string') lastText = p.text;
             }
           }
         } else if (typeof content === 'string') {
           lastText = content;
         }
+        continue;
       }
+
+      if (type === 'turn.completed') {
+        const output = event.output;
+        if (typeof output === 'string' && output) lastText = output;
+        if (typeof output === 'object' && output !== null) {
+          const o = output as Record<string, unknown>;
+          if (typeof o.text === 'string') lastText = o.text;
+        }
+        continue;
+      }
+
+      // v0.118.0: item.completed 이벤트에 agent_message 텍스트로 최종 응답 전달
+      if (type === 'item.completed') {
+        const item = event.item as Record<string, unknown> | undefined;
+        if (item?.type === 'agent_message' && typeof item.text === 'string') {
+          lastText = item.text;
+        }
+        continue;
+      }
+
+      // message/turn.completed 없이 스트리밍 delta만 오는 경우 누적
+      const deltaText = pickText(event);
+      if (deltaText) deltaAccum.push(deltaText);
     } catch { /* skip unparseable lines */ }
   }
 
-  return lastText ? lastText.trim() : null;
+  if (lastText) return lastText.trim();
+  if (deltaAccum.length) return deltaAccum.join('').trim();
+  return null;
 }

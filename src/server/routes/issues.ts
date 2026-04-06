@@ -1,36 +1,35 @@
 import { Hono } from 'hono';
-import { getDb } from '../../db/index.js';
 import {
   getIssues,
   updateIssueStatus,
   getDecisionLogs,
+  getDecisionLogsBulk,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
+import { requireRequestContext } from '../context.js';
 
 const issuesRoute = new Hono();
 
-// GET /api/issues?tab=review
 issuesRoute.get('/', (c) => {
-  const db = getDb();
+  const { db } = requireRequestContext(c);
   const tab = c.req.query('tab') as Tab | undefined;
   const issues = getIssues(db, tab);
-  return c.json({ issues });
+  const logsByIssue = getDecisionLogsBulk(db, issues.map(issue => issue.id));
+  return c.json({ issues: issues.map(issue => ({ ...issue, logs: logsByIssue[issue.id] ?? [] })) });
 });
 
-// GET /api/issues/:id/logs
 issuesRoute.get('/:id/logs', (c) => {
-  const db = getDb();
+  const { db } = requireRequestContext(c);
   const logs = getDecisionLogs(db, c.req.param('id'));
   return c.json({ logs });
 });
 
-// PUT /api/issues/:id — status/memo 업데이트
 issuesRoute.put('/:id', async (c) => {
-  const db = getDb();
+  const { db } = requireRequestContext(c);
   const id = c.req.param('id');
   const body = await c.req.json<{ status: IssueStatus; memo: string }>();
-  updateIssueStatus(db, id, body.status, body.memo ?? '');
+  updateIssueStatus(db, id, body.status, body.memo ?? '', { updated_by: 'user' });
   return c.json({ ok: true });
 });
 

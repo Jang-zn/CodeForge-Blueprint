@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CodeForge Blueprint</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,7 +14,7 @@
 <div id="workspace-picker" class="workspace-picker hidden">
   <div class="workspace-picker-inner">
     <div class="picker-logo">
-      CodeForge Blueprint
+      <span class="picker-logo-title"><img src="code-forge-logo.png" class="logo-icon" width="22" height="22" alt="CodeForge" loading="lazy">CodeForge Blueprint</span>
       <button id="workspace-picker-cancel" class="picker-cancel-btn hidden">✕ 취소</button>
     </div>
     <div class="picker-columns">
@@ -57,6 +58,7 @@
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="logo">
+    <img src="code-forge-logo.png" class="logo-icon" width="28" height="28" alt="">
     CodeForge Blueprint
     <small>기획 리뷰 대시보드</small>
   </div>
@@ -68,17 +70,12 @@
     <button class="tab-btn" data-tab="frontend" onclick="switchTab('frontend')">FE 설계</button>
   </div>
 
-  <div class="nav-group">
-    <div class="nav-group-title"><span class="dot" style="background:var(--accent)"></span> Overview</div>
-    <a href="#overview">전체 요약</a>
-    <a href="#" onclick="event.preventDefault();document.getElementById('init-screen').classList.remove('hidden');document.querySelector('.tab-content')?.classList.add('hidden');document.getElementById('prd-preview').classList.add('hidden');">새 프로젝트</a>
-  </div>
-
-  <div class="nav-workspace-change">
-    <button id="btn-change-workspace" class="btn-change-workspace">⇄ 워크스페이스 변경</button>
-  </div>
-
   <div id="statusSidebar"><!-- built by buildStatusSidebar() in app.js --></div>
+
+  <div class="sidebar-footer">
+    <button id="btn-new-project" class="sidebar-footer-btn">+ 새 프로젝트</button>
+    <button id="btn-change-workspace" class="sidebar-footer-btn sidebar-footer-btn-muted">⇄ 워크스페이스 변경</button>
+  </div>
 </nav>
 
 <!-- MAIN CONTENT -->
@@ -276,6 +273,21 @@
   <button id="btn-apply" class="btn-action btn-apply" disabled>반영하기</button>
   <button id="btn-generate" class="btn-action btn-generate" disabled>문서 생성하기</button>
   <div id="job-status" class="job-status hidden"></div>
+</div>
+
+<div id="workflow-summary" class="workflow-summary hidden"></div>
+<div id="recovery-panel" class="recovery-panel hidden"></div>
+
+<!-- ===== Job Log Panel ===== -->
+<div id="job-log-panel" class="job-log-panel hidden">
+  <div class="job-log-header">
+    <span id="job-log-provider" class="job-log-provider"></span>
+    <span id="job-log-title" class="job-log-title"></span>
+    <span class="job-log-spacer"></span>
+    <span id="job-log-elapsed" class="job-log-elapsed">0s</span>
+    <button id="job-log-cancel" class="picker-cancel-btn hidden">취소</button>
+  </div>
+  <pre id="job-log-output" class="job-log-output"></pre>
 </div>
 
 <!-- ===== Tab: 기획 리뷰 ===== -->

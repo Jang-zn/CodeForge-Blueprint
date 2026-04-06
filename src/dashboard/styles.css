@@ -34,8 +34,11 @@ body {
 }
 .sidebar::-webkit-scrollbar { width: 4px; }
 .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-.sidebar .logo { font-size: 16px; font-weight: 700; padding: 0 16px 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
-.sidebar .logo small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+.sidebar .logo { font-size: 16px; font-weight: 700; padding: 0 16px 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.sidebar .logo small { display: block; width: 100%; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+.logo-icon { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; filter: brightness(0) invert(1); }
+.picker-logo .logo-icon { width: 22px; height: 22px; }
+.picker-logo-title { display: flex; align-items: center; gap: 6px; }
 .sidebar .nav-group { margin-bottom: 4px; }
 .sidebar .nav-group-title {
   font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px;
@@ -49,14 +52,15 @@ body {
 }
 .sidebar a:hover { color: var(--text); background: var(--surface2); border-left-color: var(--accent); }
 .sidebar a.active { color: var(--accent); border-left-color: var(--accent); }
-.nav-workspace-change { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--border); }
-.btn-change-workspace {
+.sidebar-footer { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.sidebar-footer-btn {
   width: 100%; padding: 7px 12px; background: transparent;
   border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text-muted); font-size: 12px; cursor: pointer; text-align: left;
-  transition: border-color 0.15s, color 0.15s;
+  color: var(--text); font-size: 12px; cursor: pointer; text-align: left;
+  transition: border-color 0.15s, background 0.15s;
 }
-.btn-change-workspace:hover { border-color: var(--accent); color: var(--text); }
+.sidebar-footer-btn:hover { border-color: var(--accent); background: var(--surface2); }
+.sidebar-footer-btn-muted { color: var(--text-muted); }
 .badge { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-left: 4px; vertical-align: middle; }
 .badge-p0 { background: #f8514922; color: var(--red); }
 .badge-p1 { background: #d2992222; color: var(--orange); }
@@ -380,6 +384,65 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
   color: #93c5fd;
 }
 .job-status.error { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.3); color: #f87171; }
+.workflow-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.workflow-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.workflow-card .label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.workflow-card .value {
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 6px;
+}
+.workflow-card .sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+.recovery-panel {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(248,113,113,0.35);
+  background: rgba(248,113,113,0.08);
+  border-radius: 10px;
+}
+.recovery-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #fca5a5;
+}
+.recovery-body {
+  font-size: 13px;
+  color: var(--text);
+}
+.recovery-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* === 잡 로그 패널 === */
+.job-log-panel { margin: 0 0 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.job-log-header { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 12px; }
+.job-log-provider { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); border-radius: 4px; padding: 1px 7px; font-family: var(--font-mono, monospace); font-size: 11px; white-space: nowrap; }
+.job-log-title { color: var(--text-muted); }
+.job-log-spacer { flex: 1; }
+.job-log-elapsed { color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 11px; }
+.job-log-output { margin: 0; padding: 12px 14px; background: var(--bg-primary); font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.6; color: #d1d5db; max-height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
 .spinner {
   width: 14px; height: 14px;
   border: 2px solid currentColor;

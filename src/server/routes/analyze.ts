@@ -1,45 +1,85 @@
 import { Hono } from 'hono';
 import crypto from 'crypto';
-import { getDb } from '../../db/index.js';
 import {
   getWorkspaceMeta,
   getIssues,
   getRefItems,
   createJob,
   updateJob,
+  appendJobLog,
   bulkUpsertIssues,
   bulkSetRefItems,
   getProviderModel,
+  markSupersededJobs,
+  isJobRunnable,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
 import { spawnProvider } from '../../claude/provider.js';
+import { chunkToLogText } from '../../claude/log-extractor.js';
 import { buildReviewPlanPrompt } from '../../claude/prompts/review-plan.js';
 import { buildBackendPrompt } from '../../claude/prompts/design-backend.js';
 import { buildFrontendPrompt } from '../../claude/prompts/design-frontend.js';
 import { buildFeaturesPrompt } from '../../claude/prompts/plan-features.js';
+import { requireRequestContext } from '../context.js';
+import { validateAnalyzeResults } from '../analysis-schema.js';
 
 const analyzeRoute = new Hono();
 
-interface AnalyzeIssue {
-  id: string;
-  category: string;
-  title: string;
-  tag?: string;
-  priority?: string;
-  description: string;
-  evidence?: string;
-  conclusion?: string;
-  callout_type?: string;
-}
-
 interface AnalyzeResult {
-  mode: string;
-  issues: AnalyzeIssue[];
-  refItems?: string[];
+  mode?: string;
+  issues?: unknown;
+  refItems?: unknown;
 }
 
-function buildIssueHtml(issue: AnalyzeIssue): string {
+function extractCandidates(text: string): AnalyzeResult[] {
+  const codeBlocks = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map(match => match[1].trim());
+  const candidates = codeBlocks.length > 0 ? codeBlocks : [text];
+  const results: AnalyzeResult[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) results.push(...parsed);
+      else results.push(parsed);
+      continue;
+    } catch {
+      // try best-effort JSON extraction below
+    }
+
+    let depth = 0;
+    let start = -1;
+    let inStr = false;
+    let esc = false;
+    for (let i = 0; i < candidate.length; i++) {
+      const ch = candidate[i];
+      if (esc) { esc = false; continue; }
+      if (ch === '\\' && inStr) { esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === '{' || ch === '[') {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (ch === '}' || ch === ']') {
+        depth--;
+        if (depth === 0 && start >= 0) {
+          try {
+            const parsed = JSON.parse(candidate.slice(start, i + 1));
+            if (Array.isArray(parsed)) results.push(...parsed);
+            else results.push(parsed);
+          } catch {
+            // ignore
+          }
+          start = -1;
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+function buildIssueHtml(issue: { description: string; evidence?: string; conclusion?: string; callout_type?: string }): string {
   const calloutClass = issue.callout_type ?? 'blue';
   const evidenceHtml = issue.evidence
     ? `<div class="evidence"><strong>근거:</strong> ${escapeHtml(issue.evidence)}</div>`
@@ -59,54 +99,73 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// POST /api/analyze
 analyzeRoute.post('/', async (c) => {
-  const db = getDb();
+  const { db, workspace, sessionId } = requireRequestContext(c);
   const body = await c.req.json<{ tab?: Tab }>().catch(() => ({ tab: 'review' as Tab }));
   const tab: Tab = body.tab ?? 'review';
 
   const meta = getWorkspaceMeta(db);
   if (!meta?.prd_path) {
-    return c.json({ error: 'PRD 경로가 설정되지 않았습니다.' }, 400);
+    return c.json({ error: 'PRD 경로가 설정되지 않았습니다.', recovery: '먼저 PRD를 생성하거나 불러오세요.' }, 400);
   }
+  const prdPath = meta.prd_path;
 
   const jobId = crypto.randomUUID();
-  createJob(db, jobId, `analyze-${tab}`);
+  const providerModel = getProviderModel(db);
+  const sourceVersion = tab === 'review' ? 'prd' : getIssues(db, 'review').length > 0 ? 'review-ready' : 'draft';
 
-  // 비동기 분석 실행
+  markSupersededJobs(db, { session_id: sessionId, type: `analyze-${tab}`, tab, run_key: tab }, jobId);
+  createJob(db, jobId, `analyze-${tab}`, {
+    tab,
+    session_id: sessionId,
+    capability: 'analysis',
+    run_key: tab,
+    source_version: sourceVersion,
+    workspace_root: workspace.rootPath,
+  });
+  appendJobLog(db, jobId, `[${providerModel.provider}:${providerModel.model}] 분석 시작...\n`);
+
   (async () => {
     try {
       let prompt: string;
       if (tab === 'review') {
-        prompt = buildReviewPlanPrompt(meta.prd_path!);
+        prompt = buildReviewPlanPrompt(prdPath);
       } else if (tab === 'backend') {
-        prompt = buildBackendPrompt(meta.prd_path!);
+        prompt = buildBackendPrompt(prdPath);
       } else if (tab === 'frontend') {
-        const refItems = getRefItems(db).map(r => r.content);
-        prompt = buildFrontendPrompt(meta.prd_path!, refItems);
+        const refItems = getRefItems(db).map(item => item.content);
+        prompt = buildFrontendPrompt(prdPath, refItems);
       } else if (tab === 'features') {
         const deferredIssues = getIssues(db, 'features')
-          .filter(i => i.tag === 'deferred')
-          .map(i => ({ id: i.id, title: i.title, memo: i.memo }));
-        prompt = buildFeaturesPrompt(meta.prd_path!, deferredIssues);
+          .filter(issue => issue.tag === 'deferred')
+          .map(issue => ({ id: issue.id, title: issue.title, memo: issue.memo }));
+        prompt = buildFeaturesPrompt(prdPath, deferredIssues);
       } else {
         updateJob(db, jobId, 'failed', `알 수 없는 탭: ${tab}`);
         return;
       }
 
-      const result = await spawnProvider(prompt, getProviderModel(db));
+      const result = await spawnProvider(prompt, providerModel, {
+        onChunk: (chunk) => {
+          if (!isJobRunnable(db, jobId)) return;
+          const text = chunkToLogText(chunk, providerModel.provider);
+          if (text) appendJobLog(db, jobId, text);
+        },
+      });
+      if (!isJobRunnable(db, jobId)) return;
       if (!result.success) {
         updateJob(db, jobId, 'failed', result.error);
         return;
       }
 
-      // JSON 파싱
-      const jsonMatch = result.result.match(/```json\s*([\s\S]*?)```|(\{[\s\S]*\})/);
-      const jsonStr = jsonMatch?.[1] ?? jsonMatch?.[2] ?? result.result;
-      const parsed: AnalyzeResult = JSON.parse(jsonStr.trim());
+      const parsed = extractCandidates(result.result);
+      const { issues: validIssues, refItems } = validateAnalyzeResults(parsed, tab);
+      if (validIssues.length === 0) {
+        updateJob(db, jobId, 'failed', '분석 결과가 유효한 JSON 스키마를 만족하지 않습니다.');
+        return;
+      }
 
-      // issues를 DB에 저장
-      const issues = parsed.issues.map((issue, idx) => ({
+      bulkUpsertIssues(db, validIssues.map((issue, idx) => ({
         id: issue.id,
         tab,
         category: issue.category,
@@ -119,17 +178,20 @@ analyzeRoute.post('/', async (c) => {
         memo: '',
         sort_order: idx,
         origin_id: null,
-      }));
+        assignee: null,
+        updated_by: 'ai',
+        applied_at: null,
+        source_run_id: jobId,
+        confidence: issue.confidence ?? null,
+      })));
 
-      bulkUpsertIssues(db, issues);
-
-      // refItems 저장
-      if (parsed.refItems?.length) {
-        bulkSetRefItems(db, parsed.refItems.map(content => ({ content })));
+      if (refItems.length > 0) {
+        bulkSetRefItems(db, refItems.map(content => ({ content })));
       }
 
       updateJob(db, jobId, 'completed');
     } catch (e) {
+      if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));
     }
   })();

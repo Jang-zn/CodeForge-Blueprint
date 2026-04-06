@@ -3,9 +3,9 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getWorkspaceOrNull } from '../workspace.js';
-import { getDb } from '../db/index.js';
-import { getJob } from '../db/repository.js';
+import { closeAllDbs } from '../db/index.js';
+import { initAppDb, closeAppDb } from '../db/app-db.js';
+import { cancelJob, getJob } from '../db/repository.js';
 import { checkClaude, checkCodex } from '../claude/finder.js';
 import { createWorkspaceRoute } from './routes/workspace.js';
 import issuesRoute from './routes/issues.js';
@@ -13,10 +13,12 @@ import initRoute from './routes/init.js';
 import analyzeRoute from './routes/analyze.js';
 import applyRoute from './routes/apply.js';
 import generateRoute from './routes/generate.js';
+import { getRequestContext } from './context.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function startServer(port: number): Promise<number> {
+  initAppDb();
   const [claudeStatus, codexStatus] = await Promise.all([checkClaude(), checkCodex()]);
 
   const app = new Hono();
@@ -25,10 +27,18 @@ export async function startServer(port: number): Promise<number> {
   api.route('/workspace', createWorkspaceRoute(claudeStatus, codexStatus));
 
   api.get('/jobs/:id', (c) => {
-    if (!getWorkspaceOrNull()) return c.json({ error: 'Not found' }, 404);
-    const job = getJob(getDb(), c.req.param('id'));
+    const reqCtx = getRequestContext(c);
+    if (!reqCtx) return c.json({ error: 'Not found' }, 404);
+    const job = getJob(reqCtx.db, c.req.param('id'));
     if (!job) return c.json({ error: 'Not found' }, 404);
     return c.json(job);
+  });
+
+  api.post('/jobs/:id/cancel', (c) => {
+    const reqCtx = getRequestContext(c);
+    if (!reqCtx) return c.json({ error: 'Not found' }, 404);
+    cancelJob(reqCtx.db, c.req.param('id'));
+    return c.json({ ok: true });
   });
 
   api.route('/issues', issuesRoute);
@@ -47,8 +57,6 @@ export async function startServer(port: number): Promise<number> {
       const server = serve({ fetch: app.fetch, port: p }, () => {
         console.log(`\n🚀 CodeForge Blueprint`);
         console.log(`🌐 http://localhost:${p}`);
-        const ws = getWorkspaceOrNull();
-        if (ws) console.log(`📂 Workspace: ${ws.rootPath}`);
         if (claudeStatus.available) {
           console.log(`🤖 Claude CLI: ✓ ${claudeStatus.version ?? claudeStatus.path}`);
         } else {
@@ -68,8 +76,15 @@ export async function startServer(port: number): Promise<number> {
         else reject(err);
       });
 
-      process.on('SIGINT', () => { server.close(); process.exit(0); });
-      process.on('SIGTERM', () => { server.close(); process.exit(0); });
+      const shutdown = () => {
+        server.close();
+        closeAppDb();
+        closeAllDbs();
+        process.exit(0);
+      };
+
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
     };
 
     tryListen(port);

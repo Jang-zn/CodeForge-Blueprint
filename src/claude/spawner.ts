@@ -19,7 +19,7 @@ export interface SpawnResult {
  */
 export async function spawnClaude(prompt: string, options: SpawnOptions = {}): Promise<SpawnResult> {
   const model = options.model ?? 'claude-sonnet-4-6';
-  const timeout = options.timeout ?? 300_000;
+  const timeout = options.timeout ?? 600_000;
 
   const claudePath = await findClaudeBinary();
   if (!claudePath) {
@@ -31,7 +31,7 @@ export async function spawnClaude(prompt: string, options: SpawnOptions = {}): P
   }
 
   return new Promise((resolve) => {
-    const args = ['-p', '--output-format', 'json', '--model', model, '--no-session-persistence'];
+    const args = ['-p', '--output-format', 'text', '--model', model, '--no-session-persistence'];
     const child = spawn(claudePath, args, { env: process.env });
 
     const stdoutChunks: Buffer[] = [];
@@ -63,14 +63,7 @@ export async function spawnClaude(prompt: string, options: SpawnOptions = {}): P
         return;
       }
 
-      // ClaudeCLISummarizer.ts의 JSON 파싱 패턴: --output-format json 래핑 해제
-      try {
-        const parsed = JSON.parse(stdout) as { result?: string; content?: string };
-        const result = (parsed.result ?? parsed.content ?? stdout).trim();
-        resolve({ success: true, result });
-      } catch {
-        resolve({ success: true, result: stdout.trim() });
-      }
+      resolve({ success: true, result: stdout.trim() });
     });
 
     child.on('error', (err) => {

@@ -171,6 +171,11 @@ function makeIssue(overrides: Partial<{ id: string; tab: Tab; title: string }> =
     memo: '',
     sort_order: 0,
     origin_id: null,
+    assignee: null,
+    updated_by: null,
+    applied_at: null,
+    source_run_id: null,
+    confidence: null,
   };
 }
 

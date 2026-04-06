@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { openWorkspace, expandHome, getWorkspaceOrNull, hasWorkspace, getRecents } from '../../workspace.js';
-import { openDb, getDb, resetDb } from '../../db/index.js';
-import { getWorkspaceMeta, getProviderModel, setProviderModel, upsertWorkspaceMeta, type ProviderType } from '../../db/repository.js';
+import { openWorkspace, expandHome, getRecents } from '../../workspace.js';
+import { openDb } from '../../db/index.js';
+import { getProviderModel, setProviderModel, upsertWorkspaceMeta, getDocuments, getIssues, getRunningJobs, getWorkspaceMeta, type ProviderType } from '../../db/repository.js';
+import { getRequestContext, getSessionIdFromRequest } from '../context.js';
+import { getProviderCapabilities } from '../../claude/provider.js';
 
 type CliStatus = { available: boolean; version?: string; path?: string | null };
 
@@ -30,24 +32,53 @@ function pickFolderNative(): Promise<string | null> {
   });
 }
 
+function buildStageSummary(db: any) {
+  const reviewIssues = getIssues(db, 'review');
+  const documents = getDocuments(db);
+  const hasPrd = !!reviewIssues.length || documents.some(doc => doc.kind === 'source-prd' || doc.kind === 'generated-prd');
+  const stage = hasPrd ? (reviewIssues.length > 0 ? 'review' : 'prd_ready') : 'init';
+  return {
+    stage,
+    counts: {
+      review: reviewIssues.length,
+      backend: getIssues(db, 'backend').length,
+      frontend: getIssues(db, 'frontend').length,
+      features: getIssues(db, 'features').length,
+    },
+    runningJobs: getRunningJobs(db).map(job => ({
+      id: job.id,
+      type: job.type,
+      tab: job.tab,
+      started_at: job.started_at,
+      capability: job.capability,
+    })),
+    documents: documents.slice(0, 8),
+  };
+}
+
 function buildWorkspaceResponse(
-  ws: { name: string; rootPath: string; docsPath: string },
-  db: any,
+  reqCtx: ReturnType<typeof getRequestContext> extends infer T ? Exclude<T, null> : never,
   claudeStatus: CliStatus,
   codexStatus: CliStatus,
 ) {
+  const { workspace, db } = reqCtx;
   const meta = getWorkspaceMeta(db);
   return {
     hasWorkspace: true,
-    name: ws.name,
-    rootPath: ws.rootPath,
-    docsPath: ws.docsPath,
+    sessionId: workspace.sessionId,
+    name: workspace.name,
+    rootPath: workspace.rootPath,
+    docsPath: workspace.docsPath,
+    recents: getRecents(),
     prd_path: meta?.prd_path ?? null,
+    source_prd_path: meta?.source_prd_path ?? null,
     claudeAvailable: claudeStatus.available,
     claudeVersion: claudeStatus.version,
     codexAvailable: codexStatus.available,
     codexVersion: codexStatus.version,
     providerModel: getProviderModel(db),
+    providerCapabilities: getProviderCapabilities(),
+    workflow: buildStageSummary(db),
   };
 }
 
@@ -55,11 +86,11 @@ export function createWorkspaceRoute(claudeStatus: CliStatus, codexStatus: CliSt
   const router = new Hono();
 
   router.get('/', (c) => {
-    if (!hasWorkspace()) {
-      return c.json({ hasWorkspace: false, recents: getRecents() });
+    const reqCtx = getRequestContext(c);
+    if (!reqCtx) {
+      return c.json({ hasWorkspace: false, recents: getRecents(), sessionId: getSessionIdFromRequest(c) });
     }
-    const workspace = getWorkspaceOrNull()!;
-    return c.json(buildWorkspaceResponse(workspace, getDb(), claudeStatus, codexStatus));
+    return c.json(buildWorkspaceResponse(reqCtx, claudeStatus, codexStatus));
   });
 
   router.post('/pick-folder', async (c) => {
@@ -70,30 +101,32 @@ export function createWorkspaceRoute(claudeStatus: CliStatus, codexStatus: CliSt
 
   router.post('/open', async (c) => {
     const body = await c.req.json<{ path: string }>().catch(() => null);
-    if (!body?.path?.trim()) return c.json({ error: 'path가 필요합니다.' }, 400);
+    if (!body?.path?.trim()) return c.json({ error: 'path가 필요합니다.', recovery: '프로젝트 폴더 경로를 입력하세요.' }, 400);
 
     const absPath = path.resolve(expandHome(body.path));
-    if (!fs.existsSync(absPath)) return c.json({ error: '폴더가 존재하지 않습니다.' }, 400);
+    if (!fs.existsSync(absPath)) return c.json({ error: '폴더가 존재하지 않습니다.', recovery: '올바른 프로젝트 폴더를 선택하세요.' }, 400);
+    if (!fs.statSync(absPath).isDirectory()) return c.json({ error: '폴더 경로만 열 수 있습니다.', recovery: '파일이 아닌 폴더를 선택하세요.' }, 400);
 
-    resetDb();
-    const ws = openWorkspace(absPath);
-    const db = openDb(ws.dbPath);
-    return c.json(buildWorkspaceResponse(ws, db, claudeStatus, codexStatus));
+    const workspace = openWorkspace(absPath);
+    const reqCtx = { sessionId: workspace.sessionId, workspace, db: openDb(workspace.dbPath) };
+    return c.json(buildWorkspaceResponse(reqCtx, claudeStatus, codexStatus));
   });
 
   router.put('/provider', async (c) => {
-    if (!hasWorkspace()) return c.json({ error: '워크스페이스가 열려있지 않습니다.' }, 400);
+    const reqCtx = getRequestContext(c);
+    if (!reqCtx) return c.json({ error: '워크스페이스가 열려있지 않습니다.', recovery: '워크스페이스를 먼저 여세요.' }, 400);
     const body = await c.req.json<{ provider: ProviderType; model: string }>().catch(() => null);
     if (!body?.provider || !body?.model) return c.json({ error: 'provider와 model이 필요합니다.' }, 400);
     if (body.provider !== 'claude' && body.provider !== 'codex') return c.json({ error: '유효하지 않은 provider입니다.' }, 400);
-    setProviderModel(getDb(), body.provider, body.model);
+    setProviderModel(reqCtx.db, body.provider, body.model);
     return c.json({ ok: true });
   });
 
   router.patch('/', async (c) => {
-    if (!hasWorkspace()) return c.json({ error: '워크스페이스가 열려있지 않습니다.' }, 400);
+    const reqCtx = getRequestContext(c);
+    if (!reqCtx) return c.json({ error: '워크스페이스가 열려있지 않습니다.', recovery: '워크스페이스를 먼저 여세요.' }, 400);
     const body = await c.req.json<{ prd_path?: string; tech_stack_path?: string; name?: string }>();
-    upsertWorkspaceMeta(getDb(), body);
+    upsertWorkspaceMeta(reqCtx.db, body);
     return c.json({ ok: true });
   });
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { openDb, getDb, resetDb } from '../../src/db/index.js';
+import { openDb, getDb, resetDb, closeAllDbs } from '../../src/db/index.js';
 
 function makeTempDb(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-db-test-'));
@@ -18,7 +18,7 @@ describe('openDb / getDb / resetDb', () => {
   let dbPath: string;
 
   afterEach(() => {
-    resetDb();
+    closeAllDbs();
     cleanDb(dbPath);
   });
 
@@ -48,7 +48,7 @@ describe('openDb / getDb / resetDb', () => {
     assert.throws(() => getDb(), /Database not opened/);
   });
 
-  test('resetDb — DB 닫고 null로 초기화', () => {
+  test('resetDb — active DB를 해제한다', () => {
     dbPath = makeTempDb();
     openDb(dbPath);
     resetDb();
@@ -66,5 +66,22 @@ describe('openDb / getDb / resetDb', () => {
     resetDb();
     const db = openDb(dbPath);
     assert.ok(db, '재오픈 성공');
+  });
+
+  test('다른 DB를 열어도 기존 핸들은 유지된다', () => {
+    dbPath = makeTempDb();
+    const otherDbPath = makeTempDb();
+
+    const db1 = openDb(dbPath);
+    db1.prepare('CREATE TABLE IF NOT EXISTS keepalive (id INTEGER)').run();
+
+    const db2 = openDb(otherDbPath);
+    assert.notEqual(db1, db2);
+
+    assert.doesNotThrow(() => {
+      db1.prepare('INSERT INTO keepalive (id) VALUES (1)').run();
+    });
+
+    cleanDb(otherDbPath);
   });
 });

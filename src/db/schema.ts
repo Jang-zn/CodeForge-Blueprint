@@ -2,12 +2,78 @@ export const MIGRATION_V2_SQL = `
 ALTER TABLE workspace ADD COLUMN provider_model TEXT DEFAULT 'claude:claude-sonnet-4-6';
 `;
 
+export const MIGRATION_V3_SQL = `
+ALTER TABLE jobs ADD COLUMN log TEXT;
+`;
+
+export const MIGRATION_V4_SQL = `
+ALTER TABLE workspace ADD COLUMN source_prd_path TEXT;
+`;
+
+export const MIGRATION_V5_SQL = `
+ALTER TABLE issues ADD COLUMN assignee TEXT;
+`;
+
+export const MIGRATION_V6_SQL = `
+ALTER TABLE issues ADD COLUMN updated_by TEXT;
+`;
+
+export const MIGRATION_V7_SQL = `
+ALTER TABLE issues ADD COLUMN applied_at TEXT;
+`;
+
+export const MIGRATION_V8_SQL = `
+ALTER TABLE issues ADD COLUMN source_run_id TEXT;
+`;
+
+export const MIGRATION_V9_SQL = `
+ALTER TABLE issues ADD COLUMN confidence REAL;
+`;
+
+export const MIGRATION_V10_SQL = `
+ALTER TABLE jobs ADD COLUMN tab TEXT;
+`;
+
+export const MIGRATION_V11_SQL = `
+ALTER TABLE jobs ADD COLUMN session_id TEXT;
+`;
+
+export const MIGRATION_V12_SQL = `
+ALTER TABLE jobs ADD COLUMN capability TEXT;
+`;
+
+export const MIGRATION_V13_SQL = `
+ALTER TABLE jobs ADD COLUMN run_key TEXT;
+`;
+
+export const MIGRATION_V14_SQL = `
+ALTER TABLE jobs ADD COLUMN source_version TEXT;
+`;
+
+export const MIGRATION_V15_SQL = `
+ALTER TABLE jobs ADD COLUMN workspace_root TEXT;
+`;
+
+export const MIGRATION_V16_SQL = `
+ALTER TABLE jobs ADD COLUMN cancel_requested_at TEXT;
+`;
+
+export const MIGRATION_V17_SQL = `
+ALTER TABLE jobs ADD COLUMN superseded_by TEXT;
+`;
+
+export const MIGRATION_V18_SQL = `
+ALTER TABLE jobs ADD COLUMN result_path TEXT;
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
   id INTEGER PRIMARY KEY CHECK(id = 1),
   name TEXT NOT NULL,
   prd_path TEXT,
+  source_prd_path TEXT,
   tech_stack_path TEXT,
+  provider_model TEXT DEFAULT 'claude:claude-sonnet-4-6',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -30,6 +96,11 @@ CREATE TABLE IF NOT EXISTS issues (
   memo TEXT DEFAULT '',
   sort_order INTEGER DEFAULT 0,
   origin_id TEXT,
+  assignee TEXT,
+  updated_by TEXT,
+  applied_at TEXT,
+  source_run_id TEXT,
+  confidence REAL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -59,9 +130,30 @@ CREATE TABLE IF NOT EXISTS ref_items (
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
+  tab TEXT,
+  session_id TEXT,
+  capability TEXT,
+  run_key TEXT,
+  source_version TEXT,
+  workspace_root TEXT,
   status TEXT DEFAULT 'running',
   started_at TEXT DEFAULT (datetime('now')),
   completed_at TEXT,
-  error TEXT
+  error TEXT,
+  log TEXT,
+  cancel_requested_at TEXT,
+  superseded_by TEXT,
+  result_path TEXT
+);
+
+CREATE TABLE IF NOT EXISTS documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tab TEXT NOT NULL,
+  version TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  source_version TEXT,
+  source_job_id TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
 );
 `;

@@ -1,19 +1,38 @@
 // ========== API Client ==========
+let workspaceSessionId = localStorage.getItem('codeforge.sessionId') || '';
+let currentWorkflow = null;
+
+function parseApiError(status, text) {
+  try {
+    const parsed = JSON.parse(text);
+    const err = new Error(parsed.error || text || `HTTP ${status}`);
+    err.recovery = parsed.recovery || '';
+    err.code = parsed.code || '';
+    return err;
+  } catch {
+    return new Error(text || `HTTP ${status}`);
+  }
+}
+
 const API = {
-  async get(path) {
-    const res = await fetch('/api' + path);
-    if (!res.ok) throw new Error(await res.text());
+  async request(path, init = {}) {
+    const headers = new Headers(init.headers || {});
+    if (workspaceSessionId) headers.set('x-codeforge-session', workspaceSessionId);
+    const res = await fetch('/api' + path, { ...init, headers });
+    if (!res.ok) throw parseApiError(res.status, await res.text());
     return res.json();
+  },
+  async get(path) {
+    return API.request(path);
   },
   async post(path, body) {
-    const res = await fetch('/api' + path, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    return API.request(path, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   },
   async put(path, body) {
-    const res = await fetch('/api' + path, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
+    return API.request(path, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  },
+  async patch(path, body) {
+    return API.request(path, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   },
 };
 
@@ -89,6 +108,47 @@ function escapeHtml(s) {
 let state = {};
 let activeTab = 'review';
 let currentFilter = 'all';
+
+function setSessionId(sessionId) {
+  workspaceSessionId = sessionId || '';
+  if (workspaceSessionId) localStorage.setItem('codeforge.sessionId', workspaceSessionId);
+  else localStorage.removeItem('codeforge.sessionId');
+}
+
+function showRecovery(error) {
+  const panel = document.getElementById('recovery-panel');
+  if (!panel) return;
+  if (!error) {
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
+  }
+  panel.innerHTML = `<div class="recovery-title">실패 원인</div>
+    <div class="recovery-body">${escapeHtml(error.message || '알 수 없는 오류')}</div>
+    ${error.recovery ? `<div class="recovery-hint">${escapeHtml(error.recovery)}</div>` : ''}`;
+  panel.classList.remove('hidden');
+}
+
+function renderWorkflowSummary(workflow) {
+  currentWorkflow = workflow || null;
+  const el = document.getElementById('workflow-summary');
+  if (!el) return;
+  if (!workflow) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+  const docs = workflow.documents || [];
+  const latestDoc = docs[0];
+  const running = workflow.runningJobs || [];
+  const stageLabelMap = { init: 'Init', prd_ready: 'PRD Ready', review: 'Review', backend: 'Backend', frontend: 'Frontend', features: 'Features' };
+  el.innerHTML = [
+    `<div class="workflow-card"><div class="label">Current Stage</div><div class="value">${escapeHtml(stageLabelMap[workflow.stage] || workflow.stage)}</div><div class="sub">Review ${workflow.counts?.review || 0} / BE ${workflow.counts?.backend || 0} / FE ${workflow.counts?.frontend || 0}</div></div>`,
+    `<div class="workflow-card"><div class="label">Running Jobs</div><div class="value">${running.length}</div><div class="sub">${running[0] ? escapeHtml(`${running[0].type}${running[0].tab ? ` (${running[0].tab})` : ''}`) : '현재 실행 중인 작업 없음'}</div></div>`,
+    `<div class="workflow-card"><div class="label">Latest Doc</div><div class="value">${latestDoc ? escapeHtml(`${latestDoc.tab} v${latestDoc.version}`) : '없음'}</div><div class="sub">${latestDoc ? escapeHtml(latestDoc.file_path.split('/').pop()) : '생성된 문서 없음'}</div></div>`,
+  ].join('');
+  el.classList.remove('hidden');
+}
 
 function applyStatusDot(dot, status) {
   dot.style.background = STATUS_DOT_COLORS[status] || 'transparent';
@@ -172,6 +232,12 @@ function injectIssueControls(tab = activeTab) {
         debounce = setTimeout(() => { setIssueState(id, { memo: memo.value }); }, 300);
       });
       ctrl.appendChild(memo);
+
+      const logDiv = document.createElement('div');
+      logDiv.className = 'decision-log';
+      logDiv.dataset.issueId = id;
+      logDiv.style.display = 'none';
+      ctrl.appendChild(logDiv);
 
       let lastEl = h3.nextElementSibling;
       while (lastEl && lastEl.nextElementSibling &&
@@ -387,6 +453,22 @@ async function loadIssues(tab) {
 
       injectIssueControls();
 
+      // 이슈별 변경 로그 렌더링
+      issues.forEach(issue => {
+        if (!issue.logs?.length) return;
+        const logEl = document.querySelector(`.decision-log[data-issue-id="${issue.id}"]`);
+        if (!logEl) return;
+        logEl.innerHTML = '<div class="decision-log-title">변경 로그</div>' +
+          issue.logs.map(log =>
+            `<div class="decision-entry">` +
+            `<span class="decision-date">${log.date}</span>` +
+            `<span class="decision-status decision-status-${log.status}">${STATUS_MAP[log.status]?.label || log.status}</span>` +
+            (log.memo ? `<span class="decision-memo">${escapeHtml(log.memo)}</span>` : '') +
+            `</div>`
+          ).join('');
+        logEl.style.display = '';
+      });
+
       // Register new h3s with intersection observer
       contentArea.querySelectorAll('h3[id]').forEach(el => obs.observe(el));
     }
@@ -398,6 +480,7 @@ async function loadIssues(tab) {
 
     refreshUI();
   } catch (e) {
+    showRecovery(e);
     console.error('Failed to load issues:', e);
   }
 }
@@ -453,17 +536,20 @@ document.getElementById('btn-generate-prd')?.addEventListener('click', async () 
     pollJob(jobId, async (err) => {
       btn.disabled = false;
       btn.textContent = 'PRD 생성하기';
-      if (err) { showToast('PRD 생성 실패: ' + err.message, 'error'); return; }
+      if (err) { showRecovery(err); showToast('PRD 생성 실패: ' + err.message, 'error'); return; }
       try {
         const prdData = await API.get('/init/prd');
         document.getElementById('prd-content').textContent = prdData.content || '';
         document.getElementById('init-screen').classList.add('hidden');
         document.getElementById('prd-preview').classList.remove('hidden');
+        try { renderWorkflowSummary((await API.get('/workspace')).workflow); } catch { /* ignore */ }
       } catch (e2) {
+        showRecovery(e2);
         showToast('PRD 로드 실패: ' + e2.message, 'error');
       }
     });
   } catch (e) {
+    showRecovery(e);
     showToast('PRD 생성에 실패했습니다: ' + e.message, 'error');
     btn.disabled = false;
     btn.textContent = 'PRD 생성하기';
@@ -485,8 +571,10 @@ document.getElementById('btn-import-prd')?.addEventListener('click', async (e) =
     document.getElementById('prd-content').textContent = res.content || '';
     document.getElementById('init-screen').classList.add('hidden');
     document.getElementById('prd-preview').classList.remove('hidden');
+    try { renderWorkflowSummary((await API.get('/workspace')).workflow); } catch { /* ignore */ }
     showToast(`"${res.originalName}" 파일을 불러왔습니다.`, 'success');
   } catch (err) {
+    showRecovery(err);
     showToast('파일 불러오기 실패: ' + err.message, 'error');
   } finally {
     btn.disabled = false;
@@ -501,22 +589,92 @@ document.getElementById('btn-start-review')?.addEventListener('click', async () 
 });
 
 // ========== Job Polling ==========
+let _elapsedTimer = null;
+let currentJobId = null;
+
+function showJobLogPanel(label) {
+  const panel = document.getElementById('job-log-panel');
+  if (!panel) return;
+  document.getElementById('job-log-title').textContent = label;
+  document.getElementById('job-log-provider').textContent = '';
+  document.getElementById('job-log-output').textContent = '';
+  const elapsedEl = document.getElementById('job-log-elapsed');
+  if (elapsedEl) elapsedEl.textContent = '0s';
+  document.getElementById('job-log-cancel')?.classList.remove('hidden');
+  panel.classList.remove('hidden');
+
+  let seconds = 0;
+  clearInterval(_elapsedTimer);
+  _elapsedTimer = setInterval(() => {
+    seconds++;
+    if (elapsedEl) elapsedEl.textContent = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
+  }, 1000);
+}
+
+function hideJobLogPanel() {
+  clearInterval(_elapsedTimer);
+  currentJobId = null;
+  document.getElementById('job-log-cancel')?.classList.add('hidden');
+  document.getElementById('job-log-panel')?.classList.add('hidden');
+}
+
+function updateJobLog(job) {
+  if (!job.log) return;
+  const outputEl = document.getElementById('job-log-output');
+  if (!outputEl) return;
+
+  // 첫 줄 provider 배지는 아직 비어있을 때만 파싱 (한 번만 설정)
+  const providerEl = document.getElementById('job-log-provider');
+  if (providerEl && !providerEl.textContent) {
+    const nl = job.log.indexOf('\n');
+    const firstLine = nl >= 0 ? job.log.slice(0, nl) : job.log;
+    const m = firstLine.match(/^\[([^\]]+)\]/);
+    if (m) providerEl.textContent = m[1];
+  }
+
+  // 첫 줄 제외한 실제 로그 표시
+  const nl = job.log.indexOf('\n');
+  const logContent = nl >= 0 ? job.log.slice(nl + 1).trim() : '';
+  if (logContent) {
+    outputEl.textContent = logContent;
+    outputEl.scrollTop = outputEl.scrollHeight;
+  } else {
+    outputEl.textContent = '처리 중입니다...';
+  }
+}
+
 async function pollJob(jobId, onDone) {
+  currentJobId = jobId;
+  let lastLog = null;
   const interval = setInterval(async () => {
     try {
       const job = await API.get('/jobs/' + jobId);
+      if (job.log !== lastLog) { lastLog = job.log; updateJobLog(job); }
       if (job.status === 'completed') {
         clearInterval(interval);
+        hideJobLogPanel();
         document.getElementById('job-status')?.classList.add('hidden');
+        try { renderWorkflowSummary((await API.get('/workspace')).workflow); } catch { /* ignore */ }
         onDone(null, job);
-      } else if (job.status === 'failed') {
+      } else if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'superseded') {
         clearInterval(interval);
+        hideJobLogPanel();
         document.getElementById('job-status')?.classList.add('hidden');
         onDone(new Error(job.error || '작업 실패'));
       }
-    } catch (e) { clearInterval(interval); }
-  }, 1500);
+    } catch (e) { clearInterval(interval); hideJobLogPanel(); }
+  }, 500);
 }
+
+document.getElementById('job-log-cancel')?.addEventListener('click', async () => {
+  if (!currentJobId) return;
+  try {
+    await API.post('/jobs/' + currentJobId + '/cancel', {});
+    showToast('작업 취소 요청을 보냈습니다.', 'success');
+  } catch (e) {
+    showToast('작업 취소 실패: ' + e.message, 'error');
+  }
+});
 
 function showJobStatus(msg) {
   const el = document.getElementById('job-status');
@@ -527,40 +685,43 @@ function showJobStatus(msg) {
 
 // ========== Action Buttons ==========
 document.getElementById('btn-analyze')?.addEventListener('click', async () => {
+  showJobLogPanel('AI 분석 중...');
   showJobStatus('분석 중...');
   try {
     const { jobId } = await API.post('/analyze', { tab: activeTab || 'review' });
     pollJob(jobId, (err) => {
-      if (err) { showToast('분석 실패: ' + err.message, 'error'); return; }
+      if (err) { showRecovery(err); showToast('분석 실패: ' + err.message, 'error'); return; }
       showToast('분석 완료!');
       loadIssues(activeTab);
     });
-  } catch (e) { showToast('오류: ' + e.message, 'error'); }
+  } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
 });
 
 document.getElementById('btn-apply')?.addEventListener('click', async () => {
   const issues = collectCurrentTabState();
+  showJobLogPanel('AI 반영 중...');
   showJobStatus('반영하기 처리 중...');
   try {
     const { jobId } = await API.post('/apply', { tab: activeTab, issues });
     pollJob(jobId, (err) => {
-      if (err) { showToast('반영 실패: ' + err.message, 'error'); return; }
+      if (err) { showRecovery(err); showToast('반영 실패: ' + err.message, 'error'); return; }
       showToast('반영 완료!');
       loadIssues(activeTab);
     });
-  } catch (e) { showToast('오류: ' + e.message, 'error'); }
+  } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
 });
 
 document.getElementById('btn-generate')?.addEventListener('click', async () => {
+  showJobLogPanel('문서 생성 중...');
   showJobStatus('문서 생성 중...');
   try {
     const { jobId, downloadUrl } = await API.post('/generate', { tab: activeTab });
     pollJob(jobId, (err) => {
-      if (err) { showToast('문서 생성 실패: ' + err.message, 'error'); return; }
+      if (err) { showRecovery(err); showToast('문서 생성 실패: ' + err.message, 'error'); return; }
       showToast('문서 생성 완료!');
       if (downloadUrl) window.open(downloadUrl, '_blank');
     });
-  } catch (e) { showToast('오류: ' + e.message, 'error'); }
+  } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
 });
 
 function setClaudeStatus(available, text) {
@@ -664,13 +825,21 @@ function hideWorkspacePicker() {
 async function doOpenWorkspace(folderPath) {
   try {
     const workspace = await API.post('/workspace/open', { path: folderPath });
+    showRecovery(null);
     renderApp(workspace);
   } catch (err) {
+    showRecovery(err);
     showToast('폴더 열기 실패: ' + err.message, 'error');
     return;
   }
   hideWorkspacePicker();
 }
+
+document.getElementById('btn-new-project')?.addEventListener('click', () => {
+  document.getElementById('init-screen').classList.remove('hidden');
+  document.querySelector('.tab-content')?.classList.add('hidden');
+  document.getElementById('prd-preview').classList.add('hidden');
+});
 
 document.getElementById('btn-change-workspace')?.addEventListener('click', async () => {
   try {
@@ -717,10 +886,18 @@ document.getElementById('workspace-path-input')?.addEventListener('keydown', (e)
 
 // ========== Initial Load ==========
 function renderApp(workspace) {
+  setSessionId(workspace.sessionId);
   const nameEl = document.getElementById('workspace-name');
   if (nameEl) nameEl.textContent = workspace.name || 'CodeForge Blueprint';
+  const reviewMeta = document.getElementById('review-meta');
+  if (reviewMeta) {
+    const latestDoc = workspace.workflow?.documents?.[0];
+    reviewMeta.textContent = `Workspace: ${workspace.rootPath}${workspace.source_prd_path ? ` | Source PRD: ${workspace.source_prd_path.split('/').pop()}` : ''}${latestDoc ? ` | Latest Doc: ${latestDoc.file_path.split('/').pop()}` : ''}`;
+  }
 
   initProviderSelect(workspace);
+  renderWorkflowSummary(workspace.workflow);
+  showRecovery(null);
 
   if (workspace.prd_path) {
     document.getElementById('init-screen').classList.add('hidden');
@@ -741,6 +918,7 @@ async function loadInitialState() {
     const workspace = await API.get('/workspace');
 
     if (!workspace.hasWorkspace) {
+      if (workspaceSessionId && workspace.sessionId !== workspaceSessionId) setSessionId('');
       showWorkspacePicker(workspace.recents);
       return;
     }
@@ -748,6 +926,7 @@ async function loadInitialState() {
     renderApp(workspace);
   } catch (e) {
     console.error('Failed to load workspace:', e);
+    showRecovery(e);
     setClaudeStatus(false, '서버 연결 실패');
   }
 }

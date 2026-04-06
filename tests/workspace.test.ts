@@ -8,6 +8,9 @@ import path from 'path';
 // 각 테스트에서 직접 import해 사용한다.
 import { expandHome, openWorkspace, hasWorkspace, getWorkspaceOrNull, getRecents } from '../src/workspace.js';
 
+const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-home-'));
+process.env.CODEFORGE_BLUEPRINT_HOME = TEST_HOME;
+
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
 
 function makeTempDir(): string {
@@ -68,13 +71,13 @@ describe('openWorkspace', () => {
   });
 
   test('hasWorkspace()가 true로 전환', () => {
-    openWorkspace(tmpDir);
-    assert.equal(hasWorkspace(), true);
+    const ws = openWorkspace(tmpDir);
+    assert.equal(hasWorkspace(ws.sessionId), true);
   });
 
   test('getWorkspaceOrNull()이 열린 워크스페이스 반환', () => {
     const ws = openWorkspace(tmpDir);
-    assert.equal(getWorkspaceOrNull(), ws);
+    assert.equal(getWorkspaceOrNull(ws.sessionId), ws);
   });
 
   test('같은 경로 재호출 시 항상 동일 컨텍스트 반환', () => {
@@ -94,14 +97,12 @@ describe('openWorkspace', () => {
 
 describe('hasWorkspace / getWorkspaceOrNull', () => {
   test('openWorkspace 전에는 hasWorkspace()가 false 또는 이전 상태', () => {
-    // 모듈 싱글톤이 이전 describe에서 설정됐을 수 있으므로
-    // 이 테스트는 전제 없이 현재 상태를 boolean으로 확인
-    const result = hasWorkspace();
+    const result = hasWorkspace('missing-session');
     assert.equal(typeof result, 'boolean');
   });
 
   test('getWorkspaceOrNull은 null 또는 WorkspaceContext 반환', () => {
-    const ws = getWorkspaceOrNull();
+    const ws = getWorkspaceOrNull('missing-session');
     assert.ok(ws === null || (typeof ws === 'object' && 'rootPath' in ws));
   });
 });

@@ -1,0 +1,32 @@
+import type { Context } from 'hono';
+import { openDb } from '../db/index.js';
+import { getWorkspaceOrNull, type WorkspaceContext } from '../workspace.js';
+import { touchSession } from '../db/app-db.js';
+
+export interface RequestContext {
+  sessionId: string;
+  workspace: WorkspaceContext;
+  db: any;
+}
+
+export function getSessionIdFromRequest(c: Context): string | null {
+  return c.req.header('x-codeforge-session') ?? c.req.query('session') ?? null;
+}
+
+export function getRequestContext(c: Context, opts: { requireWorkspace?: boolean } = {}): RequestContext | null {
+  const sessionId = getSessionIdFromRequest(c);
+  const workspace = getWorkspaceOrNull(sessionId);
+  if (!workspace) {
+    if (opts.requireWorkspace) throw new Error('Workspace session missing');
+    return null;
+  }
+  const db = openDb(workspace.dbPath);
+  touchSession(workspace.sessionId);
+  return { sessionId: workspace.sessionId, workspace, db };
+}
+
+export function requireRequestContext(c: Context): RequestContext {
+  const ctx = getRequestContext(c);
+  if (!ctx) throw new Error('Workspace session missing');
+  return ctx;
+}
