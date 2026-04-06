@@ -44,7 +44,7 @@ documentsRoute.get('/', (c) => {
 // GET /api/documents/context-package?profile=review
 documentsRoute.get('/context-package', (c) => {
   const { db, workspace } = requireRequestContext(c);
-  const profile = (c.req.query('profile') ?? 'default') as any;
+  const profile = c.req.query('profile') ?? 'default';
   const pkg = buildContextPackage(db, workspace.docsPath, profile);
   return c.json(pkg);
 });

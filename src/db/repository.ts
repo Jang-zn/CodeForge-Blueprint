@@ -659,6 +659,27 @@ export function parseSectionsFromMarkdown(content: string, templateSections: Tem
   return result;
 }
 
+export function getRecentDecisionLogs(
+  db: any,
+  statusFilter: string[],
+  limit = 20,
+): DecisionLog[] {
+  if (statusFilter.length === 0) return [];
+  const placeholders = statusFilter.map(() => '?').join(',');
+  // 이슈당 최신 로그만 선택한 뒤 최근순(id DESC) 정렬
+  return db.prepare(`
+    SELECT dl.* FROM decision_logs dl
+    INNER JOIN (
+      SELECT issue_id, MAX(id) as max_id
+      FROM decision_logs
+      GROUP BY issue_id
+    ) latest ON dl.id = latest.max_id
+    WHERE dl.status IN (${placeholders})
+    ORDER BY dl.id DESC
+    LIMIT ?
+  `).all(...statusFilter, limit) as DecisionLog[];
+}
+
 // ===== Glossary =====
 
 export function getGlossaryTerms(db: any, category?: string): GlossaryTerm[] {

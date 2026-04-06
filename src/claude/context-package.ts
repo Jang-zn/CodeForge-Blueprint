@@ -4,8 +4,7 @@ import {
   getDocByType,
   getDocSections,
   getDocType,
-  getLastDecisionLogsBulk,
-  getIssues,
+  getRecentDecisionLogs,
   getRefItems,
   buildGlossaryMarkdown,
   assembleMarkdown,
@@ -55,11 +54,11 @@ function readDocContent(db: any, docType: string, docsPath: string): string | un
 export function buildContextPackage(
   db: any,
   docsPath: string,
-  profile: ContextProfile,
+  profile: string,
   legacyPrdPath?: string | null,
 ): ContextPackage {
   const ctx: ContextPackage = {};
-  const includes = PROFILE_DOCS[profile];
+  const includes = PROFILE_DOCS[profile as ContextProfile] ?? PROFILE_DOCS.default;
 
   for (const item of includes) {
     if (item === 'project-overview') {
@@ -82,12 +81,9 @@ export function buildContextPackage(
       const refItems = getRefItems(db);
       if (refItems.length > 0) ctx.refItems = refItems.map(r => r.content);
     } else if (item === 'decisions:recent') {
-      const resolved = getIssues(db)
-        .filter(i => i.status === 'resolved' || i.status === 'deferred')
-        .slice(0, 20);
-      if (resolved.length > 0) {
-        const lastLogs = getLastDecisionLogsBulk(db, resolved.map(i => i.id));
-        ctx.decisions = Object.values(lastLogs).map(log => ({
+      const logs = getRecentDecisionLogs(db, ['resolved', 'deferred']);
+      if (logs.length > 0) {
+        ctx.decisions = logs.map(log => ({
           date: log.date,
           status: log.status,
           memo: log.memo,
@@ -95,10 +91,9 @@ export function buildContextPackage(
         }));
       }
     } else if (item === 'decisions:deferred') {
-      const deferred = getIssues(db).filter(i => i.status === 'deferred').slice(0, 20);
-      if (deferred.length > 0) {
-        const lastLogs = getLastDecisionLogsBulk(db, deferred.map(i => i.id));
-        ctx.decisions = Object.values(lastLogs).map(log => ({
+      const logs = getRecentDecisionLogs(db, ['deferred']);
+      if (logs.length > 0) {
+        ctx.decisions = logs.map(log => ({
           date: log.date,
           status: log.status,
           memo: log.memo,
