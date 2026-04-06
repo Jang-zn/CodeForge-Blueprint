@@ -7,6 +7,7 @@ import { closeAllDbs } from '../db/index.js';
 import { initAppDb, closeAppDb } from '../db/app-db.js';
 import { cancelJob, getJob } from '../db/repository.js';
 import { checkClaude, checkCodex } from '../claude/finder.js';
+import { killProcess, killAllProcesses } from '../claude/process-registry.js';
 import { createWorkspaceRoute } from './routes/workspace.js';
 import issuesRoute from './routes/issues.js';
 import initRoute from './routes/init.js';
@@ -38,6 +39,7 @@ export async function startServer(port: number): Promise<number> {
     const reqCtx = getRequestContext(c);
     if (!reqCtx) return c.json({ error: 'Not found' }, 404);
     cancelJob(reqCtx.db, c.req.param('id'));
+    killProcess(c.req.param('id'));
     return c.json({ ok: true });
   });
 
@@ -78,6 +80,7 @@ export async function startServer(port: number): Promise<number> {
 
       const shutdown = () => {
         server.close();
+        killAllProcesses();
         closeAppDb();
         closeAllDbs();
         process.exit(0);

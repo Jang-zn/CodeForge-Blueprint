@@ -14,7 +14,8 @@ import {
   isJobRunnable,
   markSupersededJobs,
 } from '../../db/repository.js';
-import { spawnProvider } from '../../claude/provider.js';
+import { spawnProviderWithHandle } from '../../claude/provider.js';
+import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
 import { chunkToLogText } from '../../claude/log-extractor.js';
 import { buildInitPrompt, type InitFormData } from '../../claude/prompts/init.js';
 import { requireRequestContext } from '../context.js';
@@ -72,13 +73,22 @@ initRoute.post('/', async (c) => {
   (async () => {
     try {
       const prompt = buildInitPrompt(body);
-      const result = await spawnProvider(prompt, providerModel, {
+      const handle = spawnProviderWithHandle(prompt, providerModel, {
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
           const text = chunkToLogText(chunk, providerModel.provider);
           if (text) appendJobLog(db, jobId, text);
         },
       });
+      handle.childReady.then(child => {
+        if (child) registerProcess(jobId, child);
+      });
+      let result: Awaited<typeof handle.promise>;
+      try {
+        result = await handle.promise;
+      } finally {
+        unregisterProcess(jobId);
+      }
 
       if (!isJobRunnable(db, jobId)) return;
       if (!result.success) {

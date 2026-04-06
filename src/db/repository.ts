@@ -389,3 +389,46 @@ export function getDocuments(db: any, tab?: Tab): DocumentRecord[] {
   }
   return db.prepare('SELECT * FROM documents ORDER BY id DESC').all();
 }
+
+// ===== Workflow Snapshot Helpers =====
+
+export function getLastApplyAtByTab(db: any): Record<string, string | null> {
+  const rows: { tab: string; last_at: string }[] = db.prepare(`
+    SELECT tab, MAX(completed_at) as last_at
+    FROM jobs
+    WHERE type LIKE 'apply-%' AND status = 'completed' AND tab IS NOT NULL
+    GROUP BY tab
+  `).all();
+  const result: Record<string, string | null> = { review: null, backend: null, frontend: null, features: null };
+  for (const row of rows) {
+    result[row.tab] = row.last_at;
+  }
+  return result;
+}
+
+export function getDirtyCountByTab(db: any, tab: string, lastApplyAt: string | null): number {
+  if (lastApplyAt === null) {
+    const row = db.prepare(`
+      SELECT COUNT(*) as cnt FROM issues WHERE tab = ? AND status != 'pending'
+    `).get(tab) as { cnt: number };
+    return row.cnt;
+  }
+  const row = db.prepare(`
+    SELECT COUNT(*) as cnt FROM issues WHERE tab = ? AND status != 'pending' AND updated_at > ?
+  `).get(tab, lastApplyAt) as { cnt: number };
+  return row.cnt;
+}
+
+export function getLastCompletedJobAtByPrefix(db: any, typePrefix: string): Record<string, string | null> {
+  const rows: { tab: string; last_at: string }[] = db.prepare(`
+    SELECT tab, MAX(completed_at) as last_at
+    FROM jobs
+    WHERE type LIKE ? AND status = 'completed' AND tab IS NOT NULL
+    GROUP BY tab
+  `).all(typePrefix + '%');
+  const result: Record<string, string | null> = { review: null, backend: null, frontend: null, features: null };
+  for (const row of rows) {
+    result[row.tab] = row.last_at;
+  }
+  return result;
+}

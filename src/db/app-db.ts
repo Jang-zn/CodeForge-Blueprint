@@ -90,7 +90,7 @@ export function initAppDb(): void {
 
 const SESSION_TTL_DAYS = 7;
 
-function cleanupStaleData(): void {
+export function cleanupStaleData(): void {
   const db = _appDb;
   if (!db) return;
 

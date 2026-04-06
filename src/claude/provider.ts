@@ -1,8 +1,14 @@
-import { spawnClaude } from './spawner.js';
-import { spawnCodex } from './codex-spawner.js';
+import { spawnClaude, spawnClaudeWithHandle } from './spawner.js';
+import { spawnCodex, spawnCodexWithHandle } from './codex-spawner.js';
 import type { SpawnOptions, SpawnResult } from './spawner.js';
+import type { ChildProcess } from 'child_process';
 import type { ProviderModel } from '../db/repository.js';
 import { getProviderCapability, getProviderCapabilities } from './capabilities.js';
+
+export interface ProviderHandle {
+  promise: Promise<SpawnResult>;
+  childReady: Promise<ChildProcess | null>;
+}
 
 function mockResult(prompt: string): string {
   if (prompt.includes('PRD(Product Requirements Document)')) {
@@ -101,6 +107,25 @@ LLM 출력 포맷 흔들림
 
 - Mock output for testing
 - Prompt length: ${prompt.length}`;
+}
+
+export function spawnProviderWithHandle(
+  prompt: string,
+  config: ProviderModel,
+  options?: SpawnOptions,
+): ProviderHandle {
+  if (process.env.CODEFORGE_MOCK_PROVIDER === '1') {
+    const result = mockResult(prompt);
+    options?.onChunk?.(result);
+    return {
+      promise: Promise.resolve({ success: true, result }),
+      childReady: Promise.resolve(null),
+    };
+  }
+  const opts: SpawnOptions = { ...options, model: config.model };
+  return config.provider === 'codex'
+    ? spawnCodexWithHandle(prompt, opts)
+    : spawnClaudeWithHandle(prompt, opts);
 }
 
 export async function spawnProvider(

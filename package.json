@@ -7,23 +7,29 @@
     "codeforge-blueprint": "./dist/cli.js"
   },
   "main": "./dist/cli.js",
-  "files": ["dist/", "skills/"],
+  "files": [
+    "dist/",
+    "skills/"
+  ],
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
     "test": "node --import tsx/esm --test 'tests/*.test.ts' 'tests/**/*.test.ts'",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "hono": "^4",
     "@hono/node-server": "^1",
     "better-sqlite3": "^11",
+    "hono": "^4",
     "open": "^10"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7",
     "@types/node": "^20",
+    "diff": "^8.0.4",
     "tsx": "^4",
     "typescript": "^5"
   }

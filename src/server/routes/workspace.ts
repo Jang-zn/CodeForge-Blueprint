@@ -2,11 +2,12 @@ import { Hono } from 'hono';
 import { execFile } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { openWorkspace, expandHome, getRecents } from '../../workspace.js';
+import { openWorkspace, expandHome, getRecents, closeWorkspaceSession } from '../../workspace.js';
 import { openDb } from '../../db/index.js';
-import { getProviderModel, setProviderModel, upsertWorkspaceMeta, getDocuments, getIssues, getRunningJobs, getWorkspaceMeta, type ProviderType } from '../../db/repository.js';
+import { getProviderModel, setProviderModel, upsertWorkspaceMeta, getDocuments, getIssues, getRunningJobs, cancelJob, getWorkspaceMeta, getLastApplyAtByTab, getDirtyCountByTab, getLastCompletedJobAtByPrefix, type ProviderType } from '../../db/repository.js';
 import { getRequestContext, getSessionIdFromRequest } from '../context.js';
 import { getProviderCapabilities } from '../../claude/provider.js';
+import { killProcess } from '../../claude/process-registry.js';
 
 type CliStatus = { available: boolean; version?: string; path?: string | null };
 
@@ -37,6 +38,19 @@ function buildStageSummary(db: any) {
   const documents = getDocuments(db);
   const hasPrd = !!reviewIssues.length || documents.some(doc => doc.kind === 'source-prd' || doc.kind === 'generated-prd');
   const stage = hasPrd ? (reviewIssues.length > 0 ? 'review' : 'prd_ready') : 'init';
+
+  // 탭별 dirty 계산
+  const lastApplyAt = getLastApplyAtByTab(db);
+  const TABS = ['review', 'backend', 'frontend', 'features'] as const;
+  const dirtyCountByTab: Record<string, number> = {};
+  for (const tab of TABS) {
+    dirtyCountByTab[tab] = getDirtyCountByTab(db, tab, lastApplyAt[tab]);
+  }
+
+  // 탭별 마지막 analyze/generate 시각
+  const lastAnalyzeAtByTab = getLastCompletedJobAtByPrefix(db, 'analyze-');
+  const lastGeneratedDocAtByTab = getLastCompletedJobAtByPrefix(db, 'generate-');
+
   return {
     stage,
     counts: {
@@ -53,6 +67,9 @@ function buildStageSummary(db: any) {
       capability: job.capability,
     })),
     documents: documents.slice(0, 8),
+    dirtyCountByTab,
+    lastAnalyzeAtByTab,
+    lastGeneratedDocAtByTab,
   };
 }
 
@@ -127,6 +144,33 @@ export function createWorkspaceRoute(claudeStatus: CliStatus, codexStatus: CliSt
     if (!reqCtx) return c.json({ error: '워크스페이스가 열려있지 않습니다.', recovery: '워크스페이스를 먼저 여세요.' }, 400);
     const body = await c.req.json<{ prd_path?: string; tech_stack_path?: string; name?: string }>();
     upsertWorkspaceMeta(reqCtx.db, body);
+    return c.json({ ok: true });
+  });
+
+  router.post('/close', async (c) => {
+    // body에서도 sessionId를 받을 수 있도록 (beforeunload sendBeacon용)
+    let sessionId: string | undefined;
+    const reqCtx = getRequestContext(c);
+    if (reqCtx) {
+      sessionId = reqCtx.sessionId;
+      // 해당 세션의 실행 중 job만 cancel + kill
+      const runningJobs = getRunningJobs(reqCtx.db);
+      for (const job of runningJobs) {
+        if (job.session_id === sessionId) {
+          cancelJob(reqCtx.db, job.id);
+          killProcess(job.id);
+        }
+      }
+    } else {
+      // header에 세션 없으면 body에서 시도
+      try {
+        const body = await c.req.json<{ sessionId?: string } | Record<string, never>>().catch(() => ({}));
+        sessionId = 'sessionId' in body ? body.sessionId : undefined;
+      } catch { /* ignore */ }
+    }
+    if (sessionId) {
+      closeWorkspaceSession(sessionId);
+    }
     return c.json({ ok: true });
   });
 

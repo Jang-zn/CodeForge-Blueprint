@@ -104,6 +104,17 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function timeAgo(isoStr) {
+  if (!isoStr) return null;
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}시간 전`;
+  return `${Math.floor(hrs / 24)}일 전`;
+}
+
 // ========== State ==========
 let state = {};
 let activeTab = 'review';
@@ -142,10 +153,34 @@ function renderWorkflowSummary(workflow) {
   const latestDoc = docs[0];
   const running = workflow.runningJobs || [];
   const stageLabelMap = { init: 'Init', prd_ready: 'PRD Ready', review: 'Review', backend: 'Backend', frontend: 'Frontend', features: 'Features' };
+  const dirty = workflow.dirtyCountByTab || {};
+  const analyzeAt = workflow.lastAnalyzeAtByTab || {};
+  const generateAt = workflow.lastGeneratedDocAtByTab || {};
+
+  const TABS = ['review', 'backend', 'frontend', 'features'];
+  const TAB_LABELS = { review: 'Review', backend: 'BE', frontend: 'FE', features: 'Feat' };
+  const dirtyBadges = TABS.map(tab => {
+    const count = dirty[tab] || 0;
+    const badge = count > 0 ? `<span style="color:#f5c518;font-weight:600;">${count}</span>` : `<span style="color:var(--muted)">0</span>`;
+    return `${TAB_LABELS[tab]}: ${badge}`;
+  }).join(' / ');
+
+  const analyzeInfo = TABS.map(tab => {
+    const at = timeAgo(analyzeAt[tab]);
+    return at ? `${TAB_LABELS[tab]}: ${escapeHtml(at)}` : null;
+  }).filter(Boolean).join(', ') || '없음';
+
+  const generateInfo = TABS.map(tab => {
+    const at = timeAgo(generateAt[tab]);
+    return at ? `${TAB_LABELS[tab]}: ${escapeHtml(at)}` : null;
+  }).filter(Boolean).join(', ') || '없음';
+
   el.innerHTML = [
     `<div class="workflow-card"><div class="label">Current Stage</div><div class="value">${escapeHtml(stageLabelMap[workflow.stage] || workflow.stage)}</div><div class="sub">Review ${workflow.counts?.review || 0} / BE ${workflow.counts?.backend || 0} / FE ${workflow.counts?.frontend || 0}</div></div>`,
     `<div class="workflow-card"><div class="label">Running Jobs</div><div class="value">${running.length}</div><div class="sub">${running[0] ? escapeHtml(`${running[0].type}${running[0].tab ? ` (${running[0].tab})` : ''}`) : '현재 실행 중인 작업 없음'}</div></div>`,
     `<div class="workflow-card"><div class="label">Latest Doc</div><div class="value">${latestDoc ? escapeHtml(`${latestDoc.tab} v${latestDoc.version}`) : '없음'}</div><div class="sub">${latestDoc ? escapeHtml(latestDoc.file_path.split('/').pop()) : '생성된 문서 없음'}</div></div>`,
+    `<div class="workflow-card"><div class="label">Dirty Issues</div><div class="value" style="font-size:0.95rem;">${dirtyBadges}</div><div class="sub">마지막 apply 이후 변경된 이슈</div></div>`,
+    `<div class="workflow-card"><div class="label">Last Analyze</div><div class="value" style="font-size:0.85rem;line-height:1.4;">${analyzeInfo}</div><div class="sub">Last Doc: ${generateInfo}</div></div>`,
   ].join('');
   el.classList.remove('hidden');
 }
@@ -474,7 +509,7 @@ async function loadIssues(tab) {
     }
 
     // Enable action buttons
-    ['btn-analyze', 'btn-apply', 'btn-generate'].forEach(id => {
+    ['btn-analyze', 'btn-apply', 'btn-generate', 'btn-history'].forEach(id => {
       document.getElementById(id)?.removeAttribute('disabled');
     });
 
@@ -850,6 +885,7 @@ function hideWorkspacePicker() {
 
 async function doOpenWorkspace(folderPath) {
   try {
+    await API.post('/workspace/close', {}).catch(() => {});  // best-effort
     const workspace = await API.post('/workspace/open', { path: folderPath });
     showRecovery(null);
     renderApp(workspace);
@@ -930,7 +966,7 @@ function renderApp(workspace) {
     document.getElementById('prd-preview').classList.add('hidden');
     document.querySelector('.tab-content')?.classList.remove('hidden');
     document.getElementById('fab-container')?.classList.remove('hidden');
-    ['btn-analyze', 'btn-apply', 'btn-generate'].forEach(id => {
+    ['btn-analyze', 'btn-apply', 'btn-generate', 'btn-history'].forEach(id => {
       document.getElementById(id)?.removeAttribute('disabled');
     });
     loadIssues(activeTab);
@@ -959,6 +995,13 @@ async function loadInitialState() {
   }
 }
 
+// ========== Beforeunload: 세션 정리 ==========
+window.addEventListener('beforeunload', () => {
+  if (workspaceSessionId) {
+    navigator.sendBeacon('/api/workspace/close', JSON.stringify({ sessionId: workspaceSessionId }));
+  }
+});
+
 // ========== Active Link Highlight ==========
 const obs = new IntersectionObserver(entries => {
   entries.forEach(entry => {
@@ -970,6 +1013,141 @@ const obs = new IntersectionObserver(entries => {
   });
 }, { rootMargin: '-15% 0px -75% 0px' });
 document.querySelectorAll('h2[id], h3[id]').forEach(el => obs.observe(el));
+
+// ========== Diff Modal Styles ==========
+(function injectDiffStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000; }
+    .modal-overlay.hidden { display:none; }
+    .modal-container { background:var(--surface,#1c2129);border:1px solid var(--border,#30363d);border-radius:12px;display:flex;flex-direction:column;overflow:hidden; }
+    .modal-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border,#30363d); }
+    .modal-header h3 { margin:0;font-size:15px;font-weight:600; }
+    .modal-close-btn { background:none;border:none;color:var(--text-muted,#888);cursor:pointer;font-size:16px;padding:4px 8px;border-radius:4px; }
+    .modal-close-btn:hover { background:var(--border,#30363d);color:var(--text,#e6edf3); }
+    .modal-footer { padding:12px 20px;border-top:1px solid var(--border,#30363d);display:flex;justify-content:flex-end; }
+    .btn-primary { background:var(--blue,#1f6feb);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500; }
+    .btn-primary:disabled { opacity:0.4;cursor:not-allowed; }
+    .btn-primary:not(:disabled):hover { background:#388bfd; }
+    .diff-modal-container { width:90vw;max-width:1200px;height:80vh; }
+    .diff-modal-body { display:flex;flex:1;overflow:hidden;gap:0;padding:16px 20px;gap:16px; }
+    .diff-version-list { width:260px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border,#30363d);padding-right:16px; }
+    .diff-version-item { display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border,#30363d);font-size:13px; }
+    .diff-radio-label { display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap; }
+    .diff-version-info { color:var(--text-muted,#888);font-size:12px;flex:1; }
+    .diff-view { flex:1;overflow:auto; }
+    .diff-header { display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted,#888);margin-bottom:8px;padding:0 4px; }
+    .diff-content { font-size:12px;line-height:1.5;margin:0;font-family:monospace;white-space:pre-wrap;word-break:break-all; }
+    .diff-add { background:rgba(34,197,94,0.15);color:#4ade80;display:block; }
+    .diff-remove { background:rgba(239,68,68,0.15);color:#f87171;display:block; }
+    .diff-unchanged { color:var(--text-muted,#888);display:block; }
+    .empty-state,.error-state { color:var(--text-muted,#888);font-size:13px;padding:16px 0; }
+    .error-state { color:#f87171; }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ========== Diff Modal Logic ==========
+let diffSelectedLeft = null;
+let diffSelectedRight = null;
+
+document.getElementById('btn-history')?.addEventListener('click', () => {
+  openDiffModal(activeTab);
+});
+
+async function openDiffModal(tab) {
+  try {
+    const { versions } = await API.get(`/generate/versions?tab=${tab}`);
+    diffSelectedLeft = null;
+    diffSelectedRight = null;
+    renderVersionList(versions || []);
+    document.getElementById('diff-view').innerHTML = '';
+    document.getElementById('diff-compare-btn').disabled = true;
+    document.getElementById('diff-modal').classList.remove('hidden');
+  } catch (e) {
+    showToast('히스토리 로드 실패: ' + e.message, 'error');
+  }
+}
+
+function renderVersionList(versions) {
+  const container = document.getElementById('diff-version-list');
+  if (!versions.length) {
+    container.innerHTML = '<p class="empty-state">생성된 문서가 없습니다.</p>';
+    return;
+  }
+  container.innerHTML = versions.map((v, i) => `
+    <div class="diff-version-item" data-id="${v.id}">
+      <label class="diff-radio-label"><input type="radio" name="diff-left" value="${v.id}" ${i === 1 ? 'checked' : ''}> 이전</label>
+      <label class="diff-radio-label"><input type="radio" name="diff-right" value="${v.id}" ${i === 0 ? 'checked' : ''}> 현재</label>
+      <span class="diff-version-info">v${escapeHtml(v.version)} · ${timeAgo(v.created_at) || v.created_at}</span>
+    </div>
+  `).join('');
+
+  if (versions.length >= 2) {
+    diffSelectedLeft = versions[1].id;
+    diffSelectedRight = versions[0].id;
+    document.getElementById('diff-compare-btn').disabled = false;
+  }
+
+  container.querySelectorAll('input[name="diff-left"]').forEach(r => {
+    r.addEventListener('change', e => { diffSelectedLeft = parseInt(e.target.value); updateDiffCompareBtn(); });
+  });
+  container.querySelectorAll('input[name="diff-right"]').forEach(r => {
+    r.addEventListener('change', e => { diffSelectedRight = parseInt(e.target.value); updateDiffCompareBtn(); });
+  });
+}
+
+function updateDiffCompareBtn() {
+  const btn = document.getElementById('diff-compare-btn');
+  if (btn) btn.disabled = !(diffSelectedLeft && diffSelectedRight && diffSelectedLeft !== diffSelectedRight);
+}
+
+document.getElementById('diff-compare-btn')?.addEventListener('click', async () => {
+  if (!diffSelectedLeft || !diffSelectedRight) return;
+  try {
+    const [leftData, rightData] = await Promise.all([
+      API.get(`/generate/content/${diffSelectedLeft}`),
+      API.get(`/generate/content/${diffSelectedRight}`),
+    ]);
+    renderDiff(leftData, rightData);
+  } catch (e) {
+    document.getElementById('diff-view').innerHTML = `<p class="error-state">로드 실패: ${escapeHtml(e.message)}</p>`;
+  }
+});
+
+function renderDiff(left, right) {
+  const view = document.getElementById('diff-view');
+  if (left.error === 'file_not_found' || right.error === 'file_not_found') {
+    view.innerHTML = '<p class="error-state">파일이 삭제되었습니다.</p>';
+    return;
+  }
+  if (typeof Diff === 'undefined') {
+    view.innerHTML = '<p class="error-state">diff 라이브러리를 로드할 수 없습니다.</p>';
+    return;
+  }
+  const leftText = left.content || '';
+  const rightText = right.content || '';
+  const parts = Diff.diffLines(leftText, rightText);
+  let html = `<div class="diff-header"><span>v${escapeHtml(left.version)} (이전)</span><span>v${escapeHtml(right.version)} (현재)</span></div><pre class="diff-content">`;
+  for (const part of parts) {
+    const cls = part.added ? 'diff-add' : part.removed ? 'diff-remove' : 'diff-unchanged';
+    const prefix = part.added ? '+' : part.removed ? '-' : ' ';
+    const lines = part.value.split('\n');
+    if (lines[lines.length - 1] === '') lines.pop();
+    for (const line of lines) {
+      html += `<span class="${cls}">${prefix} ${escapeHtml(line)}\n</span>`;
+    }
+  }
+  html += '</pre>';
+  view.innerHTML = html;
+}
+
+document.getElementById('diff-modal-close')?.addEventListener('click', () => {
+  document.getElementById('diff-modal').classList.add('hidden');
+});
+document.getElementById('diff-modal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+});
 
 // ========== Boot ==========
 loadInitialState();

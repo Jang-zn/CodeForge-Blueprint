@@ -13,9 +13,11 @@ import {
   markSupersededJobs,
   isJobRunnable,
   addDocumentRecord,
+  getDocuments,
   type Tab,
 } from '../../db/repository.js';
-import { spawnProvider } from '../../claude/provider.js';
+import { spawnProviderWithHandle } from '../../claude/provider.js';
+import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
 import { chunkToLogText } from '../../claude/log-extractor.js';
 import { requireRequestContext } from '../context.js';
 
@@ -91,13 +93,22 @@ generateRoute.post('/', async (c) => {
       const prdContent = fs.readFileSync(prdPath, 'utf-8');
 
       const prompt = buildWriteDocPrompt(tab, issues, prdContent, version);
-      const result = await spawnProvider(prompt, providerModel, {
+      const handle = spawnProviderWithHandle(prompt, providerModel, {
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
           const text = chunkToLogText(chunk, providerModel.provider);
           if (text) appendJobLog(db, jobId, text);
         },
       });
+      handle.childReady.then(child => {
+        if (child) registerProcess(jobId, child);
+      });
+      let result: Awaited<typeof handle.promise>;
+      try {
+        result = await handle.promise;
+      } finally {
+        unregisterProcess(jobId);
+      }
 
       if (!isJobRunnable(db, jobId)) return;
       if (!result.success) {
@@ -117,6 +128,28 @@ generateRoute.post('/', async (c) => {
   })();
 
   return c.json({ jobId, filename, downloadUrl: `/api/generate/download/${filename}` });
+});
+
+generateRoute.get('/versions', (c) => {
+  const { db } = requireRequestContext(c);
+  const tab = c.req.query('tab');
+  if (!tab) return c.json({ error: 'tab 파라미터가 필요합니다.' }, 400);
+  const versions = getDocuments(db, tab as Tab);
+  return c.json({ versions });
+});
+
+generateRoute.get('/content/:id', (c) => {
+  const { db } = requireRequestContext(c);
+  const id = parseInt(c.req.param('id'));
+  if (isNaN(id)) return c.json({ error: '유효하지 않은 id입니다.' }, 400);
+  const docs = getDocuments(db);
+  const doc = docs.find(d => d.id === id);
+  if (!doc) return c.json({ error: '문서를 찾을 수 없습니다.' }, 404);
+  if (!fs.existsSync(doc.file_path)) {
+    return c.json({ id, tab: doc.tab, version: doc.version, content: null, error: 'file_not_found', created_at: doc.created_at });
+  }
+  const content = fs.readFileSync(doc.file_path, 'utf-8');
+  return c.json({ id, tab: doc.tab, version: doc.version, content, created_at: doc.created_at });
 });
 
 generateRoute.get('/download/:filename', (c) => {
