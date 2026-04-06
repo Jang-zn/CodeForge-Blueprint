@@ -18,7 +18,8 @@ import {
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
 import { chunkToLogText } from '../../claude/log-extractor.js';
-import { buildInitPrompt, type InitFormData } from '../../claude/prompts/init.js';
+import { buildInitPrompt, buildCodebasePrdPrompt, type InitFormData } from '../../claude/prompts/init.js';
+import { scanCodebase, buildScanContext } from '../../codebase-scanner.js';
 import { requireRequestContext } from '../context.js';
 
 function pickFileNative(): Promise<string | null> {
@@ -195,6 +196,75 @@ initRoute.get('/templates/:type', (c) => {
     example: exampleRaw.trim(),
     skeleton: skeletonRaw.trim(),
   });
+});
+
+initRoute.post('/scan-codebase', (c) => {
+  const { workspace } = requireRequestContext(c);
+  try {
+    const summary = scanCodebase(workspace.rootPath);
+    return c.json(summary);
+  } catch (e) {
+    return c.json({ error: '코드베이스 스캔 실패', recovery: String(e) }, 500);
+  }
+});
+
+initRoute.post('/from-codebase', async (c) => {
+  const { db, workspace, sessionId } = requireRequestContext(c);
+  const body = await c.req.json<{ userNotes?: string }>().catch(() => ({} as { userNotes?: string }));
+
+  const jobId = crypto.randomUUID();
+  const providerModel = getProviderModel(db);
+  markSupersededJobs(db, { session_id: sessionId, type: 'generate-prd', run_key: 'init' }, jobId);
+  createJob(db, jobId, 'generate-prd', {
+    session_id: sessionId,
+    capability: 'generation',
+    run_key: 'init',
+    source_version: 'codebase-scan',
+    workspace_root: workspace.rootPath,
+  });
+  appendJobLog(db, jobId, `[${providerModel.provider}:${providerModel.model}] 코드베이스 분석 후 PRD 생성 시작...\n`);
+
+  (async () => {
+    try {
+      appendJobLog(db, jobId, '코드베이스 스캔 중...\n');
+      const summary = scanCodebase(workspace.rootPath);
+      appendJobLog(db, jobId, `감지된 프로젝트 타입: ${summary.detectedType}, 예상 LOC: ${summary.stats.estimatedLoc}\n`);
+
+      const scanContext = buildScanContext(summary, body.userNotes);
+      appendJobLog(db, jobId, `스캔 컨텍스트 준비 완료 (${scanContext.length}자). PRD 생성 중...\n`);
+
+      const prompt = buildCodebasePrdPrompt(scanContext);
+      const handle = spawnProviderWithHandle(prompt, providerModel, {
+        onChunk: (chunk) => {
+          if (!isJobRunnable(db, jobId)) return;
+          const text = chunkToLogText(chunk, providerModel.provider);
+          if (text) appendJobLog(db, jobId, text);
+        },
+      });
+      handle.childReady.then(child => { if (child) registerProcess(jobId, child); });
+      let result: Awaited<typeof handle.promise>;
+      try { result = await handle.promise; } finally { unregisterProcess(jobId); }
+
+      if (!isJobRunnable(db, jobId)) return;
+      if (!result.success) { updateJob(db, jobId, 'failed', result.error); return; }
+
+      const prdPath = path.join(workspace.docsPath, 'prd-v0.1.0.md');
+      fs.writeFileSync(prdPath, result.result, 'utf-8');
+
+      upsertWorkspaceMeta(db, {
+        name: summary.projectName || workspace.name,
+        prd_path: prdPath,
+        source_prd_path: prdPath,
+      });
+      addDocumentRecord(db, { tab: 'review', version: '0.1.0', kind: 'generated-prd', file_path: prdPath, source_version: 'codebase-scan', source_job_id: jobId });
+      updateJob(db, jobId, 'completed');
+    } catch (e) {
+      if (!isJobRunnable(db, jobId)) return;
+      updateJob(db, jobId, 'failed', String(e));
+    }
+  })();
+
+  return c.json({ jobId });
 });
 
 export default initRoute;

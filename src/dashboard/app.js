@@ -740,6 +740,114 @@ document.getElementById('btn-import-prd')?.addEventListener('click', async (e) =
   }
 });
 
+// ========== Codebase Scan Handlers ==========
+document.getElementById('btn-scan-codebase')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-scan-codebase');
+  btn.disabled = true;
+  btn.textContent = '코드 분석 중...';
+  try {
+    const summary = await API.post('/init/scan-codebase', {});
+
+    // 메타 정보
+    const metaEl = document.getElementById('scan-meta');
+    metaEl.innerHTML = `
+      <span class="scan-meta-item"><strong>${escapeHtml(summary.projectName)}</strong></span>
+      <span class="scan-meta-sep">·</span>
+      <span class="scan-meta-item">${escapeHtml(summary.detectedType)}</span>
+      <span class="scan-meta-sep">·</span>
+      <span class="scan-meta-item">~${summary.stats.estimatedLoc.toLocaleString()} 줄</span>
+      <span class="scan-meta-sep">·</span>
+      <span class="scan-meta-item">${Object.entries(summary.stats.filesByExt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([ext,n])=>`${ext}(${n})`).join(', ')}</span>
+    `;
+
+    // 디렉토리 트리
+    document.getElementById('scan-tree').textContent = summary.directoryTree || '(없음)';
+
+    // README
+    document.getElementById('scan-readme').textContent = summary.readmeContent || '(README 없음)';
+
+    // 설정 파일들
+    const configsEl = document.getElementById('scan-configs');
+    if (summary.configFiles && summary.configFiles.length > 0) {
+      configsEl.innerHTML = summary.configFiles.map(f =>
+        `<details><summary class="scan-file-name">${escapeHtml(f.name)}</summary><pre class="scan-pre">${escapeHtml(f.content)}</pre></details>`
+      ).join('');
+    } else {
+      configsEl.textContent = '(설정 파일 없음)';
+    }
+
+    // 엔트리포인트
+    const epEl = document.getElementById('scan-entrypoints');
+    if (summary.entryPoints && summary.entryPoints.length > 0) {
+      epEl.innerHTML = summary.entryPoints.map(ep =>
+        `<details><summary class="scan-file-name">${escapeHtml(ep.path)}</summary><pre class="scan-pre">${escapeHtml(ep.preview)}</pre></details>`
+      ).join('');
+    } else {
+      epEl.textContent = '(엔트리포인트 없음)';
+    }
+
+    // 환경 변수
+    document.getElementById('scan-env').textContent = summary.envExample || '(.env.example 없음)';
+
+    // 패널 전환
+    document.getElementById('init-screen').classList.add('hidden');
+    document.getElementById('codebase-scan-preview').classList.remove('hidden');
+    showRecovery(null);
+  } catch (e) {
+    showRecovery(e);
+    showToast('코드 분석 실패: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '코드베이스에서 PRD 생성...';
+  }
+});
+
+document.getElementById('btn-confirm-scan')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-confirm-scan');
+  const statusEl = document.getElementById('scan-job-status');
+  btn.disabled = true;
+  btn.textContent = 'PRD 생성 중...';
+  statusEl.textContent = 'AI가 코드베이스를 분석하여 PRD를 작성 중입니다...';
+  statusEl.classList.remove('hidden');
+  try {
+    const userNotes = document.getElementById('scan-user-notes').value;
+    const { jobId } = await API.post('/init/from-codebase', { userNotes });
+    pollJob(jobId, async (err) => {
+      btn.disabled = false;
+      btn.textContent = 'PRD 생성하기 →';
+      statusEl.classList.add('hidden');
+      if (err) {
+        showRecovery(err);
+        showToast('PRD 생성 실패: ' + err.message, 'error');
+        return;
+      }
+      try {
+        const prdData = await API.get('/init/prd');
+        document.getElementById('prd-content').textContent = prdData.content || '';
+        document.getElementById('codebase-scan-preview').classList.add('hidden');
+        document.getElementById('prd-preview').classList.remove('hidden');
+        try { renderWorkflowSummary((await API.get('/workspace')).workflow); } catch { /* ignore */ }
+        showToast('코드베이스 분석 완료! PRD가 생성되었습니다.', 'success');
+      } catch (e2) {
+        showRecovery(e2);
+        showToast('PRD 로드 실패: ' + e2.message, 'error');
+      }
+    });
+  } catch (e) {
+    showRecovery(e);
+    showToast('PRD 생성 실패: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'PRD 생성하기 →';
+    statusEl.classList.add('hidden');
+  }
+});
+
+document.getElementById('btn-cancel-scan')?.addEventListener('click', () => {
+  document.getElementById('codebase-scan-preview').classList.add('hidden');
+  document.getElementById('init-screen').classList.remove('hidden');
+  document.getElementById('scan-user-notes').value = '';
+});
+
 document.getElementById('btn-start-review')?.addEventListener('click', async () => {
   document.getElementById('prd-preview').classList.add('hidden');
   document.querySelector('.tab-content')?.classList.remove('hidden');
@@ -894,11 +1002,11 @@ document.getElementById('btn-generate')?.addEventListener('click', async () => {
   showJobLogPanel('문서 생성 중...');
   showJobStatus('문서 생성 중...');
   try {
-    const { jobId, downloadUrl } = await API.post('/generate', { tab: activeTab });
+    const { jobId, folderName } = await API.post('/generate', { tab: activeTab });
     pollJob(jobId, (err) => {
       if (err) { showRecovery(err); showToast('문서 생성 실패: ' + err.message, 'error'); return; }
-      showToast('문서 생성 완료!');
-      if (downloadUrl) window.open(downloadUrl, '_blank');
+      showToast('문서 생성 완료! — ' + folderName);
+      if (typeof loadRecommendations === 'function') loadRecommendations(activeTab);
     });
   } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
 });
@@ -1066,9 +1174,20 @@ document.getElementById('workspace-path-input')?.addEventListener('keydown', (e)
 
 // ========== Initial Load ==========
 function renderApp(workspace) {
+  // 이전 워크스페이스 이슈 상태 초기화
+  state = {};
+  ['review', 'backend', 'frontend', 'features'].forEach(tab => {
+    const contentArea = document.querySelector(`#panel-${tab} .issue-content`);
+    if (contentArea) contentArea.innerHTML = '';
+  });
+  const statusSidebar = document.getElementById('statusSidebar');
+  if (statusSidebar) statusSidebar.innerHTML = '';
+
   setSessionId(workspace.sessionId);
   const nameEl = document.getElementById('workspace-name');
   if (nameEl) nameEl.textContent = workspace.name || 'CodeForge Blueprint';
+  const folderEl = document.getElementById('workspace-folder-name');
+  if (folderEl) folderEl.textContent = workspace.rootPath ? workspace.rootPath.split('/').pop() : '';
   const reviewMeta = document.getElementById('review-meta');
   if (reviewMeta) {
     const latestDoc = workspace.workflow?.documents?.[0];
