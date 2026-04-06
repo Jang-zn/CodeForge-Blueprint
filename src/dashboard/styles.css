@@ -70,17 +70,17 @@ body {
 
 /* Tab navigation */
 .tab-nav {
-  display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 12px;
+  display: flex; flex-direction: column; gap: 2px; padding: 0 12px 12px;
   border-bottom: 1px solid var(--border); margin-bottom: 8px;
 }
 .tab-btn {
-  flex: 1; min-width: 0; font-size: 11px; padding: 6px 4px; border-radius: 4px;
-  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
-  cursor: pointer; font-family: inherit; transition: all 0.15s; text-align: center;
+  width: 100%; font-size: 12.5px; padding: 8px 12px; border-radius: 6px;
+  border: none; background: transparent; color: var(--text-muted);
+  cursor: pointer; font-family: inherit; transition: all 0.15s; text-align: left;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.tab-btn:hover { border-color: var(--text-muted); color: var(--text); }
-.tab-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tab-btn:hover { background: var(--surface2); color: var(--text); }
+.tab-btn.active { background: var(--accent); color: #fff; }
 
 /* Tab panels */
 .tab-panel { display: none; }
