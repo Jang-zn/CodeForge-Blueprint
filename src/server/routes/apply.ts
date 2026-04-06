@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import crypto from 'crypto';
 import {
   getIssues,
+  getIssue,
   addDecisionLog,
   updateIssueStatus,
   upsertIssue,
@@ -84,11 +85,14 @@ applyRoute.post('/', async (c) => {
         const memoText = issueState.memo?.trim() ? `: "${issueState.memo.trim()}"` : '';
         changeLines.push(`- ${issueState.id} [${statusLabel}]${memoText}`);
 
+        const issue = allIssues.find(i => i.id === issueState.id) ?? getIssue(db, issueState.id);
         addDecisionLog(db, {
           issue_id: issueState.id,
           date: todayStr,
           status: issueState.status,
           memo: issueState.memo?.trim() || `상태: ${issueState.status}`,
+          old_status: lastLog?.status ?? null,
+          tab: issue?.tab ?? tab,
         });
 
         updateIssueStatus(db, issueState.id, issueState.status, '', {

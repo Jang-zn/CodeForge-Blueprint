@@ -8,3 +8,10 @@ const dest = path.resolve(__dirname, '../dist/dashboard');
 
 fs.cpSync(src, dest, { recursive: true });
 console.log('✓ Dashboard assets copied to dist/dashboard');
+
+const templatesSrc = path.resolve(__dirname, '../src/templates');
+const templatesDest = path.resolve(__dirname, '../dist/templates');
+if (fs.existsSync(templatesSrc)) {
+  fs.cpSync(templatesSrc, templatesDest, { recursive: true });
+  console.log('✓ Template files copied to dist/templates');
+}

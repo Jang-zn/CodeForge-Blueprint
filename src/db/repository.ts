@@ -41,6 +41,8 @@ export interface DecisionLog {
   date: string;
   status: string;
   memo: string;
+  old_status: string | null;
+  tab: string | null;
 }
 
 export interface Job {
@@ -224,8 +226,8 @@ export function setTabVersion(db: any, tab: Tab, version: string): void {
 
 export function addDecisionLog(db: any, log: Omit<DecisionLog, 'id'>): void {
   db.prepare(
-    'INSERT INTO decision_logs (issue_id, date, status, memo) VALUES (?, ?, ?, ?)'
-  ).run(log.issue_id, log.date, log.status, log.memo);
+    'INSERT INTO decision_logs (issue_id, date, status, memo, old_status, tab) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(log.issue_id, log.date, log.status, log.memo, log.old_status ?? null, log.tab ?? null);
 }
 
 export function getDecisionLogs(db: any, issue_id: string): DecisionLog[] {
@@ -431,4 +433,101 @@ export function getLastCompletedJobAtByPrefix(db: any, typePrefix: string): Reco
     result[row.tab] = row.last_at;
   }
   return result;
+}
+
+// ===== Decision Timeline =====
+
+export const DEFERRED_REMINDER_DAYS = 3;
+
+export interface TimelineDecision {
+  id: number;
+  issue_id: string;
+  issue_title: string;
+  tab: string;
+  date: string;
+  old_status: string | null;
+  status: string;
+  memo: string;
+}
+
+export function getDecisionTimeline(
+  db: any,
+  filters: { tab?: string; status?: string; from?: string; to?: string; page?: number; limit?: number }
+): { decisions: TimelineDecision[]; total: number } {
+  const { tab, status, from, to, page = 1, limit = 20 } = filters;
+  const offset = (page - 1) * limit;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (tab) { conditions.push('COALESCE(dl.tab, i.tab) = ?'); params.push(tab); }
+  if (status) { conditions.push('dl.status = ?'); params.push(status); }
+  if (from) { conditions.push('dl.date >= ?'); params.push(from); }
+  if (to) { conditions.push('dl.date <= ?'); params.push(to); }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const decisions = db.prepare(`
+    SELECT dl.id, dl.issue_id, i.title as issue_title,
+           COALESCE(dl.tab, i.tab) as tab,
+           dl.date, dl.old_status, dl.status, dl.memo
+    FROM decision_logs dl
+    JOIN issues i ON dl.issue_id = i.id
+    ${where}
+    ORDER BY dl.id DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, limit, offset) as TimelineDecision[];
+
+  const countRow = db.prepare(`
+    SELECT COUNT(*) as cnt
+    FROM decision_logs dl
+    JOIN issues i ON dl.issue_id = i.id
+    ${where}
+  `).get(...params) as { cnt: number };
+
+  return { decisions, total: countRow.cnt };
+}
+
+export interface DecisionStats {
+  total: number;
+  resolved: number;
+  deferred: number;
+  dismissed: number;
+  reviewing: number;
+  pending: number;
+}
+
+export function getDecisionStats(db: any): DecisionStats {
+  const rows = db.prepare(`
+    SELECT status, COUNT(*) as cnt FROM decision_logs GROUP BY status
+  `).all() as { status: string; cnt: number }[];
+
+  const map: Record<string, number> = {};
+  for (const row of rows) map[row.status] = row.cnt;
+
+  return {
+    total: rows.reduce((s, r) => s + r.cnt, 0),
+    resolved: map['resolved'] ?? 0,
+    deferred: map['deferred'] ?? 0,
+    dismissed: map['dismissed'] ?? 0,
+    reviewing: map['reviewing'] ?? 0,
+    pending: map['pending'] ?? 0,
+  };
+}
+
+export interface DeferredReminder {
+  issue_id: string;
+  title: string;
+  tab: string;
+  deferred_at: string;
+}
+
+export function getDeferredReminders(db: any, daysThreshold = DEFERRED_REMINDER_DAYS): DeferredReminder[] {
+  return db.prepare(`
+    SELECT id as issue_id, title, tab, updated_at as deferred_at
+    FROM issues
+    WHERE status = 'deferred'
+      AND updated_at <= datetime('now', ? || ' days')
+    ORDER BY updated_at ASC
+  `).all(`-${daysThreshold}`) as DeferredReminder[];
 }

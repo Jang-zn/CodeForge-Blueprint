@@ -8,6 +8,7 @@ import {
   type IssueStatus,
 } from '../../db/repository.js';
 import { requireRequestContext } from '../context.js';
+import { computeRecommendations } from '../recommendation.js';
 
 const issuesRoute = new Hono();
 
@@ -23,6 +24,15 @@ issuesRoute.get('/:id/logs', (c) => {
   const { db } = requireRequestContext(c);
   const logs = getDecisionLogs(db, c.req.param('id'));
   return c.json({ logs });
+});
+
+issuesRoute.get('/recommendations', (c) => {
+  const { db } = requireRequestContext(c);
+  const tab = c.req.query('tab') as Tab | undefined;
+  if (!tab) return c.json({ error: 'tab 파라미터가 필요합니다.' }, 400);
+  const issues = getIssues(db, tab);
+  const recommendations = computeRecommendations(issues);
+  return c.json(recommendations);
 });
 
 issuesRoute.put('/:id', async (c) => {

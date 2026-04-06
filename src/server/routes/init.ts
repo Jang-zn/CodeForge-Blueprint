@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { execFile } from 'child_process';
 import {
@@ -155,6 +156,45 @@ initRoute.get('/prd', (c) => {
 
   const content = fs.readFileSync(prdPath, 'utf-8');
   return c.json({ content, path: prdPath, sourcePath: meta?.source_prd_path ?? null });
+});
+
+const TEMPLATE_LABELS: Record<string, string> = {
+  saas: 'SaaS / 웹 서비스',
+  ecommerce: '커머스 / 마켓플레이스',
+  content: '콘텐츠 플랫폼',
+  'internal-tool': '내부 도구 / CLI',
+  'side-project': '사이드 프로젝트',
+};
+
+// NOTE: 소스 기준 경로 → src/templates/
+// 빌드 후 dist/server/routes/init.js 기준으로 ../../templates는 dist/templates/를 가리킴.
+// 빌드 시 src/templates/를 dist/templates/로 복사하는 작업이 별도로 필요합니다.
+const TEMPLATES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../templates');
+
+initRoute.get('/templates', (c) => {
+  const list = Object.entries(TEMPLATE_LABELS).map(([type, label]) => ({ type, label }));
+  return c.json(list);
+});
+
+initRoute.get('/templates/:type', (c) => {
+  const type = c.req.param('type');
+  const label = TEMPLATE_LABELS[type];
+  if (!label) return c.json({ error: '템플릿을 찾을 수 없습니다.' }, 404);
+
+  const filePath = path.join(TEMPLATES_DIR, `${type}.md`);
+  if (!fs.existsSync(filePath)) return c.json({ error: '템플릿 파일이 없습니다.' }, 404);
+
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  // "## 예시"와 "## 골격" 섹션으로 분리
+  const [, exampleAndRest = ''] = raw.split(/^## 예시/m);
+  const [exampleRaw = '', skeletonRaw = ''] = exampleAndRest.split(/^## 골격/m);
+
+  return c.json({
+    type,
+    label,
+    example: exampleRaw.trim(),
+    skeleton: skeletonRaw.trim(),
+  });
 });
 
 export default initRoute;

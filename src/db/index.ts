@@ -19,6 +19,8 @@ import {
   MIGRATION_V16_SQL,
   MIGRATION_V17_SQL,
   MIGRATION_V18_SQL,
+  MIGRATION_V19_SQL,
+  MIGRATION_V20_SQL,
 } from './schema.js';
 
 const require = createRequire(import.meta.url);
@@ -60,6 +62,8 @@ export function openDb(dbPath: string): any {
   try { db.exec(MIGRATION_V16_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V17_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V18_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V19_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V20_SQL); } catch { /* ignore */ }
 
   _dbs.set(normalizedPath, db);
   _activeDbPath = normalizedPath;

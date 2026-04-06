@@ -201,6 +201,11 @@ function getIssueState(id) { return state[id] || { status: 'pending', memo: '' }
 
 async function setIssueState(id, patch) {
   state[id] = { ...getIssueState(id), ...patch };
+  // Optimistic update: 상태가 pending/reviewing에서 벗어나면 추천 카드에서 즉시 제거
+  if (patch.status && patch.status !== 'pending' && patch.status !== 'reviewing') {
+    optimisticRemoveFromRec(id);
+  }
+  if (patch.status) scheduleRecRefresh();
   try {
     await API.put('/issues/' + id, { status: state[id].status, memo: state[id].memo });
   } catch (e) {
@@ -209,8 +214,119 @@ async function setIssueState(id, patch) {
   refreshUI();
 }
 
+// ========== Recommendation Card ==========
+let _recDebounceTimer = null;
+
+async function loadRecommendations(tab) {
+  try {
+    const data = await API.get('/issues/recommendations?tab=' + tab);
+    renderRecommendationCard(tab, data);
+  } catch (e) {
+    // 추천 카드 실패는 무시 (메인 기능 아님)
+  }
+}
+
+function renderRecommendationCard(tab, data) {
+  const panel = document.getElementById(`panel-${tab}`);
+  if (!panel) return;
+
+  const { now = [], defer = [], judge = [] } = data;
+  const total = now.length + defer.length + judge.length;
+
+  let card = document.getElementById(`rec-card-${tab}`);
+  if (!card) {
+    card = document.createElement('div');
+    card.className = 'recommendation-card';
+    card.id = `rec-card-${tab}`;
+    panel.insertBefore(card, panel.firstChild);
+  }
+
+  if (total === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  function recItems(items) {
+    if (!items.length) return `<div class="rec-empty">없음</div>`;
+    return items.map(item => `
+      <div class="rec-item" data-issue-id="${escapeHtml(item.id)}" onclick="scrollToIssue('${escapeHtml(item.id)}')">
+        <span class="rec-item-id">${escapeHtml(item.id.toUpperCase())}</span>
+        <div>
+          <div class="rec-item-title">${escapeHtml(item.title)}</div>
+          <div class="rec-item-reason">${escapeHtml(item.reason)}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  card.innerHTML = `
+    <div class="rec-header">지금 할 일 추천</div>
+    <div class="rec-buckets">
+      <div class="rec-bucket rec-bucket-now">
+        <div class="rec-bucket-title">지금 반영 (${now.length})</div>
+        ${recItems(now)}
+      </div>
+      <div class="rec-bucket rec-bucket-judge">
+        <div class="rec-bucket-title">판단 필요 (${judge.length})</div>
+        ${recItems(judge)}
+      </div>
+      <div class="rec-bucket rec-bucket-defer">
+        <div class="rec-bucket-title">나중에 (${defer.length})</div>
+        ${recItems(defer)}
+      </div>
+    </div>`;
+}
+
+function scrollToIssue(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function optimisticRemoveFromRec(id) {
+  // 상태 변경된 이슈를 추천 카드에서 즉시 제거
+  const card = document.getElementById(`rec-card-${activeTab}`);
+  if (!card) return;
+  card.querySelectorAll('.rec-item').forEach(item => {
+    if (item.dataset.issueId === id) item.remove();
+  });
+  // 버킷이 비었으면 empty 표시
+  card.querySelectorAll('.rec-bucket').forEach(bucket => {
+    if (!bucket.querySelector('.rec-item')) {
+      if (!bucket.querySelector('.rec-empty')) {
+        const empty = document.createElement('div');
+        empty.className = 'rec-empty';
+        empty.textContent = '없음';
+        bucket.appendChild(empty);
+      }
+    }
+  });
+  // 모든 버킷이 비었으면 카드 숨김
+  const allEmpty = !card.querySelector('.rec-item');
+  if (allEmpty) card.style.display = 'none';
+}
+
+function scheduleRecRefresh() {
+  clearTimeout(_recDebounceTimer);
+  _recDebounceTimer = setTimeout(() => loadRecommendations(activeTab), 500);
+}
+
 // ========== Tab System ==========
 function switchTab(tabId) {
+  if (tabId === 'timeline') {
+    activeTab = 'timeline';
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-timeline'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+    document.querySelector('.filter-bar')?.classList.add('hidden');
+    document.getElementById('fab-container')?.classList.add('hidden');
+    loadTimelineView();
+    return;
+  }
+
+  // 타임라인에서 일반 탭으로 돌아올 때
+  document.querySelector('.filter-bar')?.classList.remove('hidden');
+  document.getElementById('fab-container')?.classList.remove('hidden');
+
   activeTab = tabId;
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabId}`));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
@@ -514,6 +630,7 @@ async function loadIssues(tab) {
     });
 
     refreshUI();
+    loadRecommendations(tab);
   } catch (e) {
     showRecovery(e);
     console.error('Failed to load issues:', e);
@@ -1148,6 +1265,282 @@ document.getElementById('diff-modal-close')?.addEventListener('click', () => {
 document.getElementById('diff-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
 });
+
+// ========== Template Suggestion ==========
+const SERVICE_TYPE_TO_TEMPLATE = {
+  'web-fullstack': 'saas', 'pwa': 'saas', 'api': 'saas',
+  'mobile': 'saas', 'ios': 'saas', 'android': 'saas',
+  'web-frontend': 'content',
+  'cli': 'internal-tool', 'script': 'internal-tool', 'desktop': 'internal-tool',
+  'extension': 'side-project', 'sdk': 'side-project', 'game': 'side-project',
+  'unknown': 'side-project',
+};
+
+let _templateCache = {};
+let _templateMode = 'example'; // 'example' | 'skeleton'
+
+async function onServiceTypeChange(type) {
+  const templateType = SERVICE_TYPE_TO_TEMPLATE[type];
+  const container = document.getElementById('template-suggestion');
+  if (!container) return;
+  if (!templateType) { container.classList.add('hidden'); return; }
+
+  let data = _templateCache[templateType];
+  if (!data) {
+    try {
+      data = await API.get('/init/templates/' + templateType);
+      _templateCache[templateType] = data;
+    } catch (e) { container.classList.add('hidden'); return; }
+  }
+
+  container.classList.remove('hidden');
+  container.dataset.templateType = templateType;
+  renderTemplateSuggestion(data);
+}
+
+function renderTemplateSuggestion(data) {
+  const container = document.getElementById('template-suggestion');
+  if (!container || !data) return;
+
+  const content = _templateMode === 'example' ? data.example : data.skeleton;
+
+  container.innerHTML = `
+    <div class="template-suggestion-header">📄 ${escapeHtml(data.label)} 템플릿</div>
+    <div class="template-tabs">
+      <button class="template-tab-btn ${_templateMode === 'example' ? 'active' : ''}" onclick="setTemplateMode('example')">완성 예시</button>
+      <button class="template-tab-btn ${_templateMode === 'skeleton' ? 'active' : ''}" onclick="setTemplateMode('skeleton')">빈 골격</button>
+    </div>
+    <pre class="template-preview">${escapeHtml(content)}</pre>
+    <button class="template-use-btn" onclick="useTemplate()">이 템플릿 사용하기</button>`;
+}
+
+function setTemplateMode(mode) {
+  _templateMode = mode;
+  const container = document.getElementById('template-suggestion');
+  if (!container) return;
+  const type = container.dataset.templateType;
+  const data = _templateCache[type];
+  if (data) renderTemplateSuggestion(data);
+}
+
+function useTemplate() {
+  const container = document.getElementById('template-suggestion');
+  const type = container?.dataset.templateType;
+  const data = _templateCache[type];
+  if (!data) return;
+
+  const content = _templateMode === 'example' ? data.example : data.skeleton;
+  const textarea = document.getElementById('init-detail');
+  if (!textarea) return;
+
+  if (textarea.value.trim() && !confirm('현재 입력 내용을 덮어씁니다. 계속하시겠습니까?')) return;
+  textarea.value = content;
+  textarea.classList.remove('error');
+  document.getElementById('init-detail-error')?.setAttribute('style', 'display:none');
+  textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  showToast('템플릿을 적용했습니다. 자유롭게 수정하세요!');
+}
+
+// 서비스 유형 라디오 변경 이벤트
+document.querySelectorAll('input[name="service-type"]').forEach(radio => {
+  radio.addEventListener('change', (e) => onServiceTypeChange(e.target.value));
+});
+
+// ========== Timeline View ==========
+let _timelinePage = 1;
+let _timelineFilters = { tab: '', status: '', from: '', to: '' };
+let _timelineTotal = 0;
+const TIMELINE_LIMIT = 20;
+
+const STATUS_LABELS_FULL = {
+  pending: '미검토', reviewing: '검토중', resolved: '확정',
+  deferred: '보류', dismissed: '삭제'
+};
+
+async function loadTimelineView(append = false) {
+  if (!append) {
+    _timelinePage = 1;
+    const panel = document.getElementById('panel-timeline');
+    if (!panel) return;
+    panel.innerHTML = '<div class="timeline-empty" style="margin-top:40px;">불러오는 중...</div>';
+  }
+
+  try {
+    const params = new URLSearchParams({
+      page: String(_timelinePage),
+      limit: String(TIMELINE_LIMIT),
+      ...((_timelineFilters.tab) && { tab: _timelineFilters.tab }),
+      ...((_timelineFilters.status) && { status: _timelineFilters.status }),
+      ...((_timelineFilters.from) && { from: _timelineFilters.from }),
+      ...((_timelineFilters.to) && { to: _timelineFilters.to }),
+    });
+    const data = await API.get('/decisions?' + params.toString());
+    _timelineTotal = data.total || 0;
+    renderTimelineView(data, append);
+  } catch (e) {
+    const panel = document.getElementById('panel-timeline');
+    if (panel) panel.innerHTML = `<div class="timeline-empty" style="color:var(--red)">로드 실패: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderTimelineView(data, append = false) {
+  const panel = document.getElementById('panel-timeline');
+  if (!panel) return;
+
+  const { decisions = [], stats = {}, deferredReminders = [] } = data;
+
+  if (!append) {
+    let html = '<div class="timeline-panel">';
+
+    // 통계 바
+    html += `<div class="timeline-stats">
+      <div class="timeline-stat"><span class="timeline-stat-num">${stats.total || 0}</span>전체 결정</div>
+      <div class="timeline-stat"><span class="timeline-stat-num" style="color:var(--green)">${stats.resolved || 0}</span>확정</div>
+      <div class="timeline-stat"><span class="timeline-stat-num" style="color:var(--text-muted)">${stats.deferred || 0}</span>보류</div>
+      <div class="timeline-stat"><span class="timeline-stat-num" style="color:var(--orange)">${stats.reviewing || 0}</span>검토중</div>
+    </div>`;
+
+    // 보류 리마인더
+    if (deferredReminders.length > 0) {
+      const items = deferredReminders.map(r =>
+        `<span class="timeline-deferred-item" onclick="navigateToIssue('${escapeHtml(r.tab)}','${escapeHtml(r.issue_id)}')">${escapeHtml(r.issue_id.toUpperCase())} · ${escapeHtml(r.title.slice(0, 20))}${r.title.length > 20 ? '…' : ''}</span>`
+      ).join('');
+      html += `<div class="timeline-deferred-banner">
+        <div class="timeline-deferred-banner-title">보류 3일 이상 — 재검토 권장 (${deferredReminders.length}건)</div>
+        <div>${items}</div>
+      </div>`;
+    }
+
+    // 필터
+    html += `<div class="timeline-filters">
+      <select class="timeline-filter-select" id="tl-filter-tab" onchange="applyTimelineFilter()">
+        <option value="">모든 탭</option>
+        <option value="review">기획 리뷰</option>
+        <option value="features">다음버전</option>
+        <option value="backend">BE 설계</option>
+        <option value="frontend">FE 설계</option>
+      </select>
+      <select class="timeline-filter-select" id="tl-filter-status" onchange="applyTimelineFilter()">
+        <option value="">모든 상태</option>
+        <option value="resolved">확정</option>
+        <option value="deferred">보류</option>
+        <option value="dismissed">삭제</option>
+        <option value="reviewing">검토중</option>
+      </select>
+      <input type="date" class="timeline-filter-input" id="tl-filter-from" placeholder="시작일" onchange="applyTimelineFilter()">
+      <input type="date" class="timeline-filter-input" id="tl-filter-to" placeholder="종료일" onchange="applyTimelineFilter()">
+    </div>`;
+
+    // 필터 복원
+    html += '</div>';
+    panel.innerHTML = html;
+
+    // 필터 값 복원
+    const selTab = panel.querySelector('#tl-filter-tab');
+    const selStatus = panel.querySelector('#tl-filter-status');
+    const inFrom = panel.querySelector('#tl-filter-from');
+    const inTo = panel.querySelector('#tl-filter-to');
+    if (selTab) selTab.value = _timelineFilters.tab;
+    if (selStatus) selStatus.value = _timelineFilters.status;
+    if (inFrom) inFrom.value = _timelineFilters.from;
+    if (inTo) inTo.value = _timelineFilters.to;
+  }
+
+  // 엔트리 영역
+  let entriesContainer = panel.querySelector('.timeline-entries');
+  if (!entriesContainer) {
+    entriesContainer = document.createElement('div');
+    entriesContainer.className = 'timeline-entries';
+    panel.querySelector('.timeline-panel').appendChild(entriesContainer);
+  }
+
+  if (decisions.length === 0 && !append) {
+    entriesContainer.innerHTML = '<div class="timeline-empty">결정 이력이 없습니다. "반영하기"를 실행하면 이곳에 기록됩니다.</div>';
+    return;
+  }
+
+  // 날짜별 그룹핑
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+  function dateGroup(dateStr) {
+    if (dateStr >= today) return '오늘';
+    if (dateStr >= weekAgo) return '이번 주';
+    return '이전';
+  }
+
+  function statusBadge(status) {
+    if (!status) return '';
+    const label = STATUS_LABELS_FULL[status] || status;
+    return `<span class="timeline-status-badge tsb-${status}">${escapeHtml(label)}</span>`;
+  }
+
+  function tabBadge(tab) {
+    const labels = { review: '기획', features: '다음버전', backend: 'BE', frontend: 'FE' };
+    return `<span class="timeline-tab-badge">${escapeHtml(labels[tab] || tab)}</span>`;
+  }
+
+  // append 시 마지막 그룹 헤더 파악
+  let lastGroup = append ? (entriesContainer.dataset.lastGroup || '') : '';
+
+  for (const entry of decisions) {
+    const group = dateGroup(entry.date);
+    if (group !== lastGroup) {
+      const header = document.createElement('div');
+      header.className = 'timeline-group-header';
+      header.textContent = group;
+      entriesContainer.appendChild(header);
+      lastGroup = group;
+    }
+
+    const statusTransition = entry.old_status
+      ? `${statusBadge(entry.old_status)} <span class="tsb-arrow">→</span> ${statusBadge(entry.status)}`
+      : statusBadge(entry.status);
+
+    const div = document.createElement('div');
+    div.className = 'timeline-entry';
+    div.innerHTML = `
+      <span class="timeline-entry-date">${escapeHtml(entry.date)}</span>
+      <span class="timeline-entry-id" onclick="navigateToIssue('${escapeHtml(entry.tab)}','${escapeHtml(entry.issue_id)}')">${escapeHtml(entry.issue_id.toUpperCase())}</span>
+      <div class="timeline-status-transition">${statusTransition}</div>
+      <div class="timeline-entry-body">
+        <div class="timeline-entry-title">${escapeHtml(entry.issue_title)}</div>
+        ${entry.memo ? `<div class="timeline-entry-memo">${escapeHtml(entry.memo)}</div>` : ''}
+      </div>
+      ${tabBadge(entry.tab)}`;
+    entriesContainer.appendChild(div);
+  }
+  entriesContainer.dataset.lastGroup = lastGroup;
+
+  // 더 보기 버튼
+  const existing = panel.querySelector('.timeline-load-more');
+  if (existing) existing.remove();
+  const loaded = (_timelinePage - 1) * TIMELINE_LIMIT + decisions.length;
+  if (loaded < _timelineTotal) {
+    const btn = document.createElement('button');
+    btn.className = 'timeline-load-more';
+    btn.textContent = `더 보기 (${_timelineTotal - loaded}건 남음)`;
+    btn.addEventListener('click', () => { _timelinePage++; loadTimelineView(true); });
+    panel.querySelector('.timeline-panel').appendChild(btn);
+  }
+}
+
+function applyTimelineFilter() {
+  _timelineFilters.tab = document.getElementById('tl-filter-tab')?.value || '';
+  _timelineFilters.status = document.getElementById('tl-filter-status')?.value || '';
+  _timelineFilters.from = document.getElementById('tl-filter-from')?.value || '';
+  _timelineFilters.to = document.getElementById('tl-filter-to')?.value || '';
+  loadTimelineView(false);
+}
+
+function navigateToIssue(tab, issueId) {
+  // 타임라인에서 이슈 탭으로 이동
+  if (tab && tab !== 'timeline') {
+    switchTab(tab);
+    // 이슈 로드 완료 후 스크롤 (loadIssues가 비동기이므로 약간 지연)
+    setTimeout(() => scrollToIssue(issueId), 600);
+  }
+}
 
 // ========== Boot ==========
 loadInitialState();

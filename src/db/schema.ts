@@ -66,6 +66,14 @@ export const MIGRATION_V18_SQL = `
 ALTER TABLE jobs ADD COLUMN result_path TEXT;
 `;
 
+export const MIGRATION_V19_SQL = `
+ALTER TABLE decision_logs ADD COLUMN old_status TEXT;
+`;
+
+export const MIGRATION_V20_SQL = `
+ALTER TABLE decision_logs ADD COLUMN tab TEXT;
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
   id INTEGER PRIMARY KEY CHECK(id = 1),
