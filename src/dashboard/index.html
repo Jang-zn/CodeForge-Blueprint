@@ -369,16 +369,24 @@
 <div id="workflow-summary" class="workflow-summary hidden"></div>
 <div id="recovery-panel" class="recovery-panel hidden"></div>
 
-<!-- ===== Job Log Panel ===== -->
-<div id="job-log-panel" class="job-log-panel hidden">
-  <div class="job-log-header">
-    <span id="job-log-provider" class="job-log-provider"></span>
-    <span id="job-log-title" class="job-log-title"></span>
-    <span class="job-log-spacer"></span>
-    <span id="job-log-elapsed" class="job-log-elapsed">0s</span>
-    <button id="job-log-cancel" class="picker-cancel-btn hidden">취소</button>
+<!-- ===== Job Stream Screen ===== -->
+<div id="job-stream-screen" class="job-stream-screen hidden">
+  <div class="job-stream-header">
+    <div class="job-stream-title-row">
+      <span class="job-stream-dot"></span>
+      <span id="job-stream-title" class="job-stream-title"></span>
+      <span id="job-stream-provider" class="job-stream-provider"></span>
+    </div>
+    <div class="job-stream-stats">
+      <span id="job-stream-elapsed" class="job-stream-stat">0s</span>
+      <span class="job-stream-stat-sep">·</span>
+      <span id="job-stream-tokens" class="job-stream-stat"></span>
+      <button id="job-stream-cancel" class="job-stream-cancel-btn">취소</button>
+    </div>
   </div>
-  <pre id="job-log-output" class="job-log-output"></pre>
+  <div class="job-stream-body">
+    <pre id="job-stream-output" class="job-stream-output"></pre>
+  </div>
 </div>
 
 <!-- ===== Tab: 기획 리뷰 ===== -->

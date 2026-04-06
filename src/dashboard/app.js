@@ -689,6 +689,7 @@ document.getElementById('btn-generate-prd')?.addEventListener('click', async () 
   const btn = document.getElementById('btn-generate-prd');
   btn.disabled = true;
   btn.textContent = 'PRD 생성 중...';
+  showJobStream('PRD 생성 중...');
   try {
     const { jobId } = await API.post('/init', data);
     pollJob(jobId, async (err) => {
@@ -809,6 +810,7 @@ document.getElementById('btn-confirm-scan')?.addEventListener('click', async () 
   btn.textContent = 'PRD 생성 중...';
   statusEl.textContent = 'AI가 코드베이스를 분석하여 PRD를 작성 중입니다...';
   statusEl.classList.remove('hidden');
+  showJobStream('코드베이스 PRD 생성 중...');
   try {
     const userNotes = document.getElementById('scan-user-notes').value;
     const { jobId } = await API.post('/init/from-codebase', { userNotes });
@@ -856,83 +858,131 @@ document.getElementById('btn-start-review')?.addEventListener('click', async () 
 
 // ========== Job Polling ==========
 let _elapsedTimer = null;
+let _currentJobInterval = null;
+let _jobStreamPrevScreen = null;
 let currentJobId = null;
 
-function showJobLogPanel(label) {
-  const panel = document.getElementById('job-log-panel');
-  if (!panel) return;
-  document.getElementById('job-log-title').textContent = label;
-  document.getElementById('job-log-provider').textContent = '';
-  document.getElementById('job-log-output').textContent = '';
-  const elapsedEl = document.getElementById('job-log-elapsed');
-  if (elapsedEl) elapsedEl.textContent = '0s';
-  document.getElementById('job-log-cancel')?.classList.remove('hidden');
-  panel.classList.remove('hidden');
+// 로딩 화면 진입 전 현재 화면을 감지
+function _detectActiveScreen() {
+  const candidates = ['init-screen', 'codebase-scan-preview', 'prd-preview'];
+  const found = candidates.find(id => !document.getElementById(id)?.classList.contains('hidden'));
+  if (found) return found;
+  if (!document.querySelector('.tab-content')?.classList.contains('hidden')) return 'tab-content';
+  return null;
+}
 
-  let seconds = 0;
+function showJobStream(label, startedAt = null) {
+  // 현재 화면 기억 후 숨김
+  _jobStreamPrevScreen = _detectActiveScreen();
+  ['init-screen', 'codebase-scan-preview', 'prd-preview'].forEach(id =>
+    document.getElementById(id)?.classList.add('hidden')
+  );
+  document.querySelector('.tab-content')?.classList.add('hidden');
+
+  // 로딩 화면 초기화 & 표시
+  document.getElementById('job-stream-title').textContent = label;
+  document.getElementById('job-stream-provider').textContent = '';
+  document.getElementById('job-stream-output').textContent = '';
+  document.getElementById('job-stream-tokens').textContent = '';
+  document.getElementById('job-stream-screen').classList.remove('hidden');
+
+  // 경과 시간 타이머 (startedAt 있으면 서버 기준, 없으면 지금부터)
+  const startMs = startedAt ? new Date(startedAt).getTime() : Date.now();
   clearInterval(_elapsedTimer);
   _elapsedTimer = setInterval(() => {
-    seconds++;
-    if (elapsedEl) elapsedEl.textContent = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
+    const s = Math.floor((Date.now() - startMs) / 1000);
+    const el = document.getElementById('job-stream-elapsed');
+    if (el) el.textContent = s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
   }, 1000);
 }
 
-function hideJobLogPanel() {
+function hideJobStream() {
   clearInterval(_elapsedTimer);
+  _elapsedTimer = null;
   currentJobId = null;
-  document.getElementById('job-log-cancel')?.classList.add('hidden');
-  document.getElementById('job-log-panel')?.classList.add('hidden');
+  document.getElementById('job-stream-screen')?.classList.add('hidden');
+
+  // 이전 화면 복원
+  if (_jobStreamPrevScreen === 'tab-content') {
+    document.querySelector('.tab-content')?.classList.remove('hidden');
+  } else if (_jobStreamPrevScreen) {
+    document.getElementById(_jobStreamPrevScreen)?.classList.remove('hidden');
+  }
+  _jobStreamPrevScreen = null;
 }
 
-function updateJobLog(job) {
-  if (!job.log) return;
-  const outputEl = document.getElementById('job-log-output');
-  if (!outputEl) return;
+function updateJobStream(job) {
+  const log = job.log || '';
 
-  // 첫 줄 provider 배지는 아직 비어있을 때만 파싱 (한 번만 설정)
-  const providerEl = document.getElementById('job-log-provider');
+  // provider 배지 (첫 줄에서 한 번만 파싱)
+  const providerEl = document.getElementById('job-stream-provider');
   if (providerEl && !providerEl.textContent) {
-    const nl = job.log.indexOf('\n');
-    const firstLine = nl >= 0 ? job.log.slice(0, nl) : job.log;
+    const nl = log.indexOf('\n');
+    const firstLine = nl >= 0 ? log.slice(0, nl) : log;
     const m = firstLine.match(/^\[([^\]]+)\]/);
     if (m) providerEl.textContent = m[1];
   }
 
-  // 첫 줄 제외한 실제 로그 표시
-  const nl = job.log.indexOf('\n');
-  const logContent = nl >= 0 ? job.log.slice(nl + 1).trim() : '';
-  if (logContent) {
-    outputEl.textContent = logContent;
+  // 로그 본문 (첫 줄 제외)
+  const outputEl = document.getElementById('job-stream-output');
+  if (outputEl) {
+    const nl = log.indexOf('\n');
+    const logContent = nl >= 0 ? log.slice(nl + 1).trim() : '';
+    outputEl.textContent = logContent || '처리 중입니다...';
     outputEl.scrollTop = outputEl.scrollHeight;
-  } else {
-    outputEl.textContent = '처리 중입니다...';
+  }
+
+  // 토큰 추정 (log 전체 길이 / 4)
+  const tokensEl = document.getElementById('job-stream-tokens');
+  if (tokensEl && log.length > 0) {
+    const est = Math.round(log.length / 4);
+    tokensEl.textContent = `~${est.toLocaleString()} tokens`;
+  }
+}
+
+// 폴링 중단 + 로딩 화면 닫기 (워크스페이스 전환 / 외부 이탈용)
+function abortCurrentJob() {
+  if (_currentJobInterval) {
+    clearInterval(_currentJobInterval);
+    _currentJobInterval = null;
+  }
+  if (document.getElementById('job-stream-screen') &&
+      !document.getElementById('job-stream-screen').classList.contains('hidden')) {
+    hideJobStream();
   }
 }
 
 async function pollJob(jobId, onDone) {
   currentJobId = jobId;
   let lastLog = null;
-  const interval = setInterval(async () => {
+  if (_currentJobInterval) clearInterval(_currentJobInterval);
+  _currentJobInterval = setInterval(async () => {
     try {
       const job = await API.get('/jobs/' + jobId);
-      if (job.log !== lastLog) { lastLog = job.log; updateJobLog(job); }
+      if (job.log !== lastLog) { lastLog = job.log; updateJobStream(job); }
       if (job.status === 'completed') {
-        clearInterval(interval);
-        hideJobLogPanel();
+        clearInterval(_currentJobInterval);
+        _currentJobInterval = null;
+        hideJobStream();
         document.getElementById('job-status')?.classList.add('hidden');
         try { renderWorkflowSummary((await API.get('/workspace')).workflow); } catch { /* ignore */ }
         onDone(null, job);
       } else if (job.status === 'failed' || job.status === 'cancelled' || job.status === 'superseded') {
-        clearInterval(interval);
-        hideJobLogPanel();
+        clearInterval(_currentJobInterval);
+        _currentJobInterval = null;
+        hideJobStream();
         document.getElementById('job-status')?.classList.add('hidden');
         onDone(new Error(job.error || '작업 실패'));
       }
-    } catch (e) { clearInterval(interval); hideJobLogPanel(); }
+    } catch (e) {
+      clearInterval(_currentJobInterval);
+      _currentJobInterval = null;
+      hideJobStream();
+    }
   }, 500);
 }
 
-document.getElementById('job-log-cancel')?.addEventListener('click', async () => {
+document.getElementById('job-stream-cancel')?.addEventListener('click', async () => {
   if (!currentJobId) return;
   try {
     await API.post('/jobs/' + currentJobId + '/cancel', {});
@@ -972,7 +1022,7 @@ document.addEventListener('click', (e) => {
 
 // ========== Action Buttons ==========
 document.getElementById('btn-analyze')?.addEventListener('click', async () => {
-  showJobLogPanel('AI 분석 중...');
+  showJobStream('AI 분석 중...');
   showJobStatus('분석 중...');
   try {
     const { jobId } = await API.post('/analyze', { tab: activeTab || 'review' });
@@ -981,12 +1031,12 @@ document.getElementById('btn-analyze')?.addEventListener('click', async () => {
       showToast('분석 완료!');
       loadIssues(activeTab);
     });
-  } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
+  } catch (e) { showRecovery(e); hideJobStream(); showToast('오류: ' + e.message, 'error'); }
 });
 
 document.getElementById('btn-apply')?.addEventListener('click', async () => {
   const issues = collectCurrentTabState();
-  showJobLogPanel('AI 반영 중...');
+  showJobStream('AI 반영 중...');
   showJobStatus('반영하기 처리 중...');
   try {
     const { jobId } = await API.post('/apply', { tab: activeTab, issues });
@@ -995,11 +1045,11 @@ document.getElementById('btn-apply')?.addEventListener('click', async () => {
       showToast('반영 완료!');
       loadIssues(activeTab);
     });
-  } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
+  } catch (e) { showRecovery(e); hideJobStream(); showToast('오류: ' + e.message, 'error'); }
 });
 
 document.getElementById('btn-generate')?.addEventListener('click', async () => {
-  showJobLogPanel('문서 생성 중...');
+  showJobStream('문서 생성 중...');
   showJobStatus('문서 생성 중...');
   try {
     const { jobId, folderName } = await API.post('/generate', { tab: activeTab });
@@ -1008,7 +1058,7 @@ document.getElementById('btn-generate')?.addEventListener('click', async () => {
       showToast('문서 생성 완료! — ' + folderName);
       if (typeof loadRecommendations === 'function') loadRecommendations(activeTab);
     });
-  } catch (e) { showRecovery(e); hideJobLogPanel(); showToast('오류: ' + e.message, 'error'); }
+  } catch (e) { showRecovery(e); hideJobStream(); showToast('오류: ' + e.message, 'error'); }
 });
 
 function setClaudeStatus(available, text) {
@@ -1110,6 +1160,7 @@ function hideWorkspacePicker() {
 }
 
 async function doOpenWorkspace(folderPath) {
+  abortCurrentJob();  // 진행 중인 AI 작업 즉시 중단
   try {
     await API.post('/workspace/close', {}).catch(() => {});  // best-effort
     const workspace = await API.post('/workspace/open', { path: folderPath });
@@ -1225,6 +1276,22 @@ async function loadInitialState() {
     }
 
     renderApp(workspace);
+
+    // 창 닫기/새로고침 후 재접속 시 진행 중인 job이 있으면 폴링 재개
+    const runningJob = workspace.workflow?.runningJobs?.[0];
+    if (runningJob) {
+      const jobTypeLabel = {
+        'generate-prd': 'PRD 생성 중...',
+        'analyze': 'AI 분석 중...',
+        'apply': 'AI 반영 중...',
+        'generate': '문서 생성 중...',
+      }[runningJob.type] || 'AI 작업 중...';
+      showJobStream(jobTypeLabel, runningJob.started_at);
+      pollJob(runningJob.id, (err) => {
+        if (err) { showRecovery(err); showToast('작업 실패: ' + err.message, 'error'); return; }
+        loadIssues(activeTab);
+      });
+    }
   } catch (e) {
     console.error('Failed to load workspace:', e);
     showRecovery(e);
