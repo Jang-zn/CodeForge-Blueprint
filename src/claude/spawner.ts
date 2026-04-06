@@ -2,6 +2,31 @@ import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import { findClaudeBinary } from './finder.js';
 
+/** stream-json stdout JSONL에서 최종 결과 텍스트를 추출. */
+function extractFinalResult(stdout: string): string {
+  let lastAssistantText = '';
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const event = JSON.parse(trimmed) as Record<string, unknown>;
+      // result 타입이 최종 결과 (가장 신뢰도 높음)
+      if (event.type === 'result' && typeof event.result === 'string') {
+        return event.result;
+      }
+      // assistant 메시지에서 text content 누적
+      if (event.type === 'assistant') {
+        const msg = event.message as { content?: Array<{ type: string; text?: string }> } | undefined;
+        const texts = (msg?.content ?? [])
+          .filter(b => b.type === 'text' && b.text)
+          .map(b => b.text as string);
+        if (texts.length) lastAssistantText = texts.join('');
+      }
+    } catch { /* 불완전 JSON 라인 무시 */ }
+  }
+  return lastAssistantText;
+}
+
 export interface SpawnOptions {
   model?: string;
   timeout?: number;
@@ -42,7 +67,7 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
     }
 
     return new Promise<SpawnResult>((resolve) => {
-      const args = ['-p', '--output-format', 'text', '--model', model, '--no-session-persistence'];
+      const args = ['-p', '--output-format', 'stream-json', '--verbose', '--model', model, '--no-session-persistence'];
       const child = spawn(claudePath, args, { env: process.env });
       resolveChild(child);
 
@@ -75,7 +100,7 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
           return;
         }
 
-        resolve({ success: true, result: stdout.trim() });
+        resolve({ success: true, result: extractFinalResult(stdout) });
       });
 
       child.on('error', (err) => {

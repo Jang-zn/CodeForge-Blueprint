@@ -109,8 +109,12 @@ describe('chunkToLogText', () => {
     assert.equal(chunkToLogText(chunk, 'codex'), '[시작] 작업 시작\n');
   });
 
-  it('claude provider → raw chunk 그대로 반환', () => {
-    const chunk = '스트리밍 텍스트';
-    assert.equal(chunkToLogText(chunk, 'claude'), '스트리밍 텍스트');
+  it('claude provider → stream-json JSONL 파싱', () => {
+    const chunk = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '분석 중입니다.' }] } });
+    assert.equal(chunkToLogText(chunk, 'claude'), '분석 중입니다.');
+  });
+
+  it('claude provider → 파싱 불가 raw 텍스트는 빈 문자열', () => {
+    assert.equal(chunkToLogText('스트리밍 텍스트', 'claude'), '');
   });
 });

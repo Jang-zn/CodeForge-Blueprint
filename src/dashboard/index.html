@@ -350,26 +350,7 @@
   </div>
 </div>
 
-<!-- Tab content wrapper -->
-<div class="tab-content hidden">
-
-<!-- 공유 필터바 + 액션바 (모든 탭에서 공용) -->
-<div class="filter-bar" id="filterBar">
-  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">Filter:</span>
-  <button class="filter-btn filter-active" data-filter="all">All <span class="count" id="count-all"></span></button>
-  <button class="filter-btn" data-filter="pending">Pending <span class="count" id="count-pending"></span></button>
-  <button class="filter-btn" data-filter="reviewing">Reviewing <span class="count" id="count-reviewing"></span></button>
-  <button class="filter-btn" data-filter="resolved">Resolved <span class="count" id="count-resolved"></span></button>
-  <button class="filter-btn" data-filter="deferred">Deferred <span class="count" id="count-deferred"></span></button>
-  <button class="filter-btn" data-filter="dismissed">Dismissed <span class="count" id="count-dismissed"></span></button>
-  <button class="filter-btn" data-filter="has-memo">Has Memo <span class="count" id="count-has-memo"></span></button>
-</div>
-
-
-<div id="workflow-summary" class="workflow-summary hidden"></div>
-<div id="recovery-panel" class="recovery-panel hidden"></div>
-
-<!-- ===== Job Stream Screen ===== -->
+<!-- AI 작업 로딩 화면 (.main 직속 — .tab-content와 동일 레벨) -->
 <div id="job-stream-screen" class="job-stream-screen hidden">
   <div class="job-stream-header">
     <div class="job-stream-title-row">
@@ -388,6 +369,25 @@
     <pre id="job-stream-output" class="job-stream-output"></pre>
   </div>
 </div>
+
+<!-- Tab content wrapper -->
+<div class="tab-content hidden">
+
+<!-- 공유 필터바 + 액션바 (모든 탭에서 공용) -->
+<div class="filter-bar" id="filterBar">
+  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">Filter:</span>
+  <button class="filter-btn filter-active" data-filter="all">All <span class="count" id="count-all"></span></button>
+  <button class="filter-btn" data-filter="pending">Pending <span class="count" id="count-pending"></span></button>
+  <button class="filter-btn" data-filter="reviewing">Reviewing <span class="count" id="count-reviewing"></span></button>
+  <button class="filter-btn" data-filter="resolved">Resolved <span class="count" id="count-resolved"></span></button>
+  <button class="filter-btn" data-filter="deferred">Deferred <span class="count" id="count-deferred"></span></button>
+  <button class="filter-btn" data-filter="dismissed">Dismissed <span class="count" id="count-dismissed"></span></button>
+  <button class="filter-btn" data-filter="has-memo">Has Memo <span class="count" id="count-has-memo"></span></button>
+</div>
+
+
+<div id="workflow-summary" class="workflow-summary hidden"></div>
+<div id="recovery-panel" class="recovery-panel hidden"></div>
 
 <!-- ===== Tab: 기획 리뷰 ===== -->
 <div class="tab-panel active" id="panel-review">

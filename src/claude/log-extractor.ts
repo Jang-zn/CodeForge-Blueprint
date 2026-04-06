@@ -74,7 +74,49 @@ export function extractCodexLogText(chunk: string): string {
   return parts.join('');
 }
 
-/** 프로바이더에 맞게 청크를 로그용 텍스트로 변환. Codex는 JSONL 파싱, Claude는 raw 텍스트. */
+function formatClaudeStreamEvent(event: Record<string, unknown>): string | null {
+  const type = String(event.type ?? '');
+
+  if (type === 'assistant') {
+    const msg = event.message as { content?: Array<{ type: string; text?: string; name?: string; input?: unknown }> } | undefined;
+    if (!msg?.content) return null;
+    const parts: string[] = [];
+    for (const block of msg.content) {
+      if (block.type === 'text' && block.text) {
+        parts.push(block.text);
+      } else if (block.type === 'tool_use') {
+        const raw = typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? '');
+        const input = raw.length > INPUT_TRUNCATE ? raw.slice(0, INPUT_TRUNCATE) + '…' : raw;
+        parts.push(`[도구] ${block.name}: ${input}\n`);
+      }
+    }
+    return parts.join('') || null;
+  }
+
+  if (type === 'result') {
+    return '[완료] 작업 완료\n';
+  }
+
+  // system, rate_limit_event 등은 무시
+  return null;
+}
+
+/** Claude --output-format stream-json JSONL 청크에서 로그 텍스트 추출. */
+export function extractClaudeLogText(chunk: string): string {
+  const parts: string[] = [];
+  for (const line of chunk.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const event = JSON.parse(trimmed) as Record<string, unknown>;
+      const text = formatClaudeStreamEvent(event);
+      if (text) parts.push(text);
+    } catch { /* 불완전 JSON 라인 무시 */ }
+  }
+  return parts.join('');
+}
+
+/** 프로바이더에 맞게 청크를 로그용 텍스트로 변환. */
 export function chunkToLogText(chunk: string, provider: string): string {
-  return provider === 'codex' ? extractCodexLogText(chunk) : chunk;
+  return provider === 'codex' ? extractCodexLogText(chunk) : extractClaudeLogText(chunk);
 }
