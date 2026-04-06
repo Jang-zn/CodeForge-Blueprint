@@ -1,7 +1,9 @@
 import type { Context } from 'hono';
+import fs from 'fs';
+import path from 'path';
 import { openDb } from '../db/index.js';
 import { getWorkspaceOrNull, type WorkspaceContext } from '../workspace.js';
-import { touchSession } from '../db/app-db.js';
+import { touchSession, deleteSession } from '../db/app-db.js';
 
 export interface RequestContext {
   sessionId: string;
@@ -20,6 +22,14 @@ export function getRequestContext(c: Context, opts: { requireWorkspace?: boolean
     if (opts.requireWorkspace) throw new Error('Workspace session missing');
     return null;
   }
+
+  // stale session 처리: workspace 폴더가 삭제/이동된 경우
+  if (!fs.existsSync(path.dirname(workspace.dbPath))) {
+    deleteSession(workspace.sessionId);
+    if (opts.requireWorkspace) throw new Error('Workspace session missing');
+    return null;
+  }
+
   const db = openDb(workspace.dbPath);
   touchSession(workspace.sessionId);
   return { sessionId: workspace.sessionId, workspace, db };

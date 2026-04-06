@@ -88,7 +88,7 @@ export function initAppDb(): void {
 }
 
 export function getAppDb(): any {
-  if (!_appDb) throw new Error('App DB not initialized');
+  if (!_appDb) initAppDb();
   return _appDb;
 }
 
