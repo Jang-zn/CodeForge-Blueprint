@@ -120,25 +120,9 @@
     </div>
   </div>
 
-  <!-- Step 2: 배포 환경 -->
+  <!-- Step 2: 누구를 위한 서비스인가 -->
   <div class="init-step">
-    <h3>배포 대상 <small style="font-weight:normal;color:#9ca3af">(복수 선택 가능)</small></h3>
-    <div class="init-option-group">
-      <label><input type="checkbox" name="deploy-target" value="web-browser"> <span>웹 브라우저 (OS 무관)</span></label>
-      <label><input type="checkbox" name="deploy-target" value="ios"> <span>iOS</span></label>
-      <label><input type="checkbox" name="deploy-target" value="android"> <span>Android</span></label>
-      <label><input type="checkbox" name="deploy-target" value="windows"> <span>Windows</span></label>
-      <label><input type="checkbox" name="deploy-target" value="macos"> <span>macOS</span></label>
-      <label><input type="checkbox" name="deploy-target" value="linux"> <span>Linux</span></label>
-      <label><input type="checkbox" name="deploy-target" value="cross-platform"> <span>크로스 플랫폼</span></label>
-      <label><input type="checkbox" name="deploy-target" value="server-only"> <span>서버 전용</span></label>
-      <label><input type="checkbox" name="deploy-target" value="unknown"> <span>잘 모름</span></label>
-    </div>
-  </div>
-
-  <!-- Step 3: 서비스 성격 -->
-  <div class="init-step">
-    <h3>서비스 성격</h3>
+    <h3>누구를 위한 서비스인가요?</h3>
     <label>주요 사용자</label>
     <div class="init-option-group">
       <label><input type="checkbox" name="target" value="b2c"> <span>일반 소비자 (B2C)</span></label>
@@ -176,9 +160,82 @@
     </div>
   </div>
 
-  <!-- Step 4: 기술 선호도 (선택) -->
+  <!-- Step 3: 서비스가 어떻게 동작하나요? -->
   <div class="init-step">
-    <h3>기술 선호도 <small style="font-weight:normal;color:#9ca3af">(선택사항)</small></h3>
+    <h3>서비스가 어떻게 동작하나요?</h3>
+    <p style="font-size:13px;color:#9ca3af;margin-bottom:16px">기술 용어 몰라도 됩니다. 있는 그대로 골라주세요.</p>
+
+    <label>데이터를 저장해야 하나요?</label>
+    <p style="font-size:12px;color:#6b7280;margin:-4px 0 8px">"데이터"란 글, 사진, 설정 등 앱이 기억해야 하는 것들을 말해요.</p>
+    <div class="init-option-group">
+      <label><input type="radio" name="data-storage" value="none"> <span>저장할 게 없음 — 보여주기만 하면 됨 <em style="color:#6b7280">(예: 계산기, 타이머)</em></span></label>
+      <label><input type="radio" name="data-storage" value="local"> <span>내 기기에만 저장 — 다른 기기에선 안 보여도 됨 <em style="color:#6b7280">(예: 메모장, 할 일 목록)</em></span></label>
+      <label><input type="radio" name="data-storage" value="server"> <span>서버에 저장 — 어디서든 내 데이터에 접근 <em style="color:#6b7280">(예: 클라우드 노트, SNS)</em></span></label>
+      <label><input type="radio" name="data-storage" value="unknown"> <span>잘 모르겠음</span></label>
+    </div>
+
+    <label>로그인(계정)이 필요한가요?</label>
+    <div class="init-option-group">
+      <label><input type="radio" name="need-account" value="none"> <span>필요 없음 — 누구나 바로 쓸 수 있음 <em style="color:#6b7280">(예: 계산기, 날씨 앱)</em></span></label>
+      <label><input type="radio" name="need-account" value="optional"> <span>선택 사항 — 로그인 없이도 되지만, 로그인하면 더 많은 기능 <em style="color:#6b7280">(예: 쇼핑몰 둘러보기)</em></span></label>
+      <label><input type="radio" name="need-account" value="required"> <span>필수 — 내 데이터·설정이 있어서 로그인 필요 <em style="color:#6b7280">(예: 이메일, 은행 앱)</em></span></label>
+      <label><input type="radio" name="need-account" value="unknown"> <span>잘 모르겠음</span></label>
+    </div>
+
+    <label>다른 사용자와 함께 쓰나요?</label>
+    <div class="init-option-group">
+      <label><input type="radio" name="multi-user" value="solo"> <span>나 혼자만 씀 <em style="color:#6b7280">(예: 개인 일기, 가계부)</em></span></label>
+      <label><input type="radio" name="multi-user" value="read-only"> <span>다른 사람 것을 볼 수 있음 — 읽기/열람 위주 <em style="color:#6b7280">(예: 블로그, 리뷰 사이트)</em></span></label>
+      <label><input type="radio" name="multi-user" value="interactive"> <span>서로 주고받음 — 글, 댓글, 공유 등 <em style="color:#6b7280">(예: SNS, 커뮤니티)</em></span></label>
+      <label><input type="radio" name="multi-user" value="realtime"> <span>실시간으로 함께 — 채팅, 동시 편집 등 <em style="color:#6b7280">(예: 메신저, 구글 독스)</em></span></label>
+      <label><input type="radio" name="multi-user" value="unknown"> <span>잘 모르겠음</span></label>
+    </div>
+
+    <label>어디서 사용하나요? <small style="font-weight:normal;color:#9ca3af">(복수 선택 가능)</small></label>
+    <div class="init-option-group">
+      <label><input type="checkbox" name="usage-env" value="desktop-web"> <span>컴퓨터 웹 브라우저 <em style="color:#6b7280">(크롬, 사파리 등에서 접속)</em></span></label>
+      <label><input type="checkbox" name="usage-env" value="mobile-app"> <span>스마트폰 앱 <em style="color:#6b7280">(앱스토어에서 설치하는 앱)</em></span></label>
+      <label><input type="checkbox" name="usage-env" value="mobile-web"> <span>스마트폰 웹 <em style="color:#6b7280">(앱 설치 없이 폰 브라우저에서 접속)</em></span></label>
+      <label><input type="checkbox" name="usage-env" value="desktop-app"> <span>PC 프로그램 <em style="color:#6b7280">(윈도우·맥에 설치하는 프로그램)</em></span></label>
+      <label><input type="checkbox" name="usage-env" value="unknown"> <span>잘 모르겠음</span></label>
+    </div>
+
+    <label>알림이 필요한가요?</label>
+    <p style="font-size:12px;color:#6b7280;margin:-4px 0 8px">"알림"이란 앱이 먼저 사용자에게 메시지를 보내는 것이에요.</p>
+    <div class="init-option-group">
+      <label><input type="radio" name="need-notification" value="none"> <span>필요 없음</span></label>
+      <label><input type="radio" name="need-notification" value="email"> <span>이메일 알림이면 충분 <em style="color:#6b7280">(예: 주문 확인, 비밀번호 재설정)</em></span></label>
+      <label><input type="radio" name="need-notification" value="push"> <span>앱 알림이 필요 <em style="color:#6b7280">(예: 새 메시지 알림, 배송 상태)</em></span></label>
+      <label><input type="radio" name="need-notification" value="realtime"> <span>즉각적인 실시간 알림이 필요 <em style="color:#6b7280">(예: 채팅, 주식 가격 변동)</em></span></label>
+      <label><input type="radio" name="need-notification" value="unknown"> <span>잘 모르겠음</span></label>
+    </div>
+
+    <label>결제·돈 거래가 들어가나요?</label>
+    <div class="init-option-group">
+      <label><input type="radio" name="has-payment" value="none"> <span>없음 — 돈 관련 기능 없음</span></label>
+      <label><input type="radio" name="has-payment" value="subscription"> <span>유료 구독/결제 — 사용자가 돈을 냄 <em style="color:#6b7280">(예: 구독 서비스, 쇼핑몰)</em></span></label>
+      <label><input type="radio" name="has-payment" value="p2p"> <span>사용자 간 거래 — 사용자끼리 돈을 주고받음 <em style="color:#6b7280">(예: 중고 마켓, 프리랜서 플랫폼)</em></span></label>
+      <label><input type="radio" name="has-payment" value="unknown"> <span>잘 모르겠음</span></label>
+    </div>
+  </div>
+
+  <!-- Step 4: 상세 기획 (필수) -->
+  <div class="init-step">
+    <h3>어떤 서비스를 만들고 싶으신가요? <span class="required">*필수</span></h3>
+    <p style="font-size:13px;color:#9ca3af;margin-bottom:12px">자유롭게 써주세요. 개발 용어 전혀 몰라도 됩니다. 적을수록 PRD 품질이 낮아지니 최대한 구체적으로요!</p>
+    <textarea id="init-detail" class="init-textarea" placeholder="예시:
+- 이런 서비스예요: 동네 맛집을 친구들끼리만 공유하는 앱
+- 주요 화면: 지도에서 맛집 보기, 맛집 등록 (사진+별점+메모), 친구 목록
+- 사용 흐름: 식당 방문 → 기록 남기기 → 친구에게 공유 → 친구가 지도에서 확인
+- 경쟁 서비스와 다른 점: 공개 리뷰가 아닌 신뢰하는 지인 추천만
+- 처음에 꼭 필요한 기능: 개인 기록 + 1:1 공유 + 지도"></textarea>
+    <p id="init-detail-error" style="color:#f87171;font-size:12px;margin-top:4px;display:none">내용을 입력해주세요.</p>
+  </div>
+
+  <!-- Step 5: 기술 선호도 (선택 — 개발자용) -->
+  <div class="init-step">
+    <h3>기술 선호도 <small style="font-weight:normal;color:#9ca3af">(선택사항 — 개발자용)</small></h3>
+    <p style="font-size:13px;color:#9ca3af;margin-bottom:14px">개발 경험이 있는 분만 선택하세요. 잘 모르면 그냥 넘어가세요 — AI가 위 답변을 바탕으로 최적의 기술 스택을 자동으로 추천합니다.</p>
     <label>프론트엔드 / 클라이언트</label>
     <div class="init-option-group">
       <label><input type="checkbox" name="fe-tech" value="react"> <span>React / Next.js</span></label>
@@ -227,18 +284,6 @@
     </div>
   </div>
 
-  <!-- Step 5: 상세 기획 (필수) -->
-  <div class="init-step">
-    <h3>상세 기획 <span class="required">*필수</span></h3>
-    <p style="font-size:13px;color:#9ca3af;margin-bottom:12px">서비스의 핵심 기능, 사용자 시나리오, 차별점 등을 구체적으로 작성하세요. 상세할수록 더 정확한 PRD가 생성됩니다.</p>
-    <textarea id="init-detail" class="init-textarea" placeholder="예시:
-- 주요 기능: 맛집 기록, 친구와 공유, 지도 기반 탐색
-- 사용자 시나리오: 식당 방문 후 별점+메모+사진 기록 → 친구에게 공유 → 친구가 지도에서 확인
-- 차별점: 일반 리뷰 앱과 달리 신뢰하는 지인의 추천만 보여줌
-- MVP 범위: iOS 앱, 개인 기록 + 1:1 공유, 지도 뷰"></textarea>
-    <p id="init-detail-error" style="color:#f87171;font-size:12px;margin-top:4px;display:none">상세 기획을 입력해주세요.</p>
-  </div>
-
   <button id="btn-generate-prd" class="init-btn-primary">PRD 생성하기</button>
 </div>
 
@@ -268,12 +313,6 @@
   <button class="filter-btn" data-filter="has-memo">Has Memo <span class="count" id="count-has-memo"></span></button>
 </div>
 
-<div class="action-bar">
-  <button id="btn-analyze" class="btn-action btn-analyze" disabled>분석하기</button>
-  <button id="btn-apply" class="btn-action btn-apply" disabled>반영하기</button>
-  <button id="btn-generate" class="btn-action btn-generate" disabled>문서 생성하기</button>
-  <div id="job-status" class="job-status hidden"></div>
-</div>
 
 <div id="workflow-summary" class="workflow-summary hidden"></div>
 <div id="recovery-panel" class="recovery-panel hidden"></div>
@@ -313,6 +352,17 @@
 </div>
 
 </div><!-- .tab-content -->
+
+<!-- 확장형 FAB (탭 콘텐츠 활성화 시 표시) -->
+<div id="fab-container" class="fab-container hidden">
+  <div id="job-status" class="job-status hidden"></div>
+  <div class="fab-actions" id="fab-actions">
+    <button id="btn-generate" class="btn-action btn-generate" disabled>문서 생성하기</button>
+    <button id="btn-apply" class="btn-action btn-apply" disabled>반영하기</button>
+    <button id="btn-analyze" class="btn-action btn-analyze" disabled>분석하기</button>
+  </div>
+  <button id="fab-trigger" class="fab-trigger" aria-label="액션 메뉴">+</button>
+</div>
 
 </div><!-- .main -->
 

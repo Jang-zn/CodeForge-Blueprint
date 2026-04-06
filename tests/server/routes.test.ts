@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { openDb, resetDb, getDb, closeAllDbs } from '../../src/db/index.js';
 import { upsertIssue, getIssue, getIssues } from '../../src/db/repository.js';
 import { openWorkspace, type WorkspaceContext } from '../../src/workspace.js';
+import { initAppDb, closeAppDb } from '../../src/db/app-db.js';
 import applyRoute from '../../src/server/routes/apply.js';
 import generateRoute from '../../src/server/routes/generate.js';
 import { createWorkspaceRoute } from '../../src/server/routes/workspace.js';
@@ -57,6 +58,7 @@ describe('applyRoute', () => {
   beforeEach(() => {
     tmpDir = makeTempDir();
     process.env.CODEFORGE_BLUEPRINT_HOME = path.join(tmpDir, '.state');
+    initAppDb();
     ws = openWorkspace(tmpDir);
     openDb(ws.dbPath);
   });
@@ -64,6 +66,7 @@ describe('applyRoute', () => {
   afterEach(() => {
     resetDb();
     closeAllDbs();
+    closeAppDb();
     cleanDir(tmpDir);
   });
 
@@ -124,6 +127,7 @@ describe('generateRoute', () => {
   beforeEach(() => {
     tmpDir = makeTempDir();
     process.env.CODEFORGE_BLUEPRINT_HOME = path.join(tmpDir, '.state');
+    initAppDb();
     ws = openWorkspace(tmpDir);
     openDb(ws.dbPath);
     fs.mkdirSync(ws.docsPath, { recursive: true });
@@ -133,6 +137,7 @@ describe('generateRoute', () => {
   afterEach(() => {
     resetDb();
     closeAllDbs();
+    closeAppDb();
     cleanDir(tmpDir);
   });
 
@@ -151,11 +156,13 @@ describe('workspaceRoute', () => {
   beforeEach(() => {
     tmpDir = makeTempDir();
     process.env.CODEFORGE_BLUEPRINT_HOME = path.join(tmpDir, '.state');
+    initAppDb();
   });
 
   afterEach(() => {
     resetDb();
     closeAllDbs();
+    closeAppDb();
     cleanDir(tmpDir);
   });
 

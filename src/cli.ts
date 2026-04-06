@@ -2,6 +2,7 @@
 
 import { openWorkspace } from './workspace.js';
 import { openDb } from './db/index.js';
+import { initAppDb } from './db/app-db.js';
 import { startServer } from './server/index.js';
 import open from 'open';
 
@@ -23,6 +24,8 @@ function parseArgs(args: string[]): { workspacePath: string | null; port: number
 
 async function main() {
   const { workspacePath, port } = parseArgs(process.argv.slice(2));
+
+  initAppDb();
 
   if (workspacePath) {
     const ws = openWorkspace(workspacePath);

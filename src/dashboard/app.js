@@ -518,8 +518,13 @@ document.getElementById('btn-generate-prd')?.addEventListener('click', async () 
   const data = {
     projectName: document.getElementById('init-project-name').value,
     tagline: document.getElementById('init-tagline').value,
-    serviceType: document.querySelector('input[name="service-type"]:checked')?.value,
-    deployTargets: [...document.querySelectorAll('input[name="deploy-target"]:checked')].map(el => el.value),
+    serviceType: document.querySelector('input[name="service-type"]:checked')?.value || '',
+    dataStorage: document.querySelector('input[name="data-storage"]:checked')?.value || '',
+    needAccount: document.querySelector('input[name="need-account"]:checked')?.value || '',
+    multiUser: document.querySelector('input[name="multi-user"]:checked')?.value || '',
+    usageEnvironment: [...document.querySelectorAll('input[name="usage-env"]:checked')].map(el => el.value),
+    needNotification: document.querySelector('input[name="need-notification"]:checked')?.value || '',
+    hasPayment: document.querySelector('input[name="has-payment"]:checked')?.value || '',
     targets: [...document.querySelectorAll('input[name="target"]:checked')].map(el => el.value),
     revenues: [...document.querySelectorAll('input[name="revenue"]:checked')].map(el => el.value),
     features: [...document.querySelectorAll('input[name="feature"]:checked')].map(el => el.value),
@@ -682,6 +687,27 @@ function showJobStatus(msg) {
   el.innerHTML = `<div class="spinner"></div> ${msg}`;
   el.classList.remove('hidden', 'error');
 }
+
+// ========== FAB Toggle ==========
+document.getElementById('fab-trigger')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const actions = document.getElementById('fab-actions');
+  const trigger = e.currentTarget;
+  const isOpen = actions.classList.contains('open');
+  actions.classList.toggle('open', !isOpen);
+  trigger.classList.toggle('open', !isOpen);
+});
+
+document.addEventListener('click', (e) => {
+  const fab = document.getElementById('fab-container');
+  if (fab && !fab.contains(e.target)) {
+    const actions = document.getElementById('fab-actions');
+    if (actions?.classList.contains('open')) {
+      actions.classList.remove('open');
+      document.getElementById('fab-trigger')?.classList.remove('open');
+    }
+  }
+});
 
 // ========== Action Buttons ==========
 document.getElementById('btn-analyze')?.addEventListener('click', async () => {
@@ -903,6 +929,7 @@ function renderApp(workspace) {
     document.getElementById('init-screen').classList.add('hidden');
     document.getElementById('prd-preview').classList.add('hidden');
     document.querySelector('.tab-content')?.classList.remove('hidden');
+    document.getElementById('fab-container')?.classList.remove('hidden');
     ['btn-analyze', 'btn-apply', 'btn-generate'].forEach(id => {
       document.getElementById(id)?.removeAttribute('disabled');
     });
@@ -910,6 +937,7 @@ function renderApp(workspace) {
   } else {
     document.getElementById('init-screen').classList.remove('hidden');
     document.querySelector('.tab-content')?.classList.add('hidden');
+    document.getElementById('fab-container')?.classList.add('hidden');
   }
 }
 

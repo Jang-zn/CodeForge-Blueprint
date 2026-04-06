@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import { Hono } from 'hono';
 import { closeAllDbs, getDb } from '../src/db/index.js';
+import { initAppDb, closeAppDb } from '../src/db/app-db.js';
 import { createWorkspaceRoute } from '../src/server/routes/workspace.js';
 import initRoute from '../src/server/routes/init.js';
 import analyzeRoute from '../src/server/routes/analyze.js';
@@ -35,6 +36,7 @@ describe('end-to-end flow', () => {
     tmpDir = makeTempDir();
     process.env.CODEFORGE_BLUEPRINT_HOME = path.join(tmpDir, '.state');
     process.env.CODEFORGE_MOCK_PROVIDER = '1';
+    initAppDb();
 
     app = new Hono();
     app.route('/workspace', createWorkspaceRoute({ available: true, version: 'mock' }, { available: true, version: 'mock' }));
@@ -54,6 +56,7 @@ describe('end-to-end flow', () => {
   afterEach(() => {
     delete process.env.CODEFORGE_MOCK_PROVIDER;
     closeAllDbs();
+    closeAppDb();
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
@@ -75,7 +78,12 @@ describe('end-to-end flow', () => {
         projectName: 'Mock Project',
         tagline: 'Mock tagline',
         serviceType: 'web-fullstack',
-        deployTargets: ['web-browser'],
+        dataStorage: 'server',
+        needAccount: 'required',
+        multiUser: 'interactive',
+        usageEnvironment: ['desktop-web'],
+        needNotification: 'push',
+        hasPayment: 'none',
         targets: ['b2c'],
         revenues: ['freemium'],
         features: ['ai'],

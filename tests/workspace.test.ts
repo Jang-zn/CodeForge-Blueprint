@@ -7,9 +7,11 @@ import path from 'path';
 // workspace 모듈은 모듈 수준 싱글톤(_workspace)을 가지므로
 // 각 테스트에서 직접 import해 사용한다.
 import { expandHome, openWorkspace, hasWorkspace, getWorkspaceOrNull, getRecents } from '../src/workspace.js';
+import { initAppDb, closeAppDb } from '../src/db/app-db.js';
 
 const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-home-'));
 process.env.CODEFORGE_BLUEPRINT_HOME = TEST_HOME;
+initAppDb();
 
 // ─── 헬퍼 ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +79,10 @@ describe('openWorkspace', () => {
 
   test('getWorkspaceOrNull()이 열린 워크스페이스 반환', () => {
     const ws = openWorkspace(tmpDir);
-    assert.equal(getWorkspaceOrNull(ws.sessionId), ws);
+    const result = getWorkspaceOrNull(ws.sessionId);
+    assert.ok(result !== null);
+    assert.equal(result!.rootPath, ws.rootPath);
+    assert.equal(result!.sessionId, ws.sessionId);
   });
 
   test('같은 경로 재호출 시 항상 동일 컨텍스트 반환', () => {

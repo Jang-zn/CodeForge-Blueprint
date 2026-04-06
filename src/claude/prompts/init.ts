@@ -2,10 +2,18 @@ export interface InitFormData {
   projectName: string;
   tagline: string;
   serviceType: string;
-  deployTargets: string[];
+  // 서비스 동작 방식 (비개발자 친화 질문)
+  dataStorage: string;        // 'none' | 'local' | 'server' | 'unknown'
+  needAccount: string;        // 'none' | 'optional' | 'required' | 'unknown'
+  multiUser: string;          // 'solo' | 'read-only' | 'interactive' | 'realtime' | 'unknown'
+  usageEnvironment: string[]; // ['desktop-web', 'mobile-app', 'mobile-web', 'desktop-app', 'unknown']
+  needNotification: string;   // 'none' | 'email' | 'push' | 'realtime' | 'unknown'
+  hasPayment: string;         // 'none' | 'subscription' | 'p2p' | 'unknown'
+  // 서비스 성격
   targets: string[];
   revenues: string[];
   features: string[];
+  // 기술 선호도 (선택, 개발자용)
   feTech: string[];
   beTech: string[];
   storageTech: string[];
@@ -74,6 +82,51 @@ const FEATURE_LABELS: Record<string, string> = {
   location: '위치/지도',
   settings: '설정/개인화',
   offline: '오프라인 지원',
+};
+
+const DATA_STORAGE_LABELS: Record<string, string> = {
+  none: '저장 불필요 (보여주기만 하면 됨)',
+  local: '내 기기에만 저장 (다른 기기에선 안 보여도 됨)',
+  server: '서버에 저장 (어디서든 접근 가능)',
+  unknown: '미정',
+};
+
+const NEED_ACCOUNT_LABELS: Record<string, string> = {
+  none: '필요 없음 (누구나 바로 사용)',
+  optional: '선택 사항 (로그인 시 더 많은 기능)',
+  required: '필수 (로그인 없으면 사용 불가)',
+  unknown: '미정',
+};
+
+const MULTI_USER_LABELS: Record<string, string> = {
+  solo: '나 혼자만 사용',
+  'read-only': '다른 사람 것을 볼 수 있음 (읽기 위주)',
+  interactive: '서로 주고받음 (글, 댓글, 공유)',
+  realtime: '실시간으로 함께 (채팅, 동시 편집)',
+  unknown: '미정',
+};
+
+const USAGE_ENV_LABELS: Record<string, string> = {
+  'desktop-web': '컴퓨터 웹 브라우저',
+  'mobile-app': '스마트폰 앱 (앱스토어 설치)',
+  'mobile-web': '스마트폰 웹 (브라우저 접속)',
+  'desktop-app': 'PC 프로그램 (윈도우/맥 설치)',
+  unknown: '미정',
+};
+
+const NEED_NOTIFICATION_LABELS: Record<string, string> = {
+  none: '알림 불필요',
+  email: '이메일 알림 (주문 확인, 비밀번호 재설정 등)',
+  push: '앱 푸시 알림 (새 메시지, 배송 상태 등)',
+  realtime: '실시간 알림 (채팅, 주식 가격 변동 등)',
+  unknown: '미정',
+};
+
+const HAS_PAYMENT_LABELS: Record<string, string> = {
+  none: '없음',
+  subscription: '유료 구독/결제 (사용자가 돈을 냄)',
+  p2p: '사용자 간 거래 (사용자끼리 돈을 주고받음)',
+  unknown: '미정',
 };
 
 const STORAGE_LABELS: Record<string, string> = {
@@ -151,10 +204,18 @@ export function buildInitPrompt(data: InitFormData): string {
 **프로젝트명**: ${data.projectName || '미정'}
 **서비스 한 줄 설명**: ${data.tagline || '미작성'}
 **서비스 유형**: ${(SERVICE_TYPE_LABELS[data.serviceType] ?? data.serviceType) || '미선택'}
-**배포 대상**: ${labels(DEPLOY_TARGET_LABELS, data.deployTargets)}
 **주요 사용자**: ${labels(TARGET_LABELS, data.targets)}
 **수익 모델**: ${labels(REVENUE_LABELS, data.revenues)}
 **핵심 기능 영역**: ${labels(FEATURE_LABELS, data.features)}
+
+### 서비스 동작 방식 (사용자 답변)
+**데이터 저장**: ${DATA_STORAGE_LABELS[data.dataStorage] ?? '미선택'}
+**계정/로그인**: ${NEED_ACCOUNT_LABELS[data.needAccount] ?? '미선택'}
+**사용자 관계**: ${MULTI_USER_LABELS[data.multiUser] ?? '미선택'}
+**사용 환경**: ${labels(USAGE_ENV_LABELS, data.usageEnvironment)}
+**알림 방식**: ${NEED_NOTIFICATION_LABELS[data.needNotification] ?? '미선택'}
+**결제/거래**: ${HAS_PAYMENT_LABELS[data.hasPayment] ?? '미선택'}
+
 ${techSection}
 
 **상세 기획**:
@@ -163,7 +224,15 @@ ${data.detail}
 ## PRD 작성 지침
 
 아래 구조로 PRD 마크다운 문서를 작성하세요. 각 섹션은 입력 정보를 바탕으로 구체적으로 작성하되, 불명확한 부분은 TBD로 표시하세요.
-배포 대상 OS/플랫폼이 여러 개인 경우 플랫폼별 차이점(UI/UX, 권한, 배포 방식 등)을 제약 사항에 반영하세요.
+
+**중요**: 입력 정보를 제공한 사람은 비개발자입니다. "서비스 동작 방식" 답변을 바탕으로 다음을 추론하여 PRD에 반영하세요:
+- 배포 대상 플랫폼 (iOS, Android, 웹, 데스크톱 등) — 사용 환경 답변에서 도출
+- 백엔드 아키텍처 필요 여부 — 데이터 저장 방식, 사용자 관계, 알림 요구에서 도출
+- 데이터 저장 전략 (로컬 vs 클라우드, DB 유형) — 데이터 저장·계정 답변에서 도출
+- 인증/계정 방식 (소셜 로그인, 이메일 등) — 로그인 필요 여부에서 도출
+- 알림 인프라 (FCM, WebSocket, 이메일 서비스 등) — 알림 방식에서 도출
+- 결제 연동 필요 여부 및 방식 — 결제 답변에서 도출
+"기술 선호도"가 비어 있으면 서비스 특성에 맞는 최적의 기술 스택을 직접 추천하세요.
 ${isClientOnly ? '백엔드가 없는 클라이언트 단독 서비스이므로 로컬 데이터 관리, 오프라인 지원, 보안(클라이언트 사이드) 등을 기술하세요.' : ''}
 
 \`\`\`markdown
