@@ -118,7 +118,9 @@ CREATE TABLE IF NOT EXISTS decision_logs (
   issue_id TEXT NOT NULL REFERENCES issues(id),
   date TEXT NOT NULL,
   status TEXT NOT NULL,
-  memo TEXT NOT NULL
+  memo TEXT NOT NULL,
+  old_status TEXT,
+  tab TEXT
 );
 
 CREATE TABLE IF NOT EXISTS changelogs (
