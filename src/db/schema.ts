@@ -74,6 +74,51 @@ export const MIGRATION_V20_SQL = `
 ALTER TABLE decision_logs ADD COLUMN tab TEXT;
 `;
 
+export const MIGRATION_V21_SQL = `
+CREATE TABLE IF NOT EXISTS doc_types (
+  slug TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  template_sections TEXT NOT NULL,
+  sort_order INTEGER DEFAULT 0
+);
+`;
+
+export const MIGRATION_V22_SQL = `
+ALTER TABLE documents ADD COLUMN doc_type TEXT;
+`;
+
+export const MIGRATION_V23_SQL = `
+ALTER TABLE documents ADD COLUMN summary TEXT;
+`;
+
+export const MIGRATION_V24_SQL = `
+CREATE TABLE IF NOT EXISTS doc_sections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL REFERENCES documents(id),
+  section_key TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(document_id, section_key)
+);
+`;
+
+export const MIGRATION_V25_SQL = `
+CREATE TABLE IF NOT EXISTS glossary_terms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  term TEXT NOT NULL,
+  definition TEXT NOT NULL,
+  category TEXT,
+  aliases TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+`;
+
+export const MIGRATION_V26_SQL = `
+ALTER TABLE decision_logs ADD COLUMN reason TEXT;
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
   id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -120,7 +165,8 @@ CREATE TABLE IF NOT EXISTS decision_logs (
   status TEXT NOT NULL,
   memo TEXT NOT NULL,
   old_status TEXT,
-  tab TEXT
+  tab TEXT,
+  reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS changelogs (
@@ -164,6 +210,35 @@ CREATE TABLE IF NOT EXISTS documents (
   file_path TEXT NOT NULL,
   source_version TEXT,
   source_job_id TEXT,
+  doc_type TEXT,
+  summary TEXT,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS doc_types (
+  slug TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  template_sections TEXT NOT NULL,
+  sort_order INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS doc_sections (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  document_id INTEGER NOT NULL REFERENCES documents(id),
+  section_key TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  sort_order INTEGER DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(document_id, section_key)
+);
+
+CREATE TABLE IF NOT EXISTS glossary_terms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  term TEXT NOT NULL,
+  definition TEXT NOT NULL,
+  category TEXT,
+  aliases TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 `;

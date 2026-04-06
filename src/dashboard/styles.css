@@ -961,3 +961,64 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
   background: var(--border);
   margin: 8px 16px;
 }
+
+/* ===== 문서 관리 패널 ===== */
+.docs-panel { padding: 0; }
+.docs-panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.docs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 32px; }
+
+.doc-card {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.doc-card:hover { border-color: var(--accent); background: var(--surface); }
+.doc-card-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.doc-card-status { font-size: 11px; }
+.doc-card-status.filled { color: var(--green); }
+.doc-card-status.empty { color: var(--text-muted); }
+.doc-card-meta { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+.doc-editor { margin-top: 8px; }
+.doc-editor-back { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; padding: 0 0 16px; display: flex; align-items: center; gap: 4px; }
+.doc-editor-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.doc-editor-subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 24px; }
+.doc-editor-summary { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12.5px; color: var(--text-muted); }
+
+.doc-section { margin-bottom: 20px; }
+.doc-section-label { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+.doc-section-required { font-size: 10px; color: var(--red); }
+.doc-section-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.doc-section-textarea {
+  width: 100%; min-height: 80px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: inherit; font-size: 13px; padding: 8px 10px;
+  resize: vertical; transition: border-color 0.15s;
+}
+.doc-section-textarea:focus { outline: none; border-color: var(--accent); }
+.doc-editor-actions { display: flex; gap: 10px; margin-top: 8px; }
+.doc-save-btn { padding: 8px 20px; background: var(--accent); border: none; border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer; }
+.doc-save-btn:hover { opacity: 0.85; }
+.doc-save-status { font-size: 12px; color: var(--green); opacity: 0; transition: opacity 0.3s; }
+.doc-save-status.visible { opacity: 1; }
+
+/* 용어집 편집기 */
+.glossary-editor { margin-top: 8px; }
+.glossary-add-form { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.glossary-add-form input {
+  flex: 1; min-width: 120px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: inherit; font-size: 13px; padding: 7px 10px;
+}
+.glossary-add-form input:focus { outline: none; border-color: var(--accent); }
+.glossary-add-btn { padding: 7px 14px; background: var(--accent); border: none; border-radius: 6px; color: #fff; font-size: 13px; cursor: pointer; white-space: nowrap; }
+
+.glossary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.glossary-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.glossary-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.glossary-table tr:hover td { background: var(--surface2); }
+.glossary-term-text { font-weight: 500; color: var(--text); }
+.glossary-def-text { color: var(--text-muted); }
+.glossary-cat-badge { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+.glossary-actions { display: flex; gap: 6px; }
+.glossary-delete-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 2px 6px; border-radius: 3px; }
+.glossary-delete-btn:hover { color: var(--red); background: var(--surface2); }

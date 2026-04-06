@@ -1,10 +1,10 @@
-import fs from 'fs';
+import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 
-export function buildBackendPrompt(prdPath: string): string {
-  const prdContent = fs.readFileSync(prdPath, 'utf-8');
+export function buildBackendPrompt(ctx: ContextPackage): string {
+  const contextBlock = formatContextForPrompt(ctx);
 
   return `당신은 시니어 백엔드 아키텍트입니다.
-아래 PRD를 분석하여 백엔드 아키텍처를 5개 섹션으로 설계하세요.
+아래 문서들을 분석하여 백엔드 아키텍처를 5개 섹션으로 설계하세요.
 
 ## 설계 섹션
 
@@ -42,10 +42,13 @@ export function buildBackendPrompt(prdPath: string): string {
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
 - 각 섹션당 최소 2개, 최대 5개 항목
+- <context:ai-guide>의 기술 제약/원칙을 설계에 반영하세요
+- <context:glossary>가 있다면 용어를 일관되게 사용하세요
+- <context:decisions>의 기존 결정과 충돌하지 않도록 하세요
 - PRD에서 실제로 도출 가능한 설계만 포함 (억지로 만들지 말 것)
 - JSON만 출력, 다른 텍스트 없음
 
-## PRD 문서
+## 문서 컨텍스트
 
-${prdContent}`;
+${contextBlock}`;
 }

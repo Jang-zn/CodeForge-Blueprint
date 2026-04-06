@@ -313,17 +313,18 @@ function scheduleRecRefresh() {
 
 // ========== Tab System ==========
 function switchTab(tabId) {
-  if (tabId === 'timeline') {
-    activeTab = 'timeline';
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-timeline'));
+  if (tabId === 'timeline' || tabId === 'docs') {
+    activeTab = tabId;
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabId}`));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
     document.querySelector('.filter-bar')?.classList.add('hidden');
     document.getElementById('fab-container')?.classList.add('hidden');
-    loadTimelineView();
+    if (tabId === 'timeline') loadTimelineView();
+    else loadDocsView();
     return;
   }
 
-  // 타임라인에서 일반 탭으로 돌아올 때
+  // 특수 탭에서 일반 탭으로 돌아올 때
   document.querySelector('.filter-bar')?.classList.remove('hidden');
   document.getElementById('fab-container')?.classList.remove('hidden');
 
@@ -1540,6 +1541,207 @@ function navigateToIssue(tab, issueId) {
     // 이슈 로드 완료 후 스크롤 (loadIssues가 비동기이므로 약간 지연)
     setTimeout(() => scrollToIssue(issueId), 600);
   }
+}
+
+// ========== Docs View ==========
+
+let _docTypes = [];
+
+async function loadDocsView() {
+  const panel = document.getElementById('panel-docs');
+  if (!panel) return;
+  panel.innerHTML = '<div class="timeline-empty">불러오는 중...</div>';
+
+  try {
+    const [types, docs] = await Promise.all([
+      API.get('/documents/types'),
+      API.get('/documents'),
+    ]);
+    _docTypes = types;
+    renderDocsGrid(panel, types, docs);
+  } catch (e) {
+    panel.innerHTML = `<div class="timeline-empty" style="color:var(--red)">오류: ${escapeHtml(String(e))}</div>`;
+  }
+}
+
+function renderDocsGrid(panel, types, docs) {
+  const docsByType = {};
+  for (const d of docs) if (d.doc_type) docsByType[d.doc_type] = d;
+
+  const cards = types.map(t => {
+    const doc = docsByType[t.slug];
+    const filled = doc && doc.id;
+    return `
+      <div class="doc-card" onclick="openDocEditor('${escapeHtml(t.slug)}')">
+        <div class="doc-card-label">${escapeHtml(t.label)}</div>
+        <div class="doc-card-status ${filled ? 'filled' : 'empty'}">${filled ? '작성됨' : '미작성'}</div>
+        ${doc?.created_at ? `<div class="doc-card-meta">${doc.created_at.slice(0, 10)}</div>` : ''}
+      </div>`;
+  });
+
+  // 용어집 카드 추가
+  cards.push(`
+    <div class="doc-card" onclick="openGlossaryEditor()">
+      <div class="doc-card-label">용어집</div>
+      <div class="doc-card-status">편집 가능</div>
+      <div class="doc-card-meta">프로젝트 고유 용어 관리</div>
+    </div>`);
+
+  panel.innerHTML = `
+    <div class="docs-panel">
+      <div class="docs-panel-header">
+        <h1>문서 관리</h1>
+      </div>
+      <div class="docs-grid">${cards.join('')}</div>
+    </div>`;
+}
+
+async function openDocEditor(docTypeSlug) {
+  const panel = document.getElementById('panel-docs');
+  if (!panel) return;
+
+  const typeDef = _docTypes.find(t => t.slug === docTypeSlug);
+  if (!typeDef) return;
+
+  panel.innerHTML = '<div class="timeline-empty">불러오는 중...</div>';
+
+  let doc = null;
+  try {
+    doc = await API.get(`/documents/by-type/${docTypeSlug}`);
+  } catch {
+    // 문서 없음 — 새로 만들기
+    try {
+      await API.post('/documents', { doc_type: docTypeSlug });
+      doc = await API.get(`/documents/by-type/${docTypeSlug}`);
+    } catch (e) {
+      panel.innerHTML = `<div class="timeline-empty" style="color:var(--red)">오류: ${escapeHtml(String(e))}</div>`;
+      return;
+    }
+  }
+
+  const sectionMap = {};
+  for (const s of (doc.sections || [])) sectionMap[s.section_key] = s.content;
+
+  const sectionHtml = typeDef.sections.map(s => `
+    <div class="doc-section">
+      <div class="doc-section-label">
+        ${escapeHtml(s.title)}
+        ${s.required ? '<span class="doc-section-required">필수</span>' : ''}
+      </div>
+      ${s.hint ? `<div class="doc-section-hint">${escapeHtml(s.hint)}</div>` : ''}
+      <textarea
+        class="doc-section-textarea"
+        data-section-key="${escapeHtml(s.key)}"
+        rows="4"
+        placeholder="${escapeHtml(s.hint || '')}"
+      >${escapeHtml(sectionMap[s.key] || '')}</textarea>
+    </div>`).join('');
+
+  const summaryHtml = doc.summary
+    ? `<div class="doc-editor-summary">${escapeHtml(doc.summary)}</div>`
+    : '';
+
+  panel.innerHTML = `
+    <div class="docs-panel doc-editor">
+      <button class="doc-editor-back" onclick="loadDocsView()">← 문서 목록</button>
+      <div class="doc-editor-title">${escapeHtml(typeDef.label)}</div>
+      ${summaryHtml}
+      ${sectionHtml}
+      <div class="doc-editor-actions">
+        <button class="doc-save-btn" onclick="saveDocSections(${doc.id})">저장</button>
+        <span class="doc-save-status" id="doc-save-status">저장됨</span>
+      </div>
+    </div>`;
+}
+
+async function saveDocSections(docId) {
+  const panel = document.getElementById('panel-docs');
+  const textareas = panel.querySelectorAll('.doc-section-textarea');
+  const saves = [];
+  textareas.forEach(ta => {
+    saves.push(
+      API.put(`/documents/${docId}/sections/${encodeURIComponent(ta.dataset.sectionKey)}`, { content: ta.value })
+    );
+  });
+  try {
+    await Promise.all(saves);
+    const status = document.getElementById('doc-save-status');
+    if (status) {
+      status.classList.add('visible');
+      setTimeout(() => status.classList.remove('visible'), 2000);
+    }
+  } catch (e) {
+    alert('저장 실패: ' + String(e));
+  }
+}
+
+// ========== Glossary Editor ==========
+
+async function openGlossaryEditor() {
+  const panel = document.getElementById('panel-docs');
+  if (!panel) return;
+  panel.innerHTML = '<div class="timeline-empty">불러오는 중...</div>';
+  await renderGlossaryEditor(panel);
+}
+
+async function renderGlossaryEditor(panel) {
+  let terms = [];
+  try { terms = await API.get('/glossary'); } catch { /* empty */ }
+
+  const rows = terms.map(t => `
+    <tr>
+      <td><span class="glossary-term-text">${escapeHtml(t.term)}</span>${t.aliases ? `<br><small style="color:var(--text-muted)">${escapeHtml(t.aliases)}</small>` : ''}</td>
+      <td class="glossary-def-text">${escapeHtml(t.definition)}</td>
+      <td>${t.category ? `<span class="glossary-cat-badge">${escapeHtml(t.category)}</span>` : ''}</td>
+      <td>
+        <div class="glossary-actions">
+          <button class="glossary-delete-btn" onclick="deleteGlossaryTerm(${t.id})">삭제</button>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  panel.innerHTML = `
+    <div class="docs-panel glossary-editor">
+      <button class="doc-editor-back" onclick="loadDocsView()">← 문서 목록</button>
+      <div class="doc-editor-title">용어집</div>
+      <div class="doc-editor-subtitle">프로젝트 고유 용어 / 기능명 / 사용자 타입 / 약어를 정의하세요. AI 분석 시 자동으로 컨텍스트에 포함됩니다.</div>
+
+      <div class="glossary-add-form" id="glossary-add-form">
+        <input id="g-term" placeholder="용어" style="flex:0 0 120px">
+        <input id="g-def" placeholder="정의" style="flex:2">
+        <input id="g-cat" placeholder="카테고리 (선택)" style="flex:0 0 120px">
+        <input id="g-aliases" placeholder="별칭 (선택)" style="flex:0 0 100px">
+        <button class="glossary-add-btn" onclick="addGlossaryTerm()">+ 추가</button>
+      </div>
+
+      ${terms.length > 0 ? `
+        <table class="glossary-table">
+          <thead><tr><th>용어</th><th>정의</th><th>카테고리</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>` : '<div class="timeline-empty">아직 등록된 용어가 없습니다.</div>'}
+    </div>`;
+}
+
+async function addGlossaryTerm() {
+  const term = document.getElementById('g-term')?.value.trim();
+  const def = document.getElementById('g-def')?.value.trim();
+  const cat = document.getElementById('g-cat')?.value.trim() || null;
+  const aliases = document.getElementById('g-aliases')?.value.trim() || null;
+  if (!term || !def) { alert('용어와 정의는 필수입니다.'); return; }
+  try {
+    await API.post('/glossary', { term, definition: def, category: cat, aliases });
+    const panel = document.getElementById('panel-docs');
+    if (panel) await renderGlossaryEditor(panel);
+  } catch (e) { alert('추가 실패: ' + String(e)); }
+}
+
+async function deleteGlossaryTerm(id) {
+  if (!confirm('이 용어를 삭제하시겠습니까?')) return;
+  try {
+    await API.request(`/glossary/${id}`, { method: 'DELETE' });
+    const panel = document.getElementById('panel-docs');
+    if (panel) await renderGlossaryEditor(panel);
+  } catch (e) { alert('삭제 실패: ' + String(e)); }
 }
 
 // ========== Boot ==========

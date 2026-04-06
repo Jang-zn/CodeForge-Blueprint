@@ -1,10 +1,10 @@
-import fs from 'fs';
+import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 
-export function buildReviewPlanPrompt(prdPath: string): string {
-  const prdContent = fs.readFileSync(prdPath, 'utf-8');
+export function buildReviewPlanPrompt(ctx: ContextPackage): string {
+  const contextBlock = formatContextForPrompt(ctx);
 
   return `당신은 시니어 프로덕트 매니저 겸 기획 검토 전문가입니다.
-아래 PRD를 분석해서 모순, 사각지대, 운영 리스크를 찾아내세요.
+아래 문서들을 분석해서 모순, 사각지대, 운영 리스크를 찾아내세요.
 
 ## 분석 지시사항
 
@@ -51,10 +51,12 @@ export function buildReviewPlanPrompt(prdPath: string): string {
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
 - 각 관점당 최소 2개, 최대 5개 이슈
 - refItems: FE 구현 시 고려할 참고사항 (이슈가 아닌 구현 힌트)
+- <context:ai-guide>가 있다면 그 원칙을 분석 기준에 반영하세요
+- <context:glossary>가 있다면 용어를 동일하게 사용하세요
 - 실제 발견된 이슈만 포함 (억지로 이슈를 만들지 말 것)
 - JSON만 출력, 다른 텍스트 없음
 
-## PRD 문서
+## 문서 컨텍스트
 
-${prdContent}`;
+${contextBlock}`;
 }

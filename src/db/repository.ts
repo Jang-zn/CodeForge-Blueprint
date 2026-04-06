@@ -43,6 +43,7 @@ export interface DecisionLog {
   memo: string;
   old_status: string | null;
   tab: string | null;
+  reason: string | null;
 }
 
 export interface Job {
@@ -72,7 +73,42 @@ export interface DocumentRecord {
   file_path: string;
   source_version: string | null;
   source_job_id: string | null;
+  doc_type: string | null;
+  summary: string | null;
   created_at: string;
+}
+
+export interface DocType {
+  slug: string;
+  label: string;
+  template_sections: string; // JSON string of TemplateSectionDef[]
+  sort_order: number;
+}
+
+export interface TemplateSectionDef {
+  key: string;
+  title: string;
+  hint: string;
+  required: boolean;
+}
+
+export interface DocSection {
+  id: number;
+  document_id: number;
+  section_key: string;
+  content: string;
+  sort_order: number;
+  updated_at: string;
+}
+
+export interface GlossaryTerm {
+  id: number;
+  term: string;
+  definition: string;
+  category: string | null;
+  aliases: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ===== Workspace =====
@@ -226,8 +262,8 @@ export function setTabVersion(db: any, tab: Tab, version: string): void {
 
 export function addDecisionLog(db: any, log: Omit<DecisionLog, 'id'>): void {
   db.prepare(
-    'INSERT INTO decision_logs (issue_id, date, status, memo, old_status, tab) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(log.issue_id, log.date, log.status, log.memo, log.old_status ?? null, log.tab ?? null);
+    'INSERT INTO decision_logs (issue_id, date, status, memo, old_status, tab, reason) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(log.issue_id, log.date, log.status, log.memo, log.old_status ?? null, log.tab ?? null, log.reason ?? null);
 }
 
 export function getDecisionLogs(db: any, issue_id: string): DecisionLog[] {
@@ -378,11 +414,14 @@ export function getRunningJobs(db: any): Job[] {
 
 // ===== Documents =====
 
-export function addDocumentRecord(db: any, doc: Omit<DocumentRecord, 'id' | 'created_at'>): void {
+export function addDocumentRecord(
+  db: any,
+  doc: Omit<DocumentRecord, 'id' | 'created_at' | 'doc_type' | 'summary'> & { doc_type?: string | null; summary?: string | null },
+): void {
   db.prepare(`
-    INSERT INTO documents (tab, version, kind, file_path, source_version, source_job_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(doc.tab, doc.version, doc.kind, doc.file_path, doc.source_version ?? null, doc.source_job_id ?? null);
+    INSERT INTO documents (tab, version, kind, file_path, source_version, source_job_id, doc_type, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(doc.tab, doc.version, doc.kind, doc.file_path, doc.source_version ?? null, doc.source_job_id ?? null, doc.doc_type ?? null, doc.summary ?? null);
 }
 
 export function getDocuments(db: any, tab?: Tab): DocumentRecord[] {
@@ -390,6 +429,10 @@ export function getDocuments(db: any, tab?: Tab): DocumentRecord[] {
     return db.prepare('SELECT * FROM documents WHERE tab = ? ORDER BY id DESC').all(tab);
   }
   return db.prepare('SELECT * FROM documents ORDER BY id DESC').all();
+}
+
+export function getDocument(db: any, id: number): DocumentRecord | null {
+  return db.prepare('SELECT * FROM documents WHERE id = ?').get(id) ?? null;
 }
 
 // ===== Workflow Snapshot Helpers =====
@@ -530,4 +573,138 @@ export function getDeferredReminders(db: any, daysThreshold = DEFERRED_REMINDER_
       AND updated_at <= datetime('now', ? || ' days')
     ORDER BY updated_at ASC
   `).all(`-${daysThreshold}`) as DeferredReminder[];
+}
+
+// ===== Doc Types =====
+
+export function getDocTypes(db: any): DocType[] {
+  return db.prepare('SELECT * FROM doc_types ORDER BY sort_order').all() as DocType[];
+}
+
+export function getDocType(db: any, slug: string): DocType | null {
+  return db.prepare('SELECT * FROM doc_types WHERE slug = ?').get(slug) ?? null;
+}
+
+// ===== Typed Documents =====
+
+export function getDocByType(db: any, docType: string): DocumentRecord | null {
+  return db.prepare(
+    'SELECT * FROM documents WHERE doc_type = ? ORDER BY id DESC LIMIT 1'
+  ).get(docType) ?? null;
+}
+
+export function createTypedDocument(db: any, docType: string, filePath: string): number {
+  const typeDef = getDocType(db, docType);
+  const result = db.prepare(
+    `INSERT INTO documents (tab, version, kind, file_path, doc_type) VALUES ('docs', '1.0.0', 'typed-doc', ?, ?)`
+  ).run(filePath, docType);
+  const docId = result.lastInsertRowid as number;
+
+  // 빈 섹션 생성
+  if (typeDef) {
+    const sections: TemplateSectionDef[] = JSON.parse(typeDef.template_sections);
+    const stmt = db.prepare(
+      'INSERT OR IGNORE INTO doc_sections (document_id, section_key, content, sort_order) VALUES (?, ?, ?, ?)'
+    );
+    sections.forEach((s, idx) => stmt.run(docId, s.key, '', idx));
+  }
+
+  return docId;
+}
+
+export function updateDocumentSummary(db: any, documentId: number, summary: string): void {
+  db.prepare('UPDATE documents SET summary = ? WHERE id = ?').run(summary, documentId);
+}
+
+// ===== Doc Sections =====
+
+export function getDocSections(db: any, documentId: number): DocSection[] {
+  return db.prepare(
+    'SELECT * FROM doc_sections WHERE document_id = ? ORDER BY sort_order'
+  ).all(documentId) as DocSection[];
+}
+
+export function upsertDocSection(db: any, documentId: number, sectionKey: string, content: string): void {
+  db.prepare(`
+    INSERT INTO doc_sections (document_id, section_key, content, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(document_id, section_key) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at
+  `).run(documentId, sectionKey, content);
+}
+
+export function assembleMarkdown(db: any, documentId: number): string {
+  const doc = getDocument(db, documentId);
+  if (!doc?.doc_type) return '';
+  const docType = getDocType(db, doc.doc_type);
+  if (!docType) return '';
+  const sections = getDocSections(db, documentId);
+  const defs: TemplateSectionDef[] = JSON.parse(docType.template_sections);
+  const lines: string[] = [`# ${docType.label}`, ''];
+  for (const def of defs) {
+    const sec = sections.find(s => s.section_key === def.key);
+    lines.push(`## ${def.title}`);
+    lines.push(sec?.content?.trim() || '');
+    lines.push('');
+  }
+  return lines.join('\n').trim();
+}
+
+export function parseSectionsFromMarkdown(content: string, templateSections: TemplateSectionDef[]): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const def of templateSections) {
+    const regex = new RegExp(`##\\s+${def.title}\\s*\\n([\\s\\S]*?)(?=\\n##\\s|$)`, 'i');
+    const match = content.match(regex);
+    if (match) result[def.key] = match[1].trim();
+  }
+  return result;
+}
+
+// ===== Glossary =====
+
+export function getGlossaryTerms(db: any, category?: string): GlossaryTerm[] {
+  if (category) {
+    return db.prepare('SELECT * FROM glossary_terms WHERE category = ? ORDER BY term').all(category) as GlossaryTerm[];
+  }
+  return db.prepare('SELECT * FROM glossary_terms ORDER BY term').all() as GlossaryTerm[];
+}
+
+type GlossaryInput = Omit<GlossaryTerm, 'id' | 'created_at' | 'updated_at'> | Omit<GlossaryTerm, 'created_at' | 'updated_at'>;
+
+export function upsertGlossaryTerm(db: any, term: GlossaryInput): GlossaryTerm {
+  const id = 'id' in term ? term.id : undefined;
+  if (id) {
+    db.prepare(`
+      UPDATE glossary_terms SET term = ?, definition = ?, category = ?, aliases = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(term.term, term.definition, term.category ?? null, term.aliases ?? null, id);
+    return db.prepare('SELECT * FROM glossary_terms WHERE id = ?').get(id) as GlossaryTerm;
+  }
+  const result = db.prepare(
+    'INSERT INTO glossary_terms (term, definition, category, aliases) VALUES (?, ?, ?, ?)'
+  ).run(term.term, term.definition, term.category ?? null, term.aliases ?? null);
+  return db.prepare('SELECT * FROM glossary_terms WHERE id = ?').get(result.lastInsertRowid) as GlossaryTerm;
+}
+
+export function deleteGlossaryTerm(db: any, id: number): void {
+  db.prepare('DELETE FROM glossary_terms WHERE id = ?').run(id);
+}
+
+export function buildGlossaryMarkdown(db: any): string {
+  const terms = getGlossaryTerms(db);
+  if (terms.length === 0) return '';
+  const lines = ['# 용어집', ''];
+  const byCategory: Record<string, GlossaryTerm[]> = {};
+  for (const t of terms) {
+    const cat = t.category || '일반';
+    (byCategory[cat] ??= []).push(t);
+  }
+  for (const [cat, items] of Object.entries(byCategory)) {
+    lines.push(`## ${cat}`, '');
+    for (const t of items) {
+      const aliases = t.aliases ? ` (별칭: ${t.aliases})` : '';
+      lines.push(`**${t.term}**${aliases}: ${t.definition}`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n').trim();
 }

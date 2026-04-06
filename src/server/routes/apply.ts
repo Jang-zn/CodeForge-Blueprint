@@ -25,6 +25,7 @@ interface IssueState {
   id: string;
   status: IssueStatus;
   memo: string;
+  reason?: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -93,6 +94,7 @@ applyRoute.post('/', async (c) => {
           memo: issueState.memo?.trim() || `상태: ${issueState.status}`,
           old_status: lastLog?.status ?? null,
           tab: issue?.tab ?? tab,
+          reason: issueState.reason?.trim() || null,
         });
 
         updateIssueStatus(db, issueState.id, issueState.status, issueState.memo?.trim() || '', {

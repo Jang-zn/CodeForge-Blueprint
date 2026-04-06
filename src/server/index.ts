@@ -15,6 +15,8 @@ import analyzeRoute from './routes/analyze.js';
 import applyRoute from './routes/apply.js';
 import generateRoute from './routes/generate.js';
 import decisionsRoute from './routes/decisions.js';
+import documentsRoute from './routes/documents.js';
+import glossaryRoute from './routes/glossary.js';
 import { getRequestContext } from './context.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +52,8 @@ export async function startServer(port: number): Promise<number> {
   api.route('/apply', applyRoute);
   api.route('/generate', generateRoute);
   api.route('/decisions', decisionsRoute);
+  api.route('/documents', documentsRoute);
+  api.route('/glossary', glossaryRoute);
 
   app.route('/api', api);
 

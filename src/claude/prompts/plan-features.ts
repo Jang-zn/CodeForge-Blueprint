@@ -1,22 +1,16 @@
-import fs from 'fs';
+import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 
-interface DeferredItem {
-  id: string;
-  title: string;
-  memo: string;
-}
+export function buildFeaturesPrompt(ctx: ContextPackage): string {
+  const contextBlock = formatContextForPrompt(ctx);
 
-export function buildFeaturesPrompt(prdPath: string, deferredItems: DeferredItem[]): string {
-  const prdContent = fs.readFileSync(prdPath, 'utf-8');
-
-  const deferredSection = deferredItems.length > 0
-    ? `\n## 기획 리뷰에서 보류된 항목 (다음 버전 후보)\n${deferredItems.map(i =>
-        `- [${i.id}] ${i.title}${i.memo ? `: ${i.memo}` : ''}`
+  const deferredSection = ctx.decisions?.length
+    ? `\n## 기획 리뷰에서 보류된 항목 (다음 버전 후보)\n${ctx.decisions.map(d =>
+        `- [${d.date}] ${d.memo}${d.reason ? `: ${d.reason}` : ''}`
       ).join('\n')}\n위 항목들을 다음 버전 기능으로 발전시킬 수 있는지 각 관점에서 평가하고, 가능하면 제안에 포함하세요.\n`
     : '';
 
   return `당신은 시니어 프로덕트 매니저입니다.
-아래 PRD를 분석하여 다음 버전 기능을 4개 관점에서 제안하세요.
+아래 문서들을 분석하여 다음 버전 기능을 4개 관점에서 제안하세요.
 
 ## 분석 관점
 
@@ -53,10 +47,12 @@ ${deferredSection}
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "green" (build) | "orange" (defer) | "red" (skip)
 - 각 관점당 최소 2개, 최대 5개 항목
+- <context:ai-guide>의 우선순위 기준/금지사항을 반드시 반영하세요
+- <context:glossary>가 있다면 용어를 일관되게 사용하세요
 - conclusion은 반드시 "build", "skip", "defer" 중 하나로 시작하고 그 이유를 작성
 - JSON만 출력, 다른 텍스트 없음
 
-## PRD 문서
+## 문서 컨텍스트
 
-${prdContent}`;
+${contextBlock}`;
 }

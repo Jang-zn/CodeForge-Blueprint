@@ -2,8 +2,6 @@ import { Hono } from 'hono';
 import crypto from 'crypto';
 import {
   getWorkspaceMeta,
-  getIssues,
-  getRefItems,
   createJob,
   updateJob,
   appendJobLog,
@@ -22,6 +20,7 @@ import { buildReviewPlanPrompt } from '../../claude/prompts/review-plan.js';
 import { buildBackendPrompt } from '../../claude/prompts/design-backend.js';
 import { buildFrontendPrompt } from '../../claude/prompts/design-frontend.js';
 import { buildFeaturesPrompt } from '../../claude/prompts/plan-features.js';
+import { buildContextPackage } from '../../claude/context-package.js';
 import { requireRequestContext } from '../context.js';
 import { validateAnalyzeResults } from '../analysis-schema.js';
 
@@ -106,14 +105,11 @@ analyzeRoute.post('/', async (c) => {
   const tab: Tab = body.tab ?? 'review';
 
   const meta = getWorkspaceMeta(db);
-  if (!meta?.prd_path) {
-    return c.json({ error: 'PRD 경로가 설정되지 않았습니다.', recovery: '먼저 PRD를 생성하거나 불러오세요.' }, 400);
-  }
-  const prdPath = meta.prd_path;
+  const ctxPackage = buildContextPackage(db, workspace.docsPath, tab as any, meta?.prd_path ?? null);
 
   const jobId = crypto.randomUUID();
   const providerModel = getProviderModel(db);
-  const sourceVersion = tab === 'review' ? 'prd' : getIssues(db, 'review').length > 0 ? 'review-ready' : 'draft';
+  const sourceVersion = tab === 'review' ? 'prd' : ctxPackage.prd ? 'review-ready' : 'draft';
 
   markSupersededJobs(db, { session_id: sessionId, type: `analyze-${tab}`, tab, run_key: tab }, jobId);
   createJob(db, jobId, `analyze-${tab}`, {
@@ -128,19 +124,20 @@ analyzeRoute.post('/', async (c) => {
 
   (async () => {
     try {
+      if (!ctxPackage.prd && !ctxPackage.projectOverview) {
+        updateJob(db, jobId, 'failed', 'PRD 또는 프로젝트 개요 문서가 없습니다. 먼저 문서를 작성하세요.');
+        return;
+      }
+
       let prompt: string;
       if (tab === 'review') {
-        prompt = buildReviewPlanPrompt(prdPath);
+        prompt = buildReviewPlanPrompt(ctxPackage);
       } else if (tab === 'backend') {
-        prompt = buildBackendPrompt(prdPath);
+        prompt = buildBackendPrompt(ctxPackage);
       } else if (tab === 'frontend') {
-        const refItems = getRefItems(db).map(item => item.content);
-        prompt = buildFrontendPrompt(prdPath, refItems);
+        prompt = buildFrontendPrompt(ctxPackage);
       } else if (tab === 'features') {
-        const deferredIssues = getIssues(db, 'features')
-          .filter(issue => issue.tag === 'deferred')
-          .map(issue => ({ id: issue.id, title: issue.title, memo: issue.memo }));
-        prompt = buildFeaturesPrompt(prdPath, deferredIssues);
+        prompt = buildFeaturesPrompt(ctxPackage);
       } else {
         updateJob(db, jobId, 'failed', `알 수 없는 탭: ${tab}`);
         return;
