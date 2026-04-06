@@ -77,24 +77,45 @@ export function extractCodexLogText(chunk: string): string {
 function formatClaudeStreamEvent(event: Record<string, unknown>): string | null {
   const type = String(event.type ?? '');
 
-  if (type === 'assistant') {
-    const msg = event.message as { content?: Array<{ type: string; text?: string; name?: string; input?: unknown }> } | undefined;
-    if (!msg?.content) return null;
-    const parts: string[] = [];
-    for (const block of msg.content) {
-      if (block.type === 'text' && block.text) {
-        parts.push(block.text);
-      } else if (block.type === 'tool_use') {
-        const raw = typeof block.input === 'string' ? block.input : JSON.stringify(block.input ?? '');
-        const input = raw.length > INPUT_TRUNCATE ? raw.slice(0, INPUT_TRUNCATE) + '…' : raw;
-        parts.push(`[도구] ${block.name}: ${input}\n`);
+  // stream_event — --include-partial-messages 사용 시 실시간 스트리밍 이벤트
+  if (type === 'stream_event') {
+    const inner = event.event as Record<string, unknown> | undefined;
+    if (!inner) return null;
+    const innerType = String(inner.type ?? '');
+
+    // content_block_delta — 실시간 텍스트 청크
+    if (innerType === 'content_block_delta') {
+      const delta = inner.delta as Record<string, unknown> | undefined;
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+        return delta.text;
       }
+      // tool_use input delta
+      if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        return null; // tool input delta는 무시 (완성 후 assistant 이벤트에서 표시)
+      }
+      return null;
     }
-    return parts.join('') || null;
+
+    // content_block_start — tool_use 블록 시작 시 도구명 표시
+    if (innerType === 'content_block_start') {
+      const block = inner.content_block as Record<string, unknown> | undefined;
+      if (block?.type === 'tool_use' && typeof block.name === 'string') {
+        return `\n[도구] ${block.name}\n`;
+      }
+      return null;
+    }
+
+    // message_start, content_block_stop, message_delta, message_stop — 무시
+    return null;
+  }
+
+  // assistant — 완료된 전체 메시지 (partial messages가 이미 표시했으므로 무시)
+  if (type === 'assistant') {
+    return null;
   }
 
   if (type === 'result') {
-    return '[완료] 작업 완료\n';
+    return '\n[완료] 작업 완료\n';
   }
 
   // system, rate_limit_event 등은 무시

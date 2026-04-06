@@ -109,9 +109,19 @@ describe('chunkToLogText', () => {
     assert.equal(chunkToLogText(chunk, 'codex'), '[시작] 작업 시작\n');
   });
 
-  it('claude provider → stream-json JSONL 파싱', () => {
-    const chunk = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '분석 중입니다.' }] } });
+  it('claude provider → stream_event content_block_delta 텍스트 추출', () => {
+    const chunk = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '분석 중입니다.' } } });
     assert.equal(chunkToLogText(chunk, 'claude'), '분석 중입니다.');
+  });
+
+  it('claude provider → stream_event content_block_start tool_use', () => {
+    const chunk = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use', name: 'Read' } } });
+    assert.equal(chunkToLogText(chunk, 'claude'), '\n[도구] Read\n');
+  });
+
+  it('claude provider → assistant 완전 메시지는 무시 (partial에서 이미 표시)', () => {
+    const chunk = JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: '결과' }] } });
+    assert.equal(chunkToLogText(chunk, 'claude'), '');
   });
 
   it('claude provider → 파싱 불가 raw 텍스트는 빈 문자열', () => {

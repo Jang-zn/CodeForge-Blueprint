@@ -67,16 +67,23 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
     }
 
     return new Promise<SpawnResult>((resolve) => {
-      const args = ['-p', '--output-format', 'stream-json', '--verbose', '--model', model, '--no-session-persistence'];
+      const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
       const child = spawn(claudePath, args, { env: process.env });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];
       let stderr = '';
+      let lineBuf = '';  // JSONL 라인 버퍼 — 줄 단위로 분리해서 onChunk 전달
 
       child.stdout.on('data', (chunk: Buffer) => {
         stdoutChunks.push(chunk);
-        options.onChunk?.(chunk.toString());
+        if (options.onChunk) {
+          lineBuf += chunk.toString();
+          const lines = lineBuf.split('\n');
+          lineBuf = lines.pop() ?? '';  // 마지막 불완전 라인은 버퍼에 유지
+          const completeLines = lines.filter(l => l.trim()).map(l => l + '\n').join('');
+          if (completeLines) options.onChunk(completeLines);
+        }
       });
       child.stderr.on('data', (chunk: Buffer) => {
         stderr += chunk.toString();
