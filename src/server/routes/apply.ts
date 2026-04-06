@@ -97,7 +97,7 @@ applyRoute.post('/', async (c) => {
           reason: issueState.reason?.trim() || null,
         });
 
-        updateIssueStatus(db, issueState.id, issueState.status, issueState.memo?.trim() || '', {
+        updateIssueStatus(db, issueState.id, issueState.status, '', {
           updated_by: 'user',
           applied_at: issueState.status === 'resolved' ? new Date().toISOString() : null,
         });
