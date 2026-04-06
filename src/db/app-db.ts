@@ -85,6 +85,31 @@ export function initAppDb(): void {
   migrateRecentsJson(db);
 
   _appDb = db;
+  cleanupStaleData();
+}
+
+const SESSION_TTL_DAYS = 7;
+
+function cleanupStaleData(): void {
+  const db = _appDb;
+  if (!db) return;
+
+  // TTL: 7일 이상 비활성 세션 삭제
+  db.prepare(`DELETE FROM sessions WHERE last_active_at < datetime('now', '-${SESSION_TTL_DAYS} days')`).run();
+
+  // stale: workspace 폴더가 존재하지 않는 세션 삭제
+  const sessions: SessionRow[] = db.prepare('SELECT * FROM sessions').all();
+  const deleteStmt = db.prepare('DELETE FROM sessions WHERE id = ?');
+  for (const s of sessions) {
+    if (!fs.existsSync(s.workspace_root)) deleteStmt.run(s.id);
+  }
+
+  // recents: 존재하지 않는 경로 삭제
+  const recents: { workspace_root: string }[] = db.prepare('SELECT workspace_root FROM recents').all();
+  const deleteRecent = db.prepare('DELETE FROM recents WHERE workspace_root = ?');
+  for (const r of recents) {
+    if (!fs.existsSync(r.workspace_root)) deleteRecent.run(r.workspace_root);
+  }
 }
 
 export function getAppDb(): any {

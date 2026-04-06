@@ -7,7 +7,7 @@ import path from 'path';
 // workspace 모듈은 모듈 수준 싱글톤(_workspace)을 가지므로
 // 각 테스트에서 직접 import해 사용한다.
 import { expandHome, openWorkspace, hasWorkspace, getWorkspaceOrNull, getRecents } from '../src/workspace.js';
-import { initAppDb, closeAppDb } from '../src/db/app-db.js';
+import { initAppDb, closeAppDb, getAppDb } from '../src/db/app-db.js';
 
 const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-home-'));
 process.env.CODEFORGE_BLUEPRINT_HOME = TEST_HOME;
@@ -162,5 +162,53 @@ describe('getRecents', () => {
     const count = recents.filter(r => r === path.resolve(tmpDir)).length;
     assert.equal(count, 1);
     assert.equal(recents[0], path.resolve(tmpDir));
+  });
+});
+
+// ─── startup cleanup ──────────────────────────────────────────────────────────
+
+describe('startup cleanup', () => {
+  test('삭제된 workspace의 session이 재시작 시 정리됨', () => {
+    const tmpDir = makeTempDir();
+    const ws = openWorkspace(tmpDir);
+    assert.equal(hasWorkspace(ws.sessionId), true);
+
+    // workspace 폴더 삭제
+    cleanDir(tmpDir);
+
+    // initAppDb 재호출로 cleanup 트리거
+    closeAppDb();
+    initAppDb();
+
+    assert.equal(hasWorkspace(ws.sessionId), false);
+  });
+
+  test('삭제된 경로가 recents에서도 정리됨', () => {
+    const tmpDir = makeTempDir();
+    openWorkspace(tmpDir);
+    assert.ok(getRecents().includes(path.resolve(tmpDir)));
+
+    cleanDir(tmpDir);
+
+    closeAppDb();
+    initAppDb();
+
+    assert.ok(!getRecents().includes(path.resolve(tmpDir)));
+  });
+
+  test('7일 초과 비활성 session이 정리됨', () => {
+    const tmpDir = makeTempDir();
+    const ws = openWorkspace(tmpDir);
+
+    // last_active_at을 10일 전으로 강제 변경
+    getAppDb().prepare(
+      `UPDATE sessions SET last_active_at = datetime('now', '-10 days') WHERE id = ?`
+    ).run(ws.sessionId);
+
+    closeAppDb();
+    initAppDb();
+
+    assert.equal(hasWorkspace(ws.sessionId), false);
+    cleanDir(tmpDir);
   });
 });
