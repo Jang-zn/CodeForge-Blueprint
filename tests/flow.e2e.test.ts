@@ -131,6 +131,6 @@ describe('end-to-end flow', () => {
     });
     const generated = await generateRes.json();
     assert.equal((await waitForJob(sessionId, generated.jobId))?.status, 'completed');
-    assert.ok(fs.existsSync(path.join(tmpDir, 'docs', generated.filename)));
+    assert.ok(fs.existsSync(path.join(tmpDir, 'docs', generated.folderName, 'index.md')));
   });
 });
