@@ -28,9 +28,17 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
       };
     }
 
+    // 모델명은 args에 직접 들어가므로 shell:true 환경에서 인젝션 방지
+    const MODEL_PATTERN = /^[a-zA-Z0-9._/-]+$/;
+    if (!MODEL_PATTERN.test(model)) {
+      resolveChild(null);
+      return { success: false, result: '', error: `잘못된 모델 이름: ${model}` };
+    }
+
     return new Promise<SpawnResult>((resolve) => {
+      const useShell = needsShell(codexPath);
       // Windows shell 환경에서는 positional arg 이스케이프 이슈 회피를 위해 항상 stdin 파이프 사용
-      const usePipe = prompt.length > LARGE_PROMPT_THRESHOLD || needsShell(codexPath);
+      const usePipe = prompt.length > LARGE_PROMPT_THRESHOLD || useShell;
 
       // 긴 프롬프트는 stdin 파이프, 짧은 프롬프트는 positional 인자
       // 100KB 초과 프롬프트는 OS arg 한계 회피를 위해 stdin 파이프 사용
@@ -38,7 +46,8 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
         ? ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, '-']
         : ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, prompt];
 
-      const child = spawn(codexPath, args, { env: process.env, shell: needsShell(codexPath) });
+      const cmd = useShell ? `"${codexPath}"` : codexPath;
+      const child = spawn(cmd, args, { env: process.env, shell: useShell });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];

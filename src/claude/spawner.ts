@@ -66,9 +66,18 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
       };
     }
 
+    // 모델명은 args에 직접 들어가므로 shell:true 환경에서 인젝션 방지
+    const MODEL_PATTERN = /^[a-zA-Z0-9._/-]+$/;
+    if (!MODEL_PATTERN.test(model)) {
+      resolveChild(null);
+      return { success: false, result: '', error: `잘못된 모델 이름: ${model}` };
+    }
+
     return new Promise<SpawnResult>((resolve) => {
       const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
-      const child = spawn(claudePath, args, { env: process.env, shell: needsShell(claudePath) });
+      const useShell = needsShell(claudePath);
+      const cmd = useShell ? `"${claudePath}"` : claudePath;
+      const child = spawn(cmd, args, { env: process.env, shell: useShell });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];

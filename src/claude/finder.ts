@@ -60,9 +60,11 @@ export async function checkCodex(): Promise<CodexStatus> {
 async function checkBinary(binPath: string | null): Promise<ClaudeStatus> {
   if (!binPath) return { available: false, path: null };
 
+  const useShell = needsShell(binPath);
+  const cmd = useShell ? `"${binPath}"` : binPath;
   try {
     const version = await new Promise<string>((resolve, reject) => {
-      execFile(binPath, ['--version'], { timeout: 5000 }, (err, stdout) => {
+      execFile(cmd, ['--version'], { timeout: 5000, shell: useShell }, (err, stdout) => {
         if (err) return reject(err);
         resolve(stdout.trim());
       });
