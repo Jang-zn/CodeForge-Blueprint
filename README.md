@@ -1,6 +1,6 @@
 # CodeForge Blueprint
 
-아이디어를 구조화된 PRD, 백엔드/프론트엔드 아키텍처, 다음 버전 기능 제안서로 만들어주는 로컬 브라우저 대시보드. AI CLI를 백엔드로 사용합니다.
+아이디어를 구조화된 PRD, 백엔드/프론트엔드 아키텍처, 다음 버전 기능 제안서로 만들어주는 AI 기획 도구. **데스크톱 앱(Electron)** 또는 **브라우저(CLI)** 두 가지 방식으로 실행할 수 있습니다.
 
 ## 요구사항
 
@@ -12,7 +12,20 @@
 | [Claude Code CLI](https://docs.anthropic.com/en/claude-code) | `npm install -g @anthropic-ai/claude-code` |
 | [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` |
 
-## 사용법
+## 실행 방법
+
+### 방법 1: 데스크톱 앱 (Electron)
+
+```bash
+git clone https://github.com/your-org/codeforge-blueprint
+cd codeforge-blueprint
+npm install       # better-sqlite3 네이티브 모듈 자동 리빌드 포함
+npm run electron:dev
+```
+
+네이티브 윈도우로 앱이 열립니다. 브라우저 불필요, 오프라인 동작.
+
+### 방법 2: CLI + 브라우저
 
 ```bash
 # 인자 없이 실행 — 브라우저에서 폴더 선택
@@ -25,7 +38,21 @@ npx codeforge-blueprint ~/projects/my-app
 npx codeforge-blueprint --port 4000
 ```
 
-대시보드가 자동으로 브라우저에서 열립니다. 폴더를 지정하지 않으면 VS Code처럼 폴더 선택 화면이 표시되며, 최근 항목을 클릭하거나 경로를 직접 입력해 워크스페이스를 열 수 있습니다. 생성된 파일은 모두 `{workspace}/docs/` 에 저장됩니다.
+대시보드가 자동으로 브라우저에서 열립니다.
+
+---
+
+생성된 파일은 모두 `{workspace}/docs/` 에 저장됩니다.
+
+## 앱 데이터 경로
+
+| 실행 방식 | 앱 데이터(sessions, recents) |
+|----------|------------------------------|
+| 데스크톱 앱 (macOS) | `~/Library/Application Support/CodeForge Blueprint/` |
+| 데스크톱 앱 (Windows) | `%APPDATA%\CodeForge Blueprint\` |
+| CLI 브라우저 | `~/.codeforge-blueprint/` |
+
+기존 CLI 모드로 사용 중이었다면 데스크톱 앱 최초 실행 시 `app.db`를 자동으로 새 경로로 복사합니다.
 
 ## 파이프라인
 
@@ -70,11 +97,9 @@ docs/backend-v1.0.0/
 └── 07-deferred.md        ← 다음 Phase 이관
 ```
 
-각 파일은 독립적으로 읽을 수 있으며, `index.md`에서 모든 섹션으로의 상대 링크 목차를 제공합니다.
-
 ## 모델 선택
 
-헤더 드롭다운에서 AI 백엔드를 언제든 전환할 수 있습니다. 선택 사항은 서버 재시작 후에도 유지됩니다.
+헤더 드롭다운에서 AI 백엔드를 언제든 전환할 수 있습니다. 선택 사항은 재시작 후에도 유지됩니다.
 
 **Claude 모델** (Claude Code CLI 필요):
 - Claude Sonnet 4.6 *(기본값)*
@@ -96,12 +121,8 @@ docs/backend-v1.0.0/
 │   ├── review-v1.1.0/          ← 기획 리뷰 반영 (폴더)
 │   │   ├── index.md
 │   │   ├── 01-service-overview.md
-│   │   ├── 02-target-users.md
 │   │   └── ...
 │   ├── backend-v1.0.0/         ← BE 설계 (폴더)
-│   │   ├── index.md
-│   │   ├── 01-api-design.md
-│   │   └── ...
 │   ├── frontend-v1.0.0/        ← FE 설계 (폴더)
 │   └── features-v1.0.0/        ← 다음버전 (폴더)
 └── ...
@@ -114,29 +135,56 @@ git clone https://github.com/your-org/codeforge-blueprint
 cd codeforge-blueprint
 npm install
 
-# dev 모드 실행 (빌드 불필요)
+# 데스크톱 앱 개발 모드
+npm run electron:dev
+
+# 브라우저 CLI 개발 모드 (빌드 불필요)
 npm run dev -- ~/projects/my-app
 
-# 빌드
+# 빌드 (tsc + 에셋 복사)
 npm run build
+
+# 배포용 패키지 빌드 (DMG / NSIS)
+npm run electron:build
 
 # 테스트
 npm test
 ```
 
+### 빌드 스크립트
+
+| 명령어 | 설명 |
+|--------|------|
+| `npm run dev` | CLI + 브라우저 모드 개발 실행 |
+| `npm run electron:dev` | Electron 데스크톱 앱 개발 실행 |
+| `npm run build` | TypeScript 컴파일 + 에셋 복사 |
+| `npm run electron:build` | 배포 패키지 생성 (`release/` 디렉토리) |
+| `npm test` | 단위 테스트 실행 |
+
 ## 아키텍처
 
 ```
-로컬 서버 (Hono + @hono/node-server)
-├── 정적 파일 서빙 (대시보드)
-├── REST API (워크스페이스, 이슈 CRUD, 잡 폴링)
-├── Provider Spawner
-│   ├── Claude CLI  (claude -p --output-format json)
-│   └── Codex CLI   (codex exec --json --full-auto --ephemeral)
-└── SQLite (better-sqlite3)
-        ↕ REST API                    ↕ child_process.spawn
-  브라우저 대시보드               AI CLI (Claude / Codex)
-  (리뷰 / 상태 관리)              (분석 및 문서 생성)
+┌─────────────────────────────────────────────────────┐
+│  실행 모드                                           │
+│  ├── Electron (데스크톱)                             │
+│  │   └── main.ts → BrowserWindow → localhost:<port>  │
+│  └── CLI (브라우저)                                  │
+│      └── cli.ts → open() → 기본 브라우저             │
+└───────────────────┬─────────────────────────────────┘
+                    │
+        Hono 서버 (@hono/node-server)
+        ├── 정적 파일 서빙 (대시보드 SPA)
+        ├── REST API /api/*
+        │   ├── 워크스페이스 (세션, recents, 폴더 피커)
+        │   ├── 이슈 CRUD / 잡 폴링
+        │   ├── 문서 생성 / 버전 관리
+        │   └── 결정 타임라인 / 용어집
+        ├── Provider Spawner
+        │   ├── Claude CLI  (claude -p --output-format stream-json)
+        │   └── Codex CLI   (codex exec --json --full-auto --ephemeral)
+        └── SQLite (better-sqlite3)
+            ├── app.db    ← 글로벌 (세션, recents)
+            └── data.db   ← 워크스페이스별 (이슈, 문서, 결정 로그)
 ```
 
 **런타임 의존성 (4개):** `hono`, `@hono/node-server`, `better-sqlite3`, `open`
