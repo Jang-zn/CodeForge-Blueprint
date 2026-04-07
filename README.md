@@ -6,14 +6,21 @@
 
 ### 방법 1: 데스크톱 앱 (권장)
 
-[Releases](https://github.com/your-org/codeforge-blueprint/releases) 페이지에서 OS에 맞는 설치 파일을 다운로드합니다.
+```bash
+git clone https://github.com/your-org/codeforge-blueprint
+cd codeforge-blueprint
+npm install
 
-| OS | 파일 | 비고 |
-|----|------|------|
-| macOS | `CodeForge Blueprint-x.x.x-universal.dmg` | Apple Silicon + Intel 유니버설 |
-| Windows | `CodeForge Blueprint Setup x.x.x.exe` | NSIS 설치 마법사 |
+# macOS
+npm run electron:build -- --mac
+# → release/CodeForge Blueprint-x.x.x-universal.dmg
 
-DMG를 열어 `/Applications`에 드래그하거나, Windows에서는 설치 마법사를 실행하면 됩니다.
+# Windows
+npm run electron:build -- --win
+# → release/CodeForge Blueprint Setup x.x.x.exe
+```
+
+생성된 DMG를 열어 `/Applications`에 드래그하거나, Windows에서는 설치 마법사를 실행합니다.
 
 ### 방법 2: CLI + 브라우저
 
