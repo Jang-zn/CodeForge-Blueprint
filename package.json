@@ -2,6 +2,7 @@
   "name": "codeforge-blueprint",
   "version": "0.1.0",
   "description": "Transform your idea into a structured PRD with AI-powered review pipeline",
+  "author": "CodeForge",
   "type": "module",
   "bin": {
     "codeforge-blueprint": "./dist/cli.js"
@@ -17,26 +18,24 @@
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
     "electron:dev": "npm run build && electron dist/electron/main.js",
-    "electron:build": "npm run build && electron-builder",
-    "postinstall": "electron-builder install-app-deps"
+    "electron:build": "npm run build && electron-builder && npm rebuild better-sqlite3"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@hono/node-server": "^1",
-    "better-sqlite3": "^11",
+    "better-sqlite3": "^12.8.0",
+    "fix-path": "^5.0.0",
     "hono": "^4",
     "open": "^10"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.3",
-    "@types/better-sqlite3": "^7",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "diff": "^8.0.4",
     "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
-    "fix-path": "^5.0.0",
     "tsx": "^4",
     "typescript": "^5"
   }

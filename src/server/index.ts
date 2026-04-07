@@ -70,8 +70,12 @@ export async function startServer(port: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const tryListen = (p: number) => {
       const server = serve({ fetch: app.fetch, port: p }, () => {
+        // port 0이면 OS가 할당한 실제 포트를 가져옴
+        const addr = server.address();
+        const actualPort = (typeof addr === 'object' && addr !== null) ? addr.port : p;
+
         console.log(`\n🚀 CodeForge Blueprint`);
-        console.log(`🌐 http://localhost:${p}`);
+        console.log(`🌐 http://localhost:${actualPort}`);
         if (claudeStatus.available) {
           console.log(`🤖 Claude CLI: ✓ ${claudeStatus.version ?? claudeStatus.path}`);
         } else {
@@ -83,7 +87,7 @@ export async function startServer(port: number): Promise<number> {
           console.log(`🤖 Codex CLI:  ✗ 미설치 → npm install -g @openai/codex`);
         }
         console.log('');
-        resolve(p);
+        resolve(actualPort);
       });
 
       server.on('error', (err: NodeJS.ErrnoException) => {
