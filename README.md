@@ -31,12 +31,14 @@ npx codeforge-blueprint --port 4000
 ## 요구사항
 
 - Node.js 18+
-- AI CLI 중 하나 이상 설치:
+- AI CLI 중 하나 이상 설치 + **해당 서비스 구독 필요**:
 
-| CLI | 설치 |
-|-----|------|
-| [Claude Code CLI](https://docs.anthropic.com/en/claude-code) | `npm install -g @anthropic-ai/claude-code` |
-| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` |
+| CLI | 설치 | 구독 |
+|-----|------|------|
+| [Claude Code CLI](https://docs.anthropic.com/en/claude-code) | `npm install -g @anthropic-ai/claude-code` | [Anthropic Max 플랜](https://www.anthropic.com/pricing) 또는 API 키 |
+| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` | [OpenAI Pro/Plus 플랜](https://openai.com/pricing) 또는 API 키 |
+
+> **참고:** CLI 설치만으로는 동작하지 않습니다. 각 CLI에서 인증(`claude login` / `codex auth`)을 완료해야 AI 기능을 사용할 수 있습니다.
 
 데스크톱 앱에서는 시작 시 CLI 설치 여부를 자동 감지합니다 (macOS Finder/Dock 실행 시에도 PATH 자동 해결).
 
