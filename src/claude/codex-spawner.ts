@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { findCodexBinary } from './finder.js';
+import { findCodexBinary, needsShell } from './finder.js';
 import type { SpawnOptions, SpawnResult, SpawnHandle } from './spawner.js';
 import { pickText } from './log-extractor.js';
 
@@ -29,7 +29,8 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
     }
 
     return new Promise<SpawnResult>((resolve) => {
-      const usePipe = prompt.length > LARGE_PROMPT_THRESHOLD;
+      // Windows shell 환경에서는 positional arg 이스케이프 이슈 회피를 위해 항상 stdin 파이프 사용
+      const usePipe = prompt.length > LARGE_PROMPT_THRESHOLD || needsShell(codexPath);
 
       // 긴 프롬프트는 stdin 파이프, 짧은 프롬프트는 positional 인자
       // 100KB 초과 프롬프트는 OS arg 한계 회피를 위해 stdin 파이프 사용
@@ -37,7 +38,7 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
         ? ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, '-']
         : ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, prompt];
 
-      const child = spawn(codexPath, args, { env: process.env });
+      const child = spawn(codexPath, args, { env: process.env, shell: needsShell(codexPath) });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];

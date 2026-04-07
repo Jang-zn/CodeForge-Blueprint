@@ -40,6 +40,15 @@ async function findBinary(name: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * Windows에서 .cmd/.bat 파일은 spawn()에 shell: true 가 필요 (CVE-2024-27980 패치 이후).
+ */
+export function needsShell(binPath: string): boolean {
+  if (process.platform !== 'win32') return false;
+  const lower = binPath.toLowerCase();
+  return lower.endsWith('.cmd') || lower.endsWith('.bat');
+}
+
 export async function checkClaude(): Promise<ClaudeStatus> {
   return checkBinary(await findClaudeBinary());
 }

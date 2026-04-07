@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { findClaudeBinary } from './finder.js';
+import { findClaudeBinary, needsShell } from './finder.js';
 
 /** stream-json stdout JSONL에서 최종 결과 텍스트를 추출. */
 function extractFinalResult(stdout: string): string {
@@ -68,7 +68,7 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
 
     return new Promise<SpawnResult>((resolve) => {
       const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
-      const child = spawn(claudePath, args, { env: process.env });
+      const child = spawn(claudePath, args, { env: process.env, shell: needsShell(claudePath) });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];
