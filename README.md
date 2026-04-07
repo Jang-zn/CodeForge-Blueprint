@@ -1,29 +1,19 @@
 # CodeForge Blueprint
 
-아이디어를 구조화된 PRD, 백엔드/프론트엔드 아키텍처, 다음 버전 기능 제안서로 만들어주는 AI 기획 도구. **데스크톱 앱(Electron)** 또는 **브라우저(CLI)** 두 가지 방식으로 실행할 수 있습니다.
+아이디어를 구조화된 PRD, 백엔드/프론트엔드 아키텍처, 다음 버전 기능 제안서로 만들어주는 AI 기획 도구. **데스크톱 앱 설치** 또는 **CLI 실행** 두 가지 방식을 지원합니다.
 
-## 요구사항
+## 설치 & 실행
 
-- Node.js 18+
-- AI CLI 중 하나 이상 설치:
+### 방법 1: 데스크톱 앱 (권장)
 
-| CLI | 설치 |
-|-----|------|
-| [Claude Code CLI](https://docs.anthropic.com/en/claude-code) | `npm install -g @anthropic-ai/claude-code` |
-| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` |
+[Releases](https://github.com/your-org/codeforge-blueprint/releases) 페이지에서 OS에 맞는 설치 파일을 다운로드합니다.
 
-## 실행 방법
+| OS | 파일 | 비고 |
+|----|------|------|
+| macOS | `CodeForge Blueprint-x.x.x-universal.dmg` | Apple Silicon + Intel 유니버설 |
+| Windows | `CodeForge Blueprint Setup x.x.x.exe` | NSIS 설치 마법사 |
 
-### 방법 1: 데스크톱 앱 (Electron)
-
-```bash
-git clone https://github.com/your-org/codeforge-blueprint
-cd codeforge-blueprint
-npm install       # better-sqlite3 네이티브 모듈 자동 리빌드 포함
-npm run electron:dev
-```
-
-네이티브 윈도우로 앱이 열립니다. 브라우저 불필요, 오프라인 동작.
+DMG를 열어 `/Applications`에 드래그하거나, Windows에서는 설치 마법사를 실행하면 됩니다.
 
 ### 방법 2: CLI + 브라우저
 
@@ -38,11 +28,19 @@ npx codeforge-blueprint ~/projects/my-app
 npx codeforge-blueprint --port 4000
 ```
 
-대시보드가 자동으로 브라우저에서 열립니다.
+## 요구사항
+
+- Node.js 18+
+- AI CLI 중 하나 이상 설치:
+
+| CLI | 설치 |
+|-----|------|
+| [Claude Code CLI](https://docs.anthropic.com/en/claude-code) | `npm install -g @anthropic-ai/claude-code` |
+| [Codex CLI](https://github.com/openai/codex) | `npm install -g @openai/codex` |
+
+데스크톱 앱에서는 시작 시 CLI 설치 여부를 자동 감지합니다 (macOS Finder/Dock 실행 시에도 PATH 자동 해결).
 
 ---
-
-생성된 파일은 모두 `{workspace}/docs/` 에 저장됩니다.
 
 ## 앱 데이터 경로
 
@@ -134,39 +132,39 @@ docs/backend-v1.0.0/
 git clone https://github.com/your-org/codeforge-blueprint
 cd codeforge-blueprint
 npm install
-
-# 데스크톱 앱 개발 모드
-npm run electron:dev
-
-# 브라우저 CLI 개발 모드 (빌드 불필요)
-npm run dev -- ~/projects/my-app
-
-# 빌드 (tsc + 에셋 복사)
-npm run build
-
-# 배포용 패키지 빌드 (DMG / NSIS)
-npm run electron:build
-
-# 테스트
-npm test
 ```
 
 ### 빌드 스크립트
 
 | 명령어 | 설명 |
 |--------|------|
-| `npm run dev` | CLI + 브라우저 모드 개발 실행 |
+| `npm run dev` | CLI + 브라우저 모드 개발 실행 (tsx, 빌드 불필요) |
 | `npm run electron:dev` | Electron 데스크톱 앱 개발 실행 |
 | `npm run build` | TypeScript 컴파일 + 에셋 복사 |
-| `npm run electron:build` | 배포 패키지 생성 (`release/` 디렉토리) |
-| `npm test` | 단위 테스트 실행 |
+| `npm run electron:build` | 배포 패키지 생성 (`release/` 디렉토리에 DMG/NSIS) |
+| `npm test` | 전체 테스트 실행 (167 tests) |
+
+### 패키징 빌드
+
+```bash
+# macOS DMG (universal: arm64 + x64)
+npm run electron:build -- --mac
+
+# Windows NSIS 설치 파일
+npm run electron:build -- --win
+
+# 양쪽 모두
+npm run electron:build
+```
+
+빌드 결과물은 `release/` 디렉토리에 생성됩니다. `electron:build` 후 `npm rebuild better-sqlite3`가 자동 실행되어 Node.js용 네이티브 모듈이 복원됩니다.
 
 ## 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  실행 모드                                           │
-│  ├── Electron (데스크톱)                             │
+│  ├── Electron (데스크톱 앱)                          │
 │  │   └── main.ts → BrowserWindow → localhost:<port>  │
 │  └── CLI (브라우저)                                  │
 │      └── cli.ts → open() → 기본 브라우저             │
@@ -187,7 +185,7 @@ npm test
             └── data.db   ← 워크스페이스별 (이슈, 문서, 결정 로그)
 ```
 
-**런타임 의존성 (4개):** `hono`, `@hono/node-server`, `better-sqlite3`, `open`
+**런타임 의존성 (5개):** `hono`, `@hono/node-server`, `better-sqlite3`, `fix-path`, `open`
 
 ## 라이선스
 
