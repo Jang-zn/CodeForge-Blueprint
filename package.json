@@ -6,7 +6,7 @@
   "bin": {
     "codeforge-blueprint": "./dist/cli.js"
   },
-  "main": "./dist/cli.js",
+  "main": "./dist/electron/main.js",
   "files": [
     "dist/",
     "skills/"
@@ -15,7 +15,10 @@
     "build": "tsc && node scripts/copy-assets.mjs",
     "test": "node --import tsx/esm --test 'tests/*.test.ts' 'tests/**/*.test.ts'",
     "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "electron:dev": "npm run build && electron dist/electron/main.js",
+    "electron:build": "npm run build && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
   "engines": {
     "node": ">=18"
@@ -27,9 +30,13 @@
     "open": "^10"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.3",
     "@types/better-sqlite3": "^7",
     "@types/node": "^20",
     "diff": "^8.0.4",
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "fix-path": "^5.0.0",
     "tsx": "^4",
     "typescript": "^5"
   }
