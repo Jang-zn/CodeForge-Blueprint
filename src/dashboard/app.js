@@ -183,7 +183,6 @@ function renderWorkflowSummary(workflow) {
     `<div class="workflow-card"><div class="label">마지막 분석</div><div class="value" style="font-size:0.85rem;line-height:1.4;">${analyzeInfo}</div><div class="sub">최신 문서: ${generateInfo}</div></div>`,
   ].join('');
   el.classList.remove('hidden');
-  updateActionButtonStates();
 }
 
 function applyStatusDot(dot, status) {
@@ -566,49 +565,29 @@ function updateCounts() {
 }
 
 // ========== Button State Management ==========
+function setButtonEnabled(id, enabled, disabledTitle) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  if (enabled) {
+    btn.removeAttribute('disabled');
+    btn.title = '';
+  } else {
+    btn.setAttribute('disabled', '');
+    btn.title = disabledTitle;
+  }
+}
+
 function updateActionButtonStates() {
   const issues = collectCurrentTabState();
   const anyMemo = issues.some(i => (i.memo || '').trim() !== '');
 
-  // 반영하기: 메모가 하나도 없으면 비활성화
-  const btnApply = document.getElementById('btn-apply');
-  if (btnApply) {
-    if (!anyMemo) {
-      btnApply.setAttribute('disabled', '');
-      btnApply.title = '변경사항 메모를 작성해주세요';
-    } else {
-      btnApply.removeAttribute('disabled');
-      btnApply.title = '';
-    }
-  }
+  setButtonEnabled('btn-apply',    anyMemo,   '변경사항 메모를 작성해주세요');
+  setButtonEnabled('btn-generate', !anyMemo,  '반영하기를 먼저 눌러 변경사항을 반영하세요');
 
-  // 문서 생성하기: 메모가 있으면 비활성화 (반영하기 먼저)
-  const btnGenerate = document.getElementById('btn-generate');
-  if (btnGenerate) {
-    if (anyMemo) {
-      btnGenerate.setAttribute('disabled', '');
-      btnGenerate.title = '반영하기를 먼저 눌러 변경사항을 반영하세요';
-    } else {
-      btnGenerate.removeAttribute('disabled');
-      btnGenerate.title = '';
-    }
-  }
-
-  // 분석하기: 현재 탭의 최신 문서 버전 == 현재 탭 버전이면 비활성화
-  const btnAnalyze = document.getElementById('btn-analyze');
-  if (btnAnalyze) {
-    const tabVersions = currentWorkflow?.tabVersions || {};
-    const docs = currentWorkflow?.documents || [];
-    const currentVer = tabVersions[activeTab];
-    const latestDoc = docs.find(d => d.tab === activeTab);
-    if (latestDoc && currentVer && latestDoc.version === currentVer) {
-      btnAnalyze.setAttribute('disabled', '');
-      btnAnalyze.title = '변경사항을 검토후 반영하여 새버전을 반영하세요';
-    } else {
-      btnAnalyze.removeAttribute('disabled');
-      btnAnalyze.title = '';
-    }
-  }
+  const tabVersions = currentWorkflow?.tabVersions || {};
+  const latestDoc = (currentWorkflow?.documents || []).find(d => d.tab === activeTab);
+  const upToDate = latestDoc && latestDoc.version === tabVersions[activeTab];
+  setButtonEnabled('btn-analyze', !upToDate, '변경사항을 검토후 반영하여 새버전을 반영하세요');
 }
 
 function refreshUI() {
@@ -958,6 +937,15 @@ function hideJobStream() {
 }
 
 // ========== Job Log Parsing ==========
+const LOG_TAG_STATUS = { '[시작]': '시작', '[완료]': '완료' };
+const LOG_TAG_TOOL   = '[도구]';
+const LOG_PILL_COLORS = {
+  '시작': 'log-pill--start',
+  '완료': 'log-pill--done',
+  '생성 중': 'log-pill--working',
+  '응답 수신': 'log-pill--working',
+};
+
 function parseJobLogEntries(logText) {
   const entries = [];
   for (const line of logText.split('\n')) {
@@ -966,19 +954,23 @@ function parseJobLogEntries(logText) {
 
     if (t === '[생성 중...]') { entries.push({ type: 'status', label: '생성 중', text: '' }); continue; }
     if (t === '[응답 수신]') { entries.push({ type: 'status', label: '응답 수신', text: '' }); continue; }
-    if (t.startsWith('[시작]')) { entries.push({ type: 'status', label: '시작', text: t.slice(4).trim() }); continue; }
-    if (t.startsWith('[완료]')) { entries.push({ type: 'status', label: '완료', text: t.slice(4).trim() }); continue; }
-    if (t.startsWith('[도구]')) { entries.push({ type: 'tool', text: t.slice(4).trim() }); continue; }
+
+    let matched = false;
+    for (const [tag, label] of Object.entries(LOG_TAG_STATUS)) {
+      if (t.startsWith(tag)) {
+        entries.push({ type: 'status', label, text: t.slice(tag.length).trim() });
+        matched = true; break;
+      }
+    }
+    if (matched) continue;
+
+    if (t.startsWith(LOG_TAG_TOOL)) { entries.push({ type: 'tool', text: t.slice(LOG_TAG_TOOL.length).trim() }); continue; }
     if (t.startsWith('[apply]') || t.startsWith('[generate]') || t.startsWith('[analyze]')) {
       entries.push({ type: 'info', text: t }); continue;
     }
 
-    // JSON 감지
     if ((t.startsWith('{') || t.startsWith('[')) && (t.endsWith('}') || t.endsWith(']'))) {
-      try {
-        const data = JSON.parse(t);
-        entries.push({ type: 'json', data }); continue;
-      } catch { /* 파싱 실패 시 텍스트로 처리 */ }
+      try { entries.push({ type: 'json', data: JSON.parse(t) }); continue; } catch { /* treat as text */ }
     }
 
     entries.push({ type: 'text', text: t });
@@ -987,12 +979,6 @@ function parseJobLogEntries(logText) {
 }
 
 function renderJobLogHtml(entries) {
-  const PILL_COLORS = {
-    '시작': 'log-pill--start',
-    '완료': 'log-pill--done',
-    '생성 중': 'log-pill--working',
-    '응답 수신': 'log-pill--working',
-  };
 
   function renderJsonData(data) {
     // 이슈 배열 형태 렌더링
@@ -1012,7 +998,7 @@ function renderJobLogHtml(entries) {
 
   return entries.map(e => {
     if (e.type === 'status') {
-      const cls = PILL_COLORS[e.label] || 'log-pill--info';
+      const cls = LOG_PILL_COLORS[e.label] || 'log-pill--info';
       const text = e.text ? ` <span class="log-status-text">${escapeHtml(e.text)}</span>` : '';
       return `<div class="log-entry log-status"><span class="log-pill ${cls}">${escapeHtml(e.label)}</span>${text}</div>`;
     }
