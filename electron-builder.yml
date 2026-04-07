@@ -1,0 +1,54 @@
+appId: com.codeforge.blueprint
+productName: CodeForge Blueprint
+copyright: Copyright © 2025 CodeForge
+
+# Electron main 진입점
+main: dist/electron/main.js
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - node_modules/**/*
+  - "!node_modules/*/{test,tests,__tests__,*.spec.*,*.test.*}"
+  - "!node_modules/**/{CHANGELOG.md,README.md,readme.md,LICENSE}"
+  - "!**/*.map"
+
+# better-sqlite3 등 네이티브 모듈을 Electron ABI에 맞게 리빌드
+npmRebuild: true
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - universal  # arm64 + x64 동시 지원 (Apple Silicon + Intel)
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  # macOS 공증(notarize) 시 필요한 Hardened Runtime
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+dmg:
+  sign: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  # Windows SmartScreen 경고 최소화 (코드 서명 없을 때도 실행 가능)
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  shortcutName: CodeForge Blueprint
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
