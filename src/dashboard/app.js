@@ -152,7 +152,7 @@ function renderWorkflowSummary(workflow) {
   const docs = workflow.documents || [];
   const latestDoc = docs[0];
   const running = workflow.runningJobs || [];
-  const stageLabelMap = { init: 'Init', prd_ready: 'PRD Ready', review: 'Review', backend: 'Backend', frontend: 'Frontend', features: 'Features' };
+  const stageLabelMap = { init: '초기화', prd_ready: 'PRD 준비', review: '리뷰', backend: '백엔드', frontend: '프론트엔드', features: '다음버전' };
   const dirty = workflow.dirtyCountByTab || {};
   const analyzeAt = workflow.lastAnalyzeAtByTab || {};
   const generateAt = workflow.lastGeneratedDocAtByTab || {};
@@ -176,13 +176,14 @@ function renderWorkflowSummary(workflow) {
   }).filter(Boolean).join(', ') || '없음';
 
   el.innerHTML = [
-    `<div class="workflow-card"><div class="label">Current Stage</div><div class="value">${escapeHtml(stageLabelMap[workflow.stage] || workflow.stage)}</div><div class="sub">Review ${workflow.counts?.review || 0} / BE ${workflow.counts?.backend || 0} / FE ${workflow.counts?.frontend || 0}</div></div>`,
-    `<div class="workflow-card"><div class="label">Running Jobs</div><div class="value">${running.length}</div><div class="sub">${running[0] ? escapeHtml(`${running[0].type}${running[0].tab ? ` (${running[0].tab})` : ''}`) : '현재 실행 중인 작업 없음'}</div></div>`,
-    `<div class="workflow-card"><div class="label">Latest Doc</div><div class="value">${latestDoc ? escapeHtml(`${latestDoc.tab} v${latestDoc.version}`) : '없음'}</div><div class="sub">${latestDoc ? escapeHtml(latestDoc.file_path.split('/').pop()) : '생성된 문서 없음'}</div></div>`,
-    `<div class="workflow-card"><div class="label">Dirty Issues</div><div class="value" style="font-size:0.95rem;">${dirtyBadges}</div><div class="sub">마지막 apply 이후 변경된 이슈</div></div>`,
-    `<div class="workflow-card"><div class="label">Last Analyze</div><div class="value" style="font-size:0.85rem;line-height:1.4;">${analyzeInfo}</div><div class="sub">Last Doc: ${generateInfo}</div></div>`,
+    `<div class="workflow-card"><div class="label">현재 단계</div><div class="value">${escapeHtml(stageLabelMap[workflow.stage] || workflow.stage)}</div><div class="sub">리뷰 ${workflow.counts?.review || 0} / BE ${workflow.counts?.backend || 0} / FE ${workflow.counts?.frontend || 0}</div></div>`,
+    `<div class="workflow-card"><div class="label">실행 중인 작업</div><div class="value">${running.length}</div><div class="sub">${running[0] ? escapeHtml(`${running[0].type}${running[0].tab ? ` (${running[0].tab})` : ''}`) : '현재 실행 중인 작업 없음'}</div></div>`,
+    `<div class="workflow-card"><div class="label">최신 문서</div><div class="value">${latestDoc ? escapeHtml(`${latestDoc.tab} v${latestDoc.version}`) : '없음'}</div><div class="sub">${latestDoc ? escapeHtml(latestDoc.file_path.split('/').pop()) : '생성된 문서 없음'}</div></div>`,
+    `<div class="workflow-card"><div class="label">변경 이슈</div><div class="value" style="font-size:0.95rem;">${dirtyBadges}</div><div class="sub">마지막 반영 이후 변경된 이슈</div></div>`,
+    `<div class="workflow-card"><div class="label">마지막 분석</div><div class="value" style="font-size:0.85rem;line-height:1.4;">${analyzeInfo}</div><div class="sub">최신 문서: ${generateInfo}</div></div>`,
   ].join('');
   el.classList.remove('hidden');
+  updateActionButtonStates();
 }
 
 function applyStatusDot(dot, status) {
@@ -564,10 +565,57 @@ function updateCounts() {
   });
 }
 
+// ========== Button State Management ==========
+function updateActionButtonStates() {
+  const issues = collectCurrentTabState();
+  const anyMemo = issues.some(i => (i.memo || '').trim() !== '');
+
+  // 반영하기: 메모가 하나도 없으면 비활성화
+  const btnApply = document.getElementById('btn-apply');
+  if (btnApply) {
+    if (!anyMemo) {
+      btnApply.setAttribute('disabled', '');
+      btnApply.title = '변경사항 메모를 작성해주세요';
+    } else {
+      btnApply.removeAttribute('disabled');
+      btnApply.title = '';
+    }
+  }
+
+  // 문서 생성하기: 메모가 있으면 비활성화 (반영하기 먼저)
+  const btnGenerate = document.getElementById('btn-generate');
+  if (btnGenerate) {
+    if (anyMemo) {
+      btnGenerate.setAttribute('disabled', '');
+      btnGenerate.title = '반영하기를 먼저 눌러 변경사항을 반영하세요';
+    } else {
+      btnGenerate.removeAttribute('disabled');
+      btnGenerate.title = '';
+    }
+  }
+
+  // 분석하기: 현재 탭의 최신 문서 버전 == 현재 탭 버전이면 비활성화
+  const btnAnalyze = document.getElementById('btn-analyze');
+  if (btnAnalyze) {
+    const tabVersions = currentWorkflow?.tabVersions || {};
+    const docs = currentWorkflow?.documents || [];
+    const currentVer = tabVersions[activeTab];
+    const latestDoc = docs.find(d => d.tab === activeTab);
+    if (latestDoc && currentVer && latestDoc.version === currentVer) {
+      btnAnalyze.setAttribute('disabled', '');
+      btnAnalyze.title = '변경사항을 검토후 반영하여 새버전을 반영하세요';
+    } else {
+      btnAnalyze.removeAttribute('disabled');
+      btnAnalyze.title = '';
+    }
+  }
+}
+
 function refreshUI() {
   updateCounts();
   updateSidebarDots();
   buildStatusSidebar();
+  updateActionButtonStates();
 }
 
 // ========== Issue Loading ==========
@@ -625,10 +673,8 @@ async function loadIssues(tab) {
       contentArea.querySelectorAll('h3[id]').forEach(el => obs.observe(el));
     }
 
-    // Enable action buttons
-    ['btn-analyze', 'btn-apply', 'btn-generate', 'btn-history'].forEach(id => {
-      document.getElementById(id)?.removeAttribute('disabled');
-    });
+    // Enable history button unconditionally; conditional buttons handled by updateActionButtonStates
+    document.getElementById('btn-history')?.removeAttribute('disabled');
 
     refreshUI();
     loadRecommendations(tab);
@@ -911,6 +957,81 @@ function hideJobStream() {
   _jobStreamPrevScreen = null;
 }
 
+// ========== Job Log Parsing ==========
+function parseJobLogEntries(logText) {
+  const entries = [];
+  for (const line of logText.split('\n')) {
+    const t = line.trim();
+    if (!t) continue;
+
+    if (t === '[생성 중...]') { entries.push({ type: 'status', label: '생성 중', text: '' }); continue; }
+    if (t === '[응답 수신]') { entries.push({ type: 'status', label: '응답 수신', text: '' }); continue; }
+    if (t.startsWith('[시작]')) { entries.push({ type: 'status', label: '시작', text: t.slice(4).trim() }); continue; }
+    if (t.startsWith('[완료]')) { entries.push({ type: 'status', label: '완료', text: t.slice(4).trim() }); continue; }
+    if (t.startsWith('[도구]')) { entries.push({ type: 'tool', text: t.slice(4).trim() }); continue; }
+    if (t.startsWith('[apply]') || t.startsWith('[generate]') || t.startsWith('[analyze]')) {
+      entries.push({ type: 'info', text: t }); continue;
+    }
+
+    // JSON 감지
+    if ((t.startsWith('{') || t.startsWith('[')) && (t.endsWith('}') || t.endsWith(']'))) {
+      try {
+        const data = JSON.parse(t);
+        entries.push({ type: 'json', data }); continue;
+      } catch { /* 파싱 실패 시 텍스트로 처리 */ }
+    }
+
+    entries.push({ type: 'text', text: t });
+  }
+  return entries;
+}
+
+function renderJobLogHtml(entries) {
+  const PILL_COLORS = {
+    '시작': 'log-pill--start',
+    '완료': 'log-pill--done',
+    '생성 중': 'log-pill--working',
+    '응답 수신': 'log-pill--working',
+  };
+
+  function renderJsonData(data) {
+    // 이슈 배열 형태 렌더링
+    const arr = Array.isArray(data) ? data : (data.issues || data.items || data.results || null);
+    if (arr && arr.length && typeof arr[0] === 'object') {
+      return arr.map(item => {
+        const id = item.id ? `<span class="log-json-id">${escapeHtml(String(item.id))}</span>` : '';
+        const title = item.title ? `<span class="log-json-title">${escapeHtml(String(item.title))}</span>` : '';
+        const cat = item.category ? `<span class="log-json-tag">${escapeHtml(String(item.category))}</span>` : '';
+        const desc = item.description ? `<div class="log-json-desc">${escapeHtml(String(item.description).slice(0, 120))}${item.description.length > 120 ? '…' : ''}</div>` : '';
+        return `<div class="log-json-item">${cat}${id}${title}${desc}</div>`;
+      }).join('');
+    }
+    // 단순 키-값 or 기타 구조 → 코드 블록
+    return `<pre class="log-json-block">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+  }
+
+  return entries.map(e => {
+    if (e.type === 'status') {
+      const cls = PILL_COLORS[e.label] || 'log-pill--info';
+      const text = e.text ? ` <span class="log-status-text">${escapeHtml(e.text)}</span>` : '';
+      return `<div class="log-entry log-status"><span class="log-pill ${cls}">${escapeHtml(e.label)}</span>${text}</div>`;
+    }
+    if (e.type === 'tool') {
+      const colonIdx = e.text.indexOf(':');
+      const name = colonIdx >= 0 ? e.text.slice(0, colonIdx).trim() : e.text;
+      const input = colonIdx >= 0 ? e.text.slice(colonIdx + 1).trim() : '';
+      return `<div class="log-entry log-tool"><span class="log-tool-icon">⚙</span><span class="log-tool-name">${escapeHtml(name)}</span>${input ? `<span class="log-tool-input">${escapeHtml(input)}</span>` : ''}</div>`;
+    }
+    if (e.type === 'info') {
+      return `<div class="log-entry log-info">${escapeHtml(e.text)}</div>`;
+    }
+    if (e.type === 'json') {
+      return `<div class="log-entry log-json-wrap">${renderJsonData(e.data)}</div>`;
+    }
+    return `<div class="log-entry log-text">${escapeHtml(e.text)}</div>`;
+  }).join('');
+}
+
 function updateJobStream(job) {
   const log = job.log || '';
 
@@ -923,12 +1044,17 @@ function updateJobStream(job) {
     if (m) providerEl.textContent = m[1];
   }
 
-  // 로그 본문 (첫 줄 제외)
+  // 로그 본문 (첫 줄 제외) — 파싱 후 HTML 렌더링
   const outputEl = document.getElementById('job-stream-output');
   if (outputEl) {
     const nl = log.indexOf('\n');
     const logContent = nl >= 0 ? log.slice(nl + 1).trim() : '';
-    outputEl.textContent = logContent || '처리 중입니다...';
+    if (!logContent) {
+      outputEl.innerHTML = '<div class="log-entry log-text">처리 중입니다...</div>';
+    } else {
+      const entries = parseJobLogEntries(logContent);
+      outputEl.innerHTML = entries.length ? renderJobLogHtml(entries) : '<div class="log-entry log-text">처리 중입니다...</div>';
+    }
     outputEl.scrollTop = outputEl.scrollHeight;
   }
 
@@ -1254,9 +1380,7 @@ function renderApp(workspace) {
     document.getElementById('prd-preview').classList.add('hidden');
     document.querySelector('.tab-content')?.classList.remove('hidden');
     document.getElementById('fab-container')?.classList.remove('hidden');
-    ['btn-analyze', 'btn-apply', 'btn-generate', 'btn-history'].forEach(id => {
-      document.getElementById(id)?.removeAttribute('disabled');
-    });
+    document.getElementById('btn-history')?.removeAttribute('disabled');
     loadIssues(activeTab);
   } else {
     document.getElementById('init-screen').classList.remove('hidden');

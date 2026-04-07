@@ -526,8 +526,57 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 
 .job-stream-body { flex: 1; overflow-y: auto; padding: 24px; }
 .job-stream-output {
-  margin: 0; font-family: var(--font-mono, monospace); font-size: 13px;
-  line-height: 1.8; color: var(--text); white-space: pre-wrap; word-break: break-word;
+  margin: 0; font-size: 13px; line-height: 1.8; color: var(--text);
+}
+
+/* Log entry base */
+.log-entry { padding: 3px 0; }
+
+/* Status pills */
+.log-status { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.log-pill {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em; flex-shrink: 0;
+}
+.log-pill--start  { background: rgba(59,130,246,0.18); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+.log-pill--done   { background: rgba(34,197,94,0.18); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+.log-pill--working{ background: rgba(249,115,22,0.18); color: #fdba74; border: 1px solid rgba(249,115,22,0.3); }
+.log-pill--info   { background: rgba(148,163,184,0.15); color: var(--text-muted); border: 1px solid var(--border); }
+.log-status-text  { color: var(--text-muted); font-size: 12px; }
+
+/* Tool calls */
+.log-tool {
+  display: flex; align-items: baseline; gap: 8px; padding: 5px 10px;
+  margin: 4px 0; border-left: 2px solid rgba(139,92,246,0.5);
+  background: rgba(139,92,246,0.06); border-radius: 0 4px 4px 0;
+}
+.log-tool-icon { color: rgba(139,92,246,0.8); font-size: 12px; }
+.log-tool-name { font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 600; color: #c4b5fd; flex-shrink: 0; }
+.log-tool-input { font-family: var(--font-mono, monospace); font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
+
+/* Info lines */
+.log-info { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--text-muted); }
+
+/* Plain text */
+.log-text { font-size: 13px; color: var(--text); line-height: 1.7; word-break: break-word; }
+
+/* JSON structured output */
+.log-json-wrap { margin: 8px 0; }
+.log-json-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  padding: 6px 10px; margin: 3px 0;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-secondary);
+}
+.log-json-id   { font-family: var(--font-mono, monospace); font-size: 11px; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 0 5px; border-radius: 3px; }
+.log-json-tag  { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
+.log-json-title{ font-size: 13px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; }
+.log-json-desc { width: 100%; font-size: 12px; color: var(--text-muted); padding-top: 2px; }
+.log-json-block{
+  margin: 0; font-family: var(--font-mono, monospace); font-size: 11px;
+  color: var(--text-muted); background: var(--bg-secondary);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 14px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;
 }
 .spinner {
   width: 14px; height: 14px;

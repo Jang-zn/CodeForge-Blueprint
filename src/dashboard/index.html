@@ -366,7 +366,7 @@
     </div>
   </div>
   <div class="job-stream-body">
-    <pre id="job-stream-output" class="job-stream-output"></pre>
+    <div id="job-stream-output" class="job-stream-output"></div>
   </div>
 </div>
 
@@ -375,14 +375,14 @@
 
 <!-- 공유 필터바 + 액션바 (모든 탭에서 공용) -->
 <div class="filter-bar" id="filterBar">
-  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">Filter:</span>
-  <button class="filter-btn filter-active" data-filter="all">All <span class="count" id="count-all"></span></button>
-  <button class="filter-btn" data-filter="pending">Pending <span class="count" id="count-pending"></span></button>
-  <button class="filter-btn" data-filter="reviewing">Reviewing <span class="count" id="count-reviewing"></span></button>
-  <button class="filter-btn" data-filter="resolved">Resolved <span class="count" id="count-resolved"></span></button>
-  <button class="filter-btn" data-filter="deferred">Deferred <span class="count" id="count-deferred"></span></button>
-  <button class="filter-btn" data-filter="dismissed">Dismissed <span class="count" id="count-dismissed"></span></button>
-  <button class="filter-btn" data-filter="has-memo">Has Memo <span class="count" id="count-has-memo"></span></button>
+  <span style="font-size:11px;color:var(--text-muted);padding:4px 0;">필터:</span>
+  <button class="filter-btn filter-active" data-filter="all">전체 <span class="count" id="count-all"></span></button>
+  <button class="filter-btn" data-filter="pending">미검토 <span class="count" id="count-pending"></span></button>
+  <button class="filter-btn" data-filter="reviewing">검토중 <span class="count" id="count-reviewing"></span></button>
+  <button class="filter-btn" data-filter="resolved">확정 <span class="count" id="count-resolved"></span></button>
+  <button class="filter-btn" data-filter="deferred">보류 <span class="count" id="count-deferred"></span></button>
+  <button class="filter-btn" data-filter="dismissed">삭제 <span class="count" id="count-dismissed"></span></button>
+  <button class="filter-btn" data-filter="has-memo">메모 <span class="count" id="count-has-memo"></span></button>
 </div>
 
 

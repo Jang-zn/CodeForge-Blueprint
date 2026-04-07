@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { openWorkspace, expandHome, getRecents, closeWorkspaceSession } from '../../workspace.js';
 import { openDb } from '../../db/index.js';
-import { getProviderModel, setProviderModel, upsertWorkspaceMeta, getDocuments, getIssues, getRunningJobs, cancelJob, getWorkspaceMeta, getLastApplyAtByTab, getDirtyCountByTab, getLastCompletedJobAtByPrefix, type ProviderType } from '../../db/repository.js';
+import { getProviderModel, setProviderModel, upsertWorkspaceMeta, getDocuments, getIssues, getRunningJobs, cancelJob, getWorkspaceMeta, getLastApplyAtByTab, getDirtyCountByTab, getLastCompletedJobAtByPrefix, getTabVersion, type ProviderType } from '../../db/repository.js';
 import { getRequestContext, getSessionIdFromRequest } from '../context.js';
 import { getProviderCapabilities } from '../../claude/provider.js';
 import { killProcess } from '../../claude/process-registry.js';
@@ -70,6 +70,7 @@ function buildStageSummary(db: any) {
     dirtyCountByTab,
     lastAnalyzeAtByTab,
     lastGeneratedDocAtByTab,
+    tabVersions: Object.fromEntries(TABS.map(tab => [tab, getTabVersion(db, tab)])),
   };
 }
 
