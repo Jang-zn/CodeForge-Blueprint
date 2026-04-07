@@ -119,6 +119,22 @@ export const MIGRATION_V26_SQL = `
 ALTER TABLE decision_logs ADD COLUMN reason TEXT;
 `;
 
+export const MIGRATION_V27_SQL = `
+ALTER TABLE jobs ADD COLUMN input_tokens INTEGER;
+`;
+
+export const MIGRATION_V28_SQL = `
+ALTER TABLE jobs ADD COLUMN output_tokens INTEGER;
+`;
+
+export const MIGRATION_V29_SQL = `
+ALTER TABLE jobs ADD COLUMN cache_creation_tokens INTEGER;
+`;
+
+export const MIGRATION_V30_SQL = `
+ALTER TABLE jobs ADD COLUMN cache_read_tokens INTEGER;
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
   id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -199,7 +215,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   log TEXT,
   cancel_requested_at TEXT,
   superseded_by TEXT,
-  result_path TEXT
+  result_path TEXT,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  cache_creation_tokens INTEGER,
+  cache_read_tokens INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS documents (

@@ -2,19 +2,41 @@ import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import { findClaudeBinary, needsShell, MODEL_PATTERN } from './finder.js';
 
-/** stream-json stdout JSONL에서 최종 결과 텍스트를 추출. */
-function extractFinalResult(stdout: string): string {
+export interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+}
+
+/** stream-json stdout JSONL에서 최종 결과 텍스트와 토큰 사용량을 추출. */
+function parseClaudeStdout(stdout: string): { text: string; usage: UsageTotals | undefined } {
   let lastAssistantText = '';
+  let usage: UsageTotals | undefined;
+
   for (const line of stdout.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
       const event = JSON.parse(trimmed) as Record<string, unknown>;
-      // result 타입이 최종 결과 (가장 신뢰도 높음)
-      if (event.type === 'result' && typeof event.result === 'string') {
-        return event.result;
+
+      // result 이벤트 — 세션 전체 누적 usage + 최종 텍스트
+      if (event.type === 'result') {
+        if (typeof event.result === 'string') lastAssistantText = event.result;
+        const u = event.usage as Record<string, unknown> | undefined;
+        if (u) {
+          usage = {
+            inputTokens: (u.input_tokens as number) ?? 0,
+            outputTokens: (u.output_tokens as number) ?? 0,
+            cacheCreationTokens: (u.cache_creation_input_tokens as number) ?? 0,
+            cacheReadTokens: (u.cache_read_input_tokens as number) ?? 0,
+          };
+        }
+        // result가 최종이므로 여기서 종료
+        break;
       }
-      // assistant 메시지에서 text content 누적
+
+      // assistant 이벤트 — text content 누적 (fallback)
       if (event.type === 'assistant') {
         const msg = event.message as { content?: Array<{ type: string; text?: string }> } | undefined;
         const texts = (msg?.content ?? [])
@@ -24,12 +46,16 @@ function extractFinalResult(stdout: string): string {
       }
     } catch { /* 불완전 JSON 라인 무시 */ }
   }
-  return lastAssistantText;
+
+  return { text: lastAssistantText, usage };
 }
 
 export interface SpawnOptions {
   model?: string;
+  /** wall-clock 최대 실행 시간(ms). 기본 1800000 (30분). */
   timeout?: number;
+  /** 청크 무응답 idle 타임아웃(ms). 기본 300000 (5분). */
+  idleTimeout?: number;
   cwd?: string;
   onChunk?: (text: string) => void;
 }
@@ -38,6 +64,7 @@ export interface SpawnResult {
   success: boolean;
   result: string;
   error?: string;
+  usage?: UsageTotals;
 }
 
 export interface SpawnHandle {
@@ -83,7 +110,25 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
       let stderr = '';
       let lineBuf = '';  // JSONL 라인 버퍼 — 줄 단위로 분리해서 onChunk 전달
 
+      // idle timeout: 청크 수신 시마다 리셋. hard timeout: 절대 최대.
+      const idleMs = options.idleTimeout ?? 300_000;   // 5분 무응답
+      const hardMs = options.timeout ?? 1_800_000;     // 30분 wall-clock 안전선
+      let idleTimer: ReturnType<typeof setTimeout>;
+      const resetIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          child.kill();
+          resolve({ success: false, result: '', error: 'Timeout: Claude CLI가 5분간 응답이 없습니다.' });
+        }, idleMs);
+      };
+      resetIdle();
+      const hardTimer = setTimeout(() => {
+        child.kill();
+        resolve({ success: false, result: '', error: 'Timeout: 최대 실행 시간(30분)을 초과했습니다.' });
+      }, hardMs);
+
       child.stdout.on('data', (chunk: Buffer) => {
+        resetIdle();
         stdoutChunks.push(chunk);
         if (options.onChunk) {
           lineBuf += chunk.toString();
@@ -101,13 +146,9 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
       child.stdin.write(prompt);
       child.stdin.end();
 
-      const timer = setTimeout(() => {
-        child.kill();
-        resolve({ success: false, result: '', error: 'Timeout: Claude CLI가 응답하지 않습니다.' });
-      }, timeout);
-
       child.on('close', (code) => {
-        clearTimeout(timer);
+        clearTimeout(idleTimer);
+        clearTimeout(hardTimer);
         const stdout = Buffer.concat(stdoutChunks).toString();
 
         if (code !== 0 && !stdout) {
@@ -115,11 +156,13 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
           return;
         }
 
-        resolve({ success: true, result: extractFinalResult(stdout) });
+        const { text, usage } = parseClaudeStdout(stdout);
+        resolve({ success: true, result: text, usage });
       });
 
       child.on('error', (err) => {
-        clearTimeout(timer);
+        clearTimeout(idleTimer);
+        clearTimeout(hardTimer);
         resolveChild(null);
         resolve({ success: false, result: '', error: err.message });
       });

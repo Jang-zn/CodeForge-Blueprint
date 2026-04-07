@@ -1,4 +1,6 @@
 // ===== Types =====
+import type { UsageTotals } from '../claude/spawner.js';
+
 export type Tab = 'review' | 'backend' | 'frontend' | 'features';
 export type IssueStatus = 'pending' | 'reviewing' | 'resolved' | 'deferred' | 'dismissed';
 export type JobStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'superseded';
@@ -63,6 +65,10 @@ export interface Job {
   cancel_requested_at: string | null;
   superseded_by: string | null;
   result_path: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_creation_tokens: number | null;
+  cache_read_tokens: number | null;
 }
 
 export interface DocumentRecord {
@@ -356,12 +362,27 @@ export function createJob(
   );
 }
 
-export function updateJob(db: any, id: string, status: JobStatus, error?: string, patch: { result_path?: string | null } = {}): void {
+export function updateJob(db: any, id: string, status: JobStatus, error?: string, patch: { result_path?: string | null; usage?: UsageTotals } = {}): void {
   db.prepare(
     `UPDATE jobs
-     SET status = ?, error = ?, result_path = COALESCE(?, result_path), completed_at = datetime('now')
+     SET status = ?, error = ?,
+         result_path = COALESCE(?, result_path),
+         input_tokens = COALESCE(?, input_tokens),
+         output_tokens = COALESCE(?, output_tokens),
+         cache_creation_tokens = COALESCE(?, cache_creation_tokens),
+         cache_read_tokens = COALESCE(?, cache_read_tokens),
+         completed_at = datetime('now')
      WHERE id = ?`
-  ).run(status, error ?? null, patch.result_path ?? null, id);
+  ).run(
+    status,
+    error ?? null,
+    patch.result_path ?? null,
+    patch.usage?.inputTokens ?? null,
+    patch.usage?.outputTokens ?? null,
+    patch.usage?.cacheCreationTokens ?? null,
+    patch.usage?.cacheReadTokens ?? null,
+    id,
+  );
 }
 
 export function appendJobLog(db: any, id: string, text: string): void {

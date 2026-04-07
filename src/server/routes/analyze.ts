@@ -196,7 +196,7 @@ analyzeRoute.post('/', async (c) => {
         bulkSetRefItems(db, refItems.map(content => ({ content })));
       }
 
-      updateJob(db, jobId, 'completed');
+      updateJob(db, jobId, 'completed', undefined, { usage: result.usage });
     } catch (e) {
       if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));

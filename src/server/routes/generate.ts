@@ -220,7 +220,7 @@ generateRoute.post('/', async (c) => {
       const indexPath = path.join(outputDir, 'index.md');
       addDocumentRecord(db, { tab, version, kind: 'generated-doc', file_path: indexPath, source_version: version, source_job_id: jobId });
 
-      updateJob(db, jobId, 'completed', undefined, { result_path: indexPath });
+      updateJob(db, jobId, 'completed', undefined, { result_path: indexPath, usage: result.usage });
     } catch (e) {
       if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));

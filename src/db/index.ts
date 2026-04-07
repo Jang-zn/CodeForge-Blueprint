@@ -27,6 +27,10 @@ import {
   MIGRATION_V24_SQL,
   MIGRATION_V25_SQL,
   MIGRATION_V26_SQL,
+  MIGRATION_V27_SQL,
+  MIGRATION_V28_SQL,
+  MIGRATION_V29_SQL,
+  MIGRATION_V30_SQL,
 } from './schema.js';
 
 // 기본 문서 유형 시드 데이터
@@ -129,6 +133,10 @@ export function openDb(dbPath: string): any {
   try { db.exec(MIGRATION_V24_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V25_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V26_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V27_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V28_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V29_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V30_SQL); } catch { /* ignore */ }
 
   // doc_types 시드 데이터 (INSERT OR IGNORE)
   const seedStmt = db.prepare(

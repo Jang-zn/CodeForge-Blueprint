@@ -1067,11 +1067,18 @@ function updateJobStream(job) {
     outputEl.scrollTop = outputEl.scrollHeight;
   }
 
-  // 토큰 추정 (log 전체 길이 / 4)
+  // 실 토큰 사용량 (job 완료 후 DB에서 조회)
   const tokensEl = document.getElementById('job-stream-tokens');
-  if (tokensEl && log.length > 0) {
-    const est = Math.round(log.length / 4);
-    tokensEl.textContent = `~${est.toLocaleString()} tokens`;
+  if (tokensEl) {
+    const inT = job.input_tokens;
+    const outT = job.output_tokens;
+    if (inT != null || outT != null) {
+      const cached = (job.cache_read_tokens ?? 0) + (job.cache_creation_tokens ?? 0);
+      const cachedStr = cached > 0 ? ` (cache ${cached.toLocaleString()})` : '';
+      tokensEl.textContent = `in ${(inT ?? 0).toLocaleString()} / out ${(outT ?? 0).toLocaleString()}${cachedStr}`;
+    } else {
+      tokensEl.textContent = '';
+    }
   }
 }
 

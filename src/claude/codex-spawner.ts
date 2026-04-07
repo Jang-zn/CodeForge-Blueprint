@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import { findCodexBinary, needsShell, MODEL_PATTERN } from './finder.js';
-import type { SpawnOptions, SpawnResult, SpawnHandle } from './spawner.js';
+import type { SpawnOptions, SpawnResult, SpawnHandle, UsageTotals } from './spawner.js';
 import { pickText } from './log-extractor.js';
 
 const LARGE_PROMPT_THRESHOLD = 100_000; // 100KB
@@ -51,7 +51,25 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
       const stdoutChunks: Buffer[] = [];
       let stderr = '';
 
+      // idle timeout: 청크 수신 시마다 리셋. hard timeout: 절대 최대.
+      const idleMs = options.idleTimeout ?? 300_000;   // 5분 무응답
+      const hardMs = options.timeout ?? 1_800_000;     // 30분 wall-clock 안전선
+      let idleTimer: ReturnType<typeof setTimeout>;
+      const resetIdle = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          child.kill();
+          resolve({ success: false, result: '', error: 'Timeout: Codex CLI가 5분간 응답이 없습니다.' });
+        }, idleMs);
+      };
+      resetIdle();
+      const hardTimer = setTimeout(() => {
+        child.kill();
+        resolve({ success: false, result: '', error: 'Timeout: 최대 실행 시간(30분)을 초과했습니다.' });
+      }, hardMs);
+
       child.stdout.on('data', (chunk: Buffer) => {
+        resetIdle();
         stdoutChunks.push(chunk);
         options.onChunk?.(chunk.toString());
       });
@@ -64,13 +82,9 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
       }
       child.stdin.end();
 
-      const timer = setTimeout(() => {
-        child.kill();
-        resolve({ success: false, result: '', error: 'Timeout: Codex CLI가 응답하지 않습니다.' });
-      }, timeout);
-
       child.on('close', (code) => {
-        clearTimeout(timer);
+        clearTimeout(idleTimer);
+        clearTimeout(hardTimer);
         const stdout = Buffer.concat(stdoutChunks).toString();
 
         if (code !== 0 && !stdout) {
@@ -78,12 +92,13 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
           return;
         }
 
-        const result = parseCodexJsonl(stdout);
-        resolve({ success: true, result: result ?? stdout.trim() });
+        const { text, usage } = parseCodexJsonl(stdout);
+        resolve({ success: true, result: text ?? stdout.trim(), usage });
       });
 
       child.on('error', (err) => {
-        clearTimeout(timer);
+        clearTimeout(idleTimer);
+        clearTimeout(hardTimer);
         resolveChild(null);
         resolve({ success: false, result: '', error: err.message });
       });
@@ -103,13 +118,14 @@ export async function spawnCodex(prompt: string, options: SpawnOptions = {}): Pr
 
 /**
  * Codex --json JSONL 출력 파싱.
- * assistant 메시지 텍스트를 추출. v0.118.0+의 turn.completed/delta 형식도 지원.
+ * assistant 메시지 텍스트와 토큰 사용량을 추출. v0.118.0+의 turn.completed/delta 형식도 지원.
  * @internal export for testing
  */
-export function parseCodexJsonl(stdout: string): string | null {
+export function parseCodexJsonl(stdout: string): { text: string | null; usage: UsageTotals | undefined } {
   const lines = stdout.split('\n').filter(l => l.trim());
   let lastText: string | null = null;
   const deltaAccum: string[] = [];
+  let usage: UsageTotals | undefined;
 
   for (const line of lines) {
     try {
@@ -138,6 +154,27 @@ export function parseCodexJsonl(stdout: string): string | null {
           const o = output as Record<string, unknown>;
           if (typeof o.text === 'string') lastText = o.text;
         }
+        // turn.completed에 usage 포함 시 추출
+        const u = event.usage as Record<string, unknown> | undefined;
+        if (u) {
+          usage = {
+            inputTokens: (u.input_tokens as number) ?? 0,
+            outputTokens: (u.output_tokens as number) ?? 0,
+            cacheCreationTokens: (u.cache_creation_input_tokens as number) ?? 0,
+            cacheReadTokens: (u.cache_read_input_tokens as number) ?? 0,
+          };
+        }
+        continue;
+      }
+
+      // token_count 이벤트 (일부 codex 버전)
+      if (type === 'token_count') {
+        usage = {
+          inputTokens: (event.input_tokens as number) ?? 0,
+          outputTokens: (event.output_tokens as number) ?? 0,
+          cacheCreationTokens: 0,
+          cacheReadTokens: 0,
+        };
         continue;
       }
 
@@ -156,7 +193,6 @@ export function parseCodexJsonl(stdout: string): string | null {
     } catch { /* skip unparseable lines */ }
   }
 
-  if (lastText) return lastText.trim();
-  if (deltaAccum.length) return deltaAccum.join('').trim();
-  return null;
+  const text = lastText ? lastText.trim() : (deltaAccum.length ? deltaAccum.join('').trim() : null);
+  return { text, usage };
 }

@@ -127,7 +127,7 @@ initRoute.post('/', async (c) => {
       });
       addDocumentRecord(db, { tab: 'review', version: '0.1.0', kind: 'generated-prd', file_path: prdPath, source_version: 'input-form', source_job_id: jobId });
 
-      updateJob(db, jobId, 'completed');
+      updateJob(db, jobId, 'completed', undefined, { usage: result.usage });
     } catch (e) {
       if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));
@@ -277,7 +277,7 @@ initRoute.post('/from-codebase', async (c) => {
         source_prd_path: prdPath,
       });
       addDocumentRecord(db, { tab: 'review', version: '0.1.0', kind: 'generated-prd', file_path: prdPath, source_version: 'codebase-scan', source_job_id: jobId });
-      updateJob(db, jobId, 'completed');
+      updateJob(db, jobId, 'completed', undefined, { usage: result.usage });
     } catch (e) {
       if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));
