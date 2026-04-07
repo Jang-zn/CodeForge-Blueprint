@@ -1,7 +1,6 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'module';
-import { SCHEMA_SQL, MIGRATION_V2_SQL } from '../../src/db/schema.js';
+import { createTestDb, makeIssue } from '../helpers.js';
 import {
   getProviderModel,
   setProviderModel,
@@ -27,17 +26,6 @@ import {
   type Tab,
 } from '../../src/db/repository.js';
 
-const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BetterSqlite3 = require('better-sqlite3') as any;
-
-function createTestDb() {
-  const db = new BetterSqlite3(':memory:');
-  db.pragma('journal_mode = WAL');
-  db.exec(SCHEMA_SQL);
-  try { db.exec(MIGRATION_V2_SQL); } catch { /* ignore */ }
-  return db;
-}
 
 describe('getProviderModel', () => {
   let db: any;
@@ -157,27 +145,8 @@ describe('upsertWorkspaceMeta / getWorkspaceMeta', () => {
 
 // ─── issues ────────────────────────────────────────────────────────────────
 
-function makeIssue(overrides: Partial<{ id: string; tab: Tab; title: string }> = {}) {
-  return {
-    id: overrides.id ?? 'a1',
-    tab: (overrides.tab ?? 'review') as Tab,
-    category: 'risk',
-    title: overrides.title ?? '테스트 이슈',
-    html_content: '<p>내용</p>',
-    tag: null,
-    priority: 'high',
-    badge: null,
-    status: 'pending' as const,
-    memo: '',
-    sort_order: 0,
-    origin_id: null,
-    assignee: null,
-    updated_by: null,
-    applied_at: null,
-    source_run_id: null,
-    confidence: null,
-  };
-}
+// makeIssue는 helpers.ts에서 import — category 기본값이 'A'로 다르지만
+// 이 테스트에서는 category를 직접 검증하지 않으므로 호환됨
 
 describe('upsertIssue / getIssue / getIssues', () => {
   let db: any;
@@ -185,7 +154,7 @@ describe('upsertIssue / getIssue / getIssues', () => {
   beforeEach(() => { db = createTestDb(); });
 
   test('이슈 삽입 후 getIssue로 조회', () => {
-    upsertIssue(db, makeIssue());
+    upsertIssue(db, makeIssue({ id: 'a1' }));
     const issue = getIssue(db, 'a1');
     assert.equal(issue?.id, 'a1');
     assert.equal(issue?.title, '테스트 이슈');
@@ -210,8 +179,8 @@ describe('upsertIssue / getIssue / getIssues', () => {
   });
 
   test('UPSERT — 같은 id로 재삽입 시 title 갱신', () => {
-    upsertIssue(db, makeIssue({ title: '원본' }));
-    upsertIssue(db, makeIssue({ title: '수정본' }));
+    upsertIssue(db, makeIssue({ id: 'a1', title: '원본' }));
+    upsertIssue(db, makeIssue({ id: 'a1', title: '수정본' }));
     assert.equal(getIssue(db, 'a1')?.title, '수정본');
   });
 
@@ -230,7 +199,7 @@ describe('updateIssueStatus', () => {
   beforeEach(() => { db = createTestDb(); });
 
   test('status와 memo 변경', () => {
-    upsertIssue(db, makeIssue());
+    upsertIssue(db, makeIssue({ id: 'a1' }));
     updateIssueStatus(db, 'a1', 'resolved', '검토 완료');
     const issue = getIssue(db, 'a1');
     assert.equal(issue?.status, 'resolved');
@@ -248,7 +217,7 @@ describe('deleteIssue', () => {
   beforeEach(() => { db = createTestDb(); });
 
   test('삭제 후 getIssue는 null 반환', () => {
-    upsertIssue(db, makeIssue());
+    upsertIssue(db, makeIssue({ id: 'a1' }));
     deleteIssue(db, 'a1');
     assert.equal(getIssue(db, 'a1'), null);
   });
@@ -308,7 +277,7 @@ describe('addDecisionLog / getDecisionLogs', () => {
 
   beforeEach(() => {
     db = createTestDb();
-    upsertIssue(db, makeIssue());
+    upsertIssue(db, makeIssue({ id: 'a1' }));
   });
 
   test('로그 추가 후 조회', () => {

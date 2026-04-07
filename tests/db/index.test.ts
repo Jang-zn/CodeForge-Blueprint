@@ -5,13 +5,14 @@ import os from 'os';
 import path from 'path';
 import { openDb, getDb, resetDb, closeAllDbs } from '../../src/db/index.js';
 
+import { makeTempDir, cleanDir } from '../helpers.js';
+
 function makeTempDb(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-db-test-'));
-  return path.join(dir, 'test.db');
+  return path.join(makeTempDir('cfb-db-test-'), 'test.db');
 }
 
 function cleanDb(dbPath: string) {
-  try { fs.rmSync(path.dirname(dbPath), { recursive: true, force: true }); } catch { /* ignore */ }
+  cleanDir(path.dirname(dbPath));
 }
 
 describe('openDb / getDb / resetDb', () => {

@@ -5,13 +5,7 @@ import os from 'os';
 import path from 'path';
 import { initAppDb, closeAppDb, getAppDb, cleanupStaleData } from '../../src/db/app-db.js';
 
-function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-appdb-test-'));
-}
-
-function cleanDir(dir: string) {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-}
+import { makeTempDir, cleanDir } from '../helpers.js';
 
 describe('cleanupStaleData', () => {
   let tmpDir: string;

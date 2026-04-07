@@ -13,15 +13,7 @@ const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-home-'));
 process.env.CODEFORGE_BLUEPRINT_HOME = TEST_HOME;
 initAppDb();
 
-// ─── 헬퍼 ────────────────────────────────────────────────────────────────────
-
-function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-test-'));
-}
-
-function cleanDir(dir: string) {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-}
+import { makeTempDir, cleanDir } from './helpers.js';
 
 // ─── expandHome ──────────────────────────────────────────────────────────────
 
@@ -101,14 +93,12 @@ describe('openWorkspace', () => {
 // ─── hasWorkspace / getWorkspaceOrNull ────────────────────────────────────────
 
 describe('hasWorkspace / getWorkspaceOrNull', () => {
-  test('openWorkspace 전에는 hasWorkspace()가 false 또는 이전 상태', () => {
-    const result = hasWorkspace('missing-session');
-    assert.equal(typeof result, 'boolean');
+  test('존재하지 않는 세션에 대해 hasWorkspace()는 false', () => {
+    assert.equal(hasWorkspace('missing-session'), false);
   });
 
-  test('getWorkspaceOrNull은 null 또는 WorkspaceContext 반환', () => {
-    const ws = getWorkspaceOrNull('missing-session');
-    assert.ok(ws === null || (typeof ws === 'object' && 'rootPath' in ws));
+  test('존재하지 않는 세션에 대해 getWorkspaceOrNull()은 null', () => {
+    assert.equal(getWorkspaceOrNull('missing-session'), null);
   });
 });
 

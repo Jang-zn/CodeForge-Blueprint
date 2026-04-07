@@ -15,18 +15,7 @@ import issuesRoute from '../src/server/routes/issues.js';
 import { getJob } from '../src/db/repository.js';
 import { getRequestContext } from '../src/server/context.js';
 
-function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-e2e-'));
-}
-
-async function waitForJob(sessionId: string, jobId: string) {
-  for (let i = 0; i < 40; i++) {
-    const job = getJob(getDb(), jobId);
-    if (job?.status === 'completed' || job?.status === 'failed') return job;
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  throw new Error(`job timeout: ${jobId}`);
-}
+import { makeTempDir, cleanDir, waitForJob } from './helpers.js';
 
 describe('end-to-end flow', () => {
   let tmpDir: string;
@@ -57,7 +46,7 @@ describe('end-to-end flow', () => {
     delete process.env.CODEFORGE_MOCK_PROVIDER;
     closeAllDbs();
     closeAppDb();
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    cleanDir(tmpDir);
   });
 
   test('workspace open -> init -> analyze -> apply -> features -> generate', async () => {
@@ -94,7 +83,7 @@ describe('end-to-end flow', () => {
       }),
     });
     const { jobId: initJobId } = await initRes.json();
-    assert.equal((await waitForJob(sessionId, initJobId))?.status, 'completed');
+    assert.equal((await waitForJob(getDb(), initJobId))?.status, 'completed');
 
     const reviewRes = await app.request('/analyze', {
       method: 'POST',
@@ -102,7 +91,7 @@ describe('end-to-end flow', () => {
       body: JSON.stringify({ tab: 'review' }),
     });
     const { jobId: reviewJobId } = await reviewRes.json();
-    assert.equal((await waitForJob(sessionId, reviewJobId))?.status, 'completed');
+    assert.equal((await waitForJob(getDb(), reviewJobId))?.status, 'completed');
 
     const issuesRes = await app.request('/issues?tab=review', { headers: { 'x-codeforge-session': sessionId } });
     const issuesJson = await issuesRes.json();
@@ -114,7 +103,7 @@ describe('end-to-end flow', () => {
       body: JSON.stringify({ tab: 'review', issues: issuesJson.issues.map((issue: any, index: number) => ({ id: issue.id, status: index === 0 ? 'resolved' : 'deferred', memo: '' })) }),
     });
     const { jobId: applyJobId } = await applyRes.json();
-    assert.equal((await waitForJob(sessionId, applyJobId))?.status, 'completed');
+    assert.equal((await waitForJob(getDb(), applyJobId))?.status, 'completed');
 
     const featuresRes = await app.request('/analyze', {
       method: 'POST',
@@ -122,7 +111,7 @@ describe('end-to-end flow', () => {
       body: JSON.stringify({ tab: 'features' }),
     });
     const { jobId: featuresJobId } = await featuresRes.json();
-    assert.equal((await waitForJob(sessionId, featuresJobId))?.status, 'completed');
+    assert.equal((await waitForJob(getDb(), featuresJobId))?.status, 'completed');
 
     const generateRes = await app.request('/generate', {
       method: 'POST',
@@ -130,7 +119,7 @@ describe('end-to-end flow', () => {
       body: JSON.stringify({ tab: 'review' }),
     });
     const generated = await generateRes.json();
-    assert.equal((await waitForJob(sessionId, generated.jobId))?.status, 'completed');
+    assert.equal((await waitForJob(getDb(), generated.jobId))?.status, 'completed');
     assert.ok(fs.existsSync(path.join(tmpDir, 'docs', generated.folderName, 'index.md')));
   });
 });

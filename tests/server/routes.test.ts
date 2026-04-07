@@ -12,44 +12,7 @@ import applyRoute from '../../src/server/routes/apply.js';
 import generateRoute from '../../src/server/routes/generate.js';
 import { createWorkspaceRoute } from '../../src/server/routes/workspace.js';
 
-function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'cfb-route-test-'));
-}
-
-function cleanDir(dir: string) {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ignore */ }
-}
-
-function makeIssue(id: string, title = '테스트 이슈') {
-  return {
-    id,
-    tab: 'review' as const,
-    category: 'A',
-    title,
-    html_content: '<p>내용</p>',
-    tag: null,
-    priority: 'high',
-    badge: null,
-    status: 'pending' as const,
-    memo: '',
-    sort_order: 0,
-    origin_id: null,
-    assignee: null,
-    updated_by: null,
-    applied_at: null,
-    source_run_id: null,
-    confidence: null,
-  };
-}
-
-async function waitForJob(id: string) {
-  for (let i = 0; i < 20; i++) {
-    const job = getDb().prepare('SELECT * FROM jobs WHERE id = ?').get(id) as { status: string; error?: string | null } | undefined;
-    if (job?.status === 'completed' || job?.status === 'failed') return job;
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  throw new Error(`job timeout: ${id}`);
-}
+import { makeTempDir, cleanDir, makeIssue, waitForJob } from '../helpers.js';
 
 describe('applyRoute', () => {
   let tmpDir: string;
@@ -71,7 +34,7 @@ describe('applyRoute', () => {
   });
 
   test('메모 없이 상태만 바꿔도 이슈 상태가 DB에 저장된다', async () => {
-    upsertIssue(getDb(), makeIssue('a1'));
+    upsertIssue(getDb(), makeIssue({ id: 'a1' }));
 
     const app = new Hono();
     app.route('/apply', applyRoute);
@@ -84,14 +47,14 @@ describe('applyRoute', () => {
 
     assert.equal(res.status, 200);
     const { jobId } = await res.json();
-    const job = await waitForJob(jobId);
+    const job = await waitForJob(getDb(), jobId);
     assert.equal(job?.status, 'completed');
     assert.equal(getIssue(getDb(), 'a1')?.status, 'resolved');
     assert.equal(getIssue(getDb(), 'a1')?.memo, '');
   });
 
   test('같은 review 이슈를 다시 deferred 처리해도 features 탭에 중복 생성되지 않는다', async () => {
-    upsertIssue(getDb(), makeIssue('a1', '원본 이슈'));
+    upsertIssue(getDb(), makeIssue({ id: 'a1', title: '원본 이슈' }));
 
     const app = new Hono();
     app.route('/apply', applyRoute);
@@ -104,7 +67,7 @@ describe('applyRoute', () => {
       body: JSON.stringify(requestBody),
     });
     const { jobId: jobId1 } = await res1.json();
-    await waitForJob(jobId1);
+    await waitForJob(getDb(), jobId1);
 
     const res2 = await app.request('/apply', {
       method: 'POST',
@@ -112,7 +75,7 @@ describe('applyRoute', () => {
       body: JSON.stringify(requestBody),
     });
     const { jobId: jobId2 } = await res2.json();
-    await waitForJob(jobId2);
+    await waitForJob(getDb(), jobId2);
 
     const featureIssues = getIssues(getDb(), 'features').filter(issue => issue.origin_id === 'a1');
     assert.equal(featureIssues.length, 1);
