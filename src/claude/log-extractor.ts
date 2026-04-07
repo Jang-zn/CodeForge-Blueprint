@@ -83,24 +83,32 @@ function formatClaudeStreamEvent(event: Record<string, unknown>): string | null 
     if (!inner) return null;
     const innerType = String(inner.type ?? '');
 
-    // content_block_delta — 실시간 텍스트 청크
+    // content_block_delta — 텍스트 청크는 UI에 노출하지 않음 (PRD 원문 스트리밍 숨김)
     if (innerType === 'content_block_delta') {
-      const delta = inner.delta as Record<string, unknown> | undefined;
-      if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
-        return delta.text;
-      }
-      // tool_use input delta
-      if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-        return null; // tool input delta는 무시 (완성 후 assistant 이벤트에서 표시)
-      }
       return null;
     }
 
-    // content_block_start — tool_use 블록 시작 시 도구명 표시
+    // content_block_start — tool_use 시작 시 도구명+설명 표시, text 시작 시 생성 중 표시
     if (innerType === 'content_block_start') {
       const block = inner.content_block as Record<string, unknown> | undefined;
       if (block?.type === 'tool_use' && typeof block.name === 'string') {
-        return `\n[도구] ${block.name}\n`;
+        const TOOL_LABELS: Record<string, string> = {
+          Agent: '서브 에이전트 호출',
+          Bash: '명령어 실행 중',
+          Read: '파일 읽기 중',
+          Write: '파일 작성 중',
+          Edit: '파일 수정 중',
+          Glob: '파일 탐색 중',
+          Grep: '코드 검색 중',
+          WebFetch: '웹 조회 중',
+          WebSearch: '웹 검색 중',
+        };
+        const desc = TOOL_LABELS[block.name] ?? '실행 중';
+        return `\n[도구] ${block.name}: ${desc}\n`;
+      }
+      // text 블록 시작 = Claude가 최종 응답 작성 시작
+      if (block?.type === 'text') {
+        return '\n[생성 중...]\n';
       }
       return null;
     }
@@ -115,7 +123,7 @@ function formatClaudeStreamEvent(event: Record<string, unknown>): string | null 
   }
 
   if (type === 'result') {
-    return '\n[완료] 작업 완료\n';
+    return '\n[완료] 문서 생성 완료\n';
   }
 
   // system, rate_limit_event 등은 무시

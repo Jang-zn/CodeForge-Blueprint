@@ -30,6 +30,7 @@ function extractFinalResult(stdout: string): string {
 export interface SpawnOptions {
   model?: string;
   timeout?: number;
+  cwd?: string;
   onChunk?: (text: string) => void;
 }
 
@@ -77,7 +78,7 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
       const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
       const useShell = needsShell(claudePath);
       const cmd = useShell ? `"${claudePath}"` : claudePath;
-      const child = spawn(cmd, args, { env: process.env, shell: useShell });
+      const child = spawn(cmd, args, { env: process.env, shell: useShell, cwd: options.cwd });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];

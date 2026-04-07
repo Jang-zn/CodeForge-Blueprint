@@ -47,7 +47,7 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
         : ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, prompt];
 
       const cmd = useShell ? `"${codexPath}"` : codexPath;
-      const child = spawn(cmd, args, { env: process.env, shell: useShell });
+      const child = spawn(cmd, args, { env: process.env, shell: useShell, cwd: options.cwd });
       resolveChild(child);
 
       const stdoutChunks: Buffer[] = [];

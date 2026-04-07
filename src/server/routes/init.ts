@@ -254,6 +254,7 @@ initRoute.post('/from-codebase', async (c) => {
 
       const prompt = buildCodebasePrdPrompt(scanContext);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
+        cwd: workspace.rootPath,
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
           const text = chunkToLogText(chunk, providerModel.provider);

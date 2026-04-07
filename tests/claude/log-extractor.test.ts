@@ -109,14 +109,14 @@ describe('chunkToLogText', () => {
     assert.equal(chunkToLogText(chunk, 'codex'), '[시작] 작업 시작\n');
   });
 
-  it('claude provider → stream_event content_block_delta 텍스트 추출', () => {
+  it('claude provider → stream_event content_block_delta 텍스트는 UI에 노출하지 않음', () => {
     const chunk = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '분석 중입니다.' } } });
-    assert.equal(chunkToLogText(chunk, 'claude'), '분석 중입니다.');
+    assert.equal(chunkToLogText(chunk, 'claude'), '');
   });
 
-  it('claude provider → stream_event content_block_start tool_use', () => {
+  it('claude provider → stream_event content_block_start tool_use (설명 포함)', () => {
     const chunk = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use', name: 'Read' } } });
-    assert.equal(chunkToLogText(chunk, 'claude'), '\n[도구] Read\n');
+    assert.equal(chunkToLogText(chunk, 'claude'), '\n[도구] Read: 파일 읽기 중\n');
   });
 
   it('claude provider → assistant 완전 메시지는 무시 (partial에서 이미 표시)', () => {
