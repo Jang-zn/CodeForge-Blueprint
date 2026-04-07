@@ -10,8 +10,11 @@
 
 | OS | 파일 |
 |----|------|
-| macOS | `CodeForge Blueprint-x.x.x-universal.dmg` (Apple Silicon + Intel) |
+| macOS (Apple Silicon) | `CodeForge Blueprint-x.x.x-arm64.dmg` |
+| macOS (Intel) | `CodeForge Blueprint-x.x.x.dmg` |
 | Windows | `CodeForge Blueprint Setup x.x.x.exe` |
+
+> macOS는 자신의 Mac 아키텍처에 맞는 DMG를 받으세요. 터미널에서 `uname -m` 실행 시 `arm64`면 Apple Silicon, `x86_64`면 Intel입니다.
 
 DMG를 열어 `/Applications`에 드래그하거나, Windows에서는 설치 마법사를 실행합니다.
 
@@ -151,7 +154,7 @@ npm install
 ### 패키징 빌드
 
 ```bash
-# macOS DMG (universal: arm64 + x64)
+# macOS DMG (arm64 + x64 각각 생성)
 npm run electron:build -- --mac
 
 # Windows NSIS 설치 파일

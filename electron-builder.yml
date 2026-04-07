@@ -23,7 +23,8 @@ mac:
   target:
     - target: dmg
       arch:
-        - universal  # arm64 + x64 동시 지원 (Apple Silicon + Intel)
+        - arm64  # Apple Silicon
+        - x64    # Intel
   category: public.app-category.developer-tools
   hardenedRuntime: true
   gatekeeperAssess: false
