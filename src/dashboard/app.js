@@ -883,6 +883,20 @@ document.getElementById('btn-start-review')?.addEventListener('click', async () 
 
 // ========== Job Polling ==========
 let _elapsedTimer = null;
+let _dotsTimer = null;
+
+function startDotsAnimation() {
+  if (_dotsTimer) return;
+  _dotsTimer = setInterval(() => {
+    const els = document.querySelectorAll('.log-generating-dots');
+    if (!els.length) { clearInterval(_dotsTimer); _dotsTimer = null; return; }
+    els.forEach(el => { el.textContent = '.'.repeat((el.textContent.length % 3) + 1); });
+  }, 400);
+}
+
+function stopDotsAnimation() {
+  if (_dotsTimer) { clearInterval(_dotsTimer); _dotsTimer = null; }
+}
 let _currentJobInterval = null;
 let _jobStreamPrevScreen = null;
 let currentJobId = null;
@@ -924,6 +938,7 @@ function showJobStream(label, startedAt = null) {
 function hideJobStream() {
   clearInterval(_elapsedTimer);
   _elapsedTimer = null;
+  stopDotsAnimation();
   currentJobId = null;
   document.getElementById('job-stream-screen')?.classList.add('hidden');
 
@@ -1000,7 +1015,11 @@ function renderJobLogHtml(entries) {
     if (e.type === 'status') {
       const cls = LOG_PILL_COLORS[e.label] || 'log-pill--info';
       const text = e.text ? ` <span class="log-status-text">${escapeHtml(e.text)}</span>` : '';
-      return `<div class="log-entry log-status"><span class="log-pill ${cls}">${escapeHtml(e.label)}</span>${text}</div>`;
+      // "생성 중" 항목은 점 애니메이션을 위한 span 포함
+      const labelHtml = e.label === '생성 중'
+        ? `생성 중<span class="log-generating-dots">.</span>`
+        : escapeHtml(e.label);
+      return `<div class="log-entry log-status"><span class="log-pill ${cls}">${labelHtml}</span>${text}</div>`;
     }
     if (e.type === 'tool') {
       const colonIdx = e.text.indexOf(':');
@@ -1040,6 +1059,7 @@ function updateJobStream(job) {
     } else {
       const entries = parseJobLogEntries(logContent);
       outputEl.innerHTML = entries.length ? renderJobLogHtml(entries) : '<div class="log-entry log-text">처리 중입니다...</div>';
+      if (outputEl.querySelector('.log-generating-dots')) startDotsAnimation();
     }
     outputEl.scrollTop = outputEl.scrollHeight;
   }
