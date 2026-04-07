@@ -1,5 +1,17 @@
 const INPUT_TRUNCATE = 200;
 
+const TOOL_LABELS: Record<string, string> = {
+  Agent: '서브 에이전트 호출',
+  Bash: '명령어 실행 중',
+  Read: '파일 읽기 중',
+  Write: '파일 작성 중',
+  Edit: '파일 수정 중',
+  Glob: '파일 탐색 중',
+  Grep: '코드 검색 중',
+  WebFetch: '웹 조회 중',
+  WebSearch: '웹 검색 중',
+};
+
 export function pickText(event: Record<string, unknown>): string | null {
   if (typeof event.text === 'string' && event.text) return event.text;
   if (typeof event.delta === 'string' && event.delta) return event.delta;
@@ -92,17 +104,6 @@ function formatClaudeStreamEvent(event: Record<string, unknown>): string | null 
     if (innerType === 'content_block_start') {
       const block = inner.content_block as Record<string, unknown> | undefined;
       if (block?.type === 'tool_use' && typeof block.name === 'string') {
-        const TOOL_LABELS: Record<string, string> = {
-          Agent: '서브 에이전트 호출',
-          Bash: '명령어 실행 중',
-          Read: '파일 읽기 중',
-          Write: '파일 작성 중',
-          Edit: '파일 수정 중',
-          Glob: '파일 탐색 중',
-          Grep: '코드 검색 중',
-          WebFetch: '웹 조회 중',
-          WebSearch: '웹 검색 중',
-        };
         const desc = TOOL_LABELS[block.name] ?? '실행 중';
         return `\n[도구] ${block.name}: ${desc}\n`;
       }

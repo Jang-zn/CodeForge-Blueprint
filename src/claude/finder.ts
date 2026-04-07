@@ -40,6 +40,9 @@ async function findBinary(name: string): Promise<string | null> {
   return null;
 }
 
+/** shell:true 환경에서 args에 들어가는 모델명 인젝션 방지용 화이트리스트 */
+export const MODEL_PATTERN = /^[a-zA-Z0-9._/-]+$/;
+
 /**
  * Windows에서 .cmd/.bat 파일은 spawn()에 shell: true 가 필요 (CVE-2024-27980 패치 이후).
  */

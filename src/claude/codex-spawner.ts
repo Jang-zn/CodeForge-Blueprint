@@ -1,6 +1,6 @@
 import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { findCodexBinary, needsShell } from './finder.js';
+import { findCodexBinary, needsShell, MODEL_PATTERN } from './finder.js';
 import type { SpawnOptions, SpawnResult, SpawnHandle } from './spawner.js';
 import { pickText } from './log-extractor.js';
 
@@ -28,8 +28,6 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
       };
     }
 
-    // 모델명은 args에 직접 들어가므로 shell:true 환경에서 인젝션 방지
-    const MODEL_PATTERN = /^[a-zA-Z0-9._/-]+$/;
     if (!MODEL_PATTERN.test(model)) {
       resolveChild(null);
       return { success: false, result: '', error: `잘못된 모델 이름: ${model}` };

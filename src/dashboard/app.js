@@ -884,18 +884,21 @@ document.getElementById('btn-start-review')?.addEventListener('click', async () 
 // ========== Job Polling ==========
 let _elapsedTimer = null;
 let _dotsTimer = null;
+let _dotsCount = 1;
 
 function startDotsAnimation() {
   if (_dotsTimer) return;
   _dotsTimer = setInterval(() => {
     const els = document.querySelectorAll('.log-generating-dots');
     if (!els.length) { clearInterval(_dotsTimer); _dotsTimer = null; return; }
-    els.forEach(el => { el.textContent = '.'.repeat((el.textContent.length % 3) + 1); });
+    _dotsCount = (_dotsCount % 3) + 1;
+    els.forEach(el => { el.textContent = '.'.repeat(_dotsCount); });
   }, 400);
 }
 
 function stopDotsAnimation() {
   if (_dotsTimer) { clearInterval(_dotsTimer); _dotsTimer = null; }
+  _dotsCount = 1;
 }
 let _currentJobInterval = null;
 let _jobStreamPrevScreen = null;
@@ -1015,9 +1018,9 @@ function renderJobLogHtml(entries) {
     if (e.type === 'status') {
       const cls = LOG_PILL_COLORS[e.label] || 'log-pill--info';
       const text = e.text ? ` <span class="log-status-text">${escapeHtml(e.text)}</span>` : '';
-      // "생성 중" 항목은 점 애니메이션을 위한 span 포함
+      // "생성 중" 항목은 점 애니메이션을 위한 span 포함 (현재 dot 개수 유지)
       const labelHtml = e.label === '생성 중'
-        ? `생성 중<span class="log-generating-dots">.</span>`
+        ? `생성 중<span class="log-generating-dots">${'.'.repeat(_dotsCount)}</span>`
         : escapeHtml(e.label);
       return `<div class="log-entry log-status"><span class="log-pill ${cls}">${labelHtml}</span>${text}</div>`;
     }
