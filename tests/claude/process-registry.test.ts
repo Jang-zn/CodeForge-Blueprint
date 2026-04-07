@@ -43,6 +43,7 @@ describe('registerProcess / unregisterProcess', () => {
     registerProcess('job-3', child2);
     killProcess('job-3');
     assert.equal((child2 as any)._kills.length, 1);
+    assert.equal((child1 as any)._kills.length, 0, '이전 프로세스는 kill되지 않아야 함');
   });
 });
 
@@ -76,8 +77,8 @@ describe('killAllProcesses', () => {
     registerProcess('all-1', child1);
     registerProcess('all-2', child2);
     killAllProcesses();
-    assert.ok((child1 as any)._kills.length >= 1);
-    assert.ok((child2 as any)._kills.length >= 1);
+    assert.equal((child1 as any)._kills.length, 1);
+    assert.equal((child2 as any)._kills.length, 1);
     assert.equal(killProcess('all-1'), false);
     assert.equal(killProcess('all-2'), false);
   });
