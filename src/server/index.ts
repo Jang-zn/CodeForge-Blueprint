@@ -21,6 +21,13 @@ import { getRequestContext } from './context.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+let _shutdownFn: (() => void) | null = null;
+
+/** Electron main process에서 호출하는 graceful shutdown */
+export function shutdownServer(): void {
+  if (_shutdownFn) _shutdownFn();
+}
+
 export async function startServer(port: number): Promise<number> {
   initAppDb();
   const [claudeStatus, codexStatus] = await Promise.all([checkClaude(), checkCodex()]);
@@ -89,11 +96,17 @@ export async function startServer(port: number): Promise<number> {
         killAllProcesses();
         closeAppDb();
         closeAllDbs();
-        process.exit(0);
+        // Electron 모드에서는 process.exit을 Electron이 제어
+        if (!process.env.CODEFORGE_ELECTRON) process.exit(0);
       };
 
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
+      _shutdownFn = shutdown;
+
+      // CLI 모드에서만 시그널 핸들러 등록 (Windows GUI 앱에서는 비신뢰적)
+      if (!process.env.CODEFORGE_ELECTRON) {
+        process.on('SIGINT', shutdown);
+        process.on('SIGTERM', shutdown);
+      }
     };
 
     tryListen(port);

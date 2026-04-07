@@ -39,7 +39,12 @@ const _lastTouchTime = new Map<string, number>();
 const TOUCH_THROTTLE_MS = 60_000;
 
 function getAppBaseDir(): string {
-  return process.env.CODEFORGE_BLUEPRINT_HOME || path.join(os.homedir(), '.codeforge-blueprint');
+  // 우선순위: 명시적 env → Electron userData → 기본 홈 경로
+  return (
+    process.env.CODEFORGE_BLUEPRINT_HOME ||
+    process.env.CODEFORGE_APP_DATA_DIR ||
+    path.join(os.homedir(), '.codeforge-blueprint')
+  );
 }
 
 function getAppDbPath(): string {

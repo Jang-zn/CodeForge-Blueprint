@@ -12,6 +12,11 @@ import { killProcess } from '../../claude/process-registry.js';
 type CliStatus = { available: boolean; version?: string; path?: string | null };
 
 function pickFolderNative(): Promise<string | null> {
+  // Electron 모드: IPC를 통해 main process의 dialog.showOpenDialog 사용
+  if (process.env.CODEFORGE_ELECTRON) {
+    return _pickFolderViaElectron();
+  }
+
   return new Promise((resolve) => {
     const platform = process.platform;
     if (platform === 'darwin') {
@@ -31,6 +36,20 @@ function pickFolderNative(): Promise<string | null> {
       resolve(null);
     }
   });
+}
+
+async function _pickFolderViaElectron(): Promise<string | null> {
+  try {
+    const { dialog, BrowserWindow } = await import('electron');
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const opts = { properties: ['openDirectory' as const], title: '워크스페이스 폴더 선택' };
+    const result = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts);
+    return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
+  } catch {
+    return null;
+  }
 }
 
 function buildStageSummary(db: any) {

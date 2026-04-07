@@ -23,6 +23,11 @@ import { scanCodebase, buildScanContext } from '../../codebase-scanner.js';
 import { requireRequestContext } from '../context.js';
 
 function pickFileNative(): Promise<string | null> {
+  // Electron 모드: dialog.showOpenDialog 사용
+  if (process.env.CODEFORGE_ELECTRON) {
+    return _pickFileViaElectron();
+  }
+
   return new Promise((resolve) => {
     const platform = process.platform;
     if (platform === 'darwin') {
@@ -48,6 +53,20 @@ function pickFileNative(): Promise<string | null> {
       resolve(null);
     }
   });
+}
+
+async function _pickFileViaElectron(): Promise<string | null> {
+  try {
+    const { dialog, BrowserWindow } = await import('electron');
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const opts = { properties: ['openFile' as const], title: '기획서 파일 선택', filters: [{ name: 'Markdown/Text', extensions: ['md', 'txt'] }] };
+    const result = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts);
+    return result.canceled || !result.filePaths[0] ? null : result.filePaths[0];
+  } catch {
+    return null;
+  }
 }
 
 const initRoute = new Hono();
