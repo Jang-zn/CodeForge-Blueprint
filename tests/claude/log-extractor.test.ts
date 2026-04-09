@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractCodexLogText, chunkToLogText } from '../../src/claude/log-extractor.js';
+import { extractCodexLogText, chunkToLogText, ClaudeLogExtractor } from '../../src/claude/log-extractor.js';
 
 describe('extractCodexLogText', () => {
   it('task_started 이벤트 → [시작] 라인', () => {
@@ -100,6 +100,82 @@ describe('extractCodexLogText', () => {
   it('delta 이벤트 — text 필드 직접 추출', () => {
     const chunk = JSON.stringify({ type: 'response.output_text.delta', text: '안녕' });
     assert.equal(extractCodexLogText(chunk), '안녕');
+  });
+});
+
+describe('ClaudeLogExtractor', () => {
+  it('tool_use 블록: start → input_json_delta → stop 시퀀스에서 파일 경로 추출 (Read)', () => {
+    const extractor = new ClaudeLogExtractor();
+    const start = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use', name: 'Read' } } });
+    const delta = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{"file_path":"/Users/jang/projects/src/server/index.ts"}' } } });
+    const stop = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_stop' } });
+
+    const r1 = extractor.processChunk(start);
+    const r2 = extractor.processChunk(delta);
+    const r3 = extractor.processChunk(stop);
+
+    assert.ok(r1.includes('[도구] Read:'), `start should include tool label, got: ${r1}`);
+    assert.equal(r2, '', 'delta should be empty');
+    assert.ok(r3.includes('→'), `stop should include detail arrow, got: ${r3}`);
+    assert.ok(r3.includes('server/index.ts'), `stop should include shortened path, got: ${r3}`);
+  });
+
+  it('tool_use 블록: Grep 패턴 추출', () => {
+    const extractor = new ClaudeLogExtractor();
+    extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use', name: 'Grep' } } }));
+    extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{"pattern":"appendJobLog"}' } } }));
+    const result = extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_stop' } }));
+    assert.ok(result.includes('"appendJobLog"'), `grep detail should include pattern, got: ${result}`);
+  });
+
+  it('tool_use 블록: input JSON 없으면 detail 생략', () => {
+    const extractor = new ClaudeLogExtractor();
+    extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use', name: 'Read' } } }));
+    // delta 없이 바로 stop
+    const result = extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_stop' } }));
+    assert.equal(result, '', `no detail without input, got: ${result}`);
+  });
+
+  it('text 블록: text_delta는 suppress', () => {
+    const extractor = new ClaudeLogExtractor();
+    extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'text' } } }));
+    const result = extractor.processChunk(JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: '```json\n{"mode":"A"}' } } }));
+    assert.equal(result, '', `text delta should be suppressed, got: ${result}`);
+  });
+
+  it('raw JSON 분석 결과가 processChunk를 통과해도 빈 문자열 반환', () => {
+    const extractor = new ClaudeLogExtractor();
+    const raw = JSON.stringify({ mode: 'A', issues: [{ id: 'a1', title: '테스트' }] });
+    assert.equal(extractor.processChunk(raw), '');
+  });
+
+  it('미인식 이벤트 타입 — 빈 문자열', () => {
+    const extractor = new ClaudeLogExtractor();
+    const chunk = JSON.stringify({ type: 'unknown_new_type', content: 'some text content' });
+    assert.equal(extractor.processChunk(chunk), '');
+  });
+
+  it('여러 tool_use 블록 연속 처리', () => {
+    const extractor = new ClaudeLogExtractor();
+    const mkStart = (name: string) => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'tool_use', name } } });
+    const mkDelta = (json: string) => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: json } } });
+    const mkStop = () => JSON.stringify({ type: 'stream_event', event: { type: 'content_block_stop' } });
+
+    extractor.processChunk(mkStart('Read'));
+    extractor.processChunk(mkDelta('{"file_path":"/a/b/c/foo.ts"}'));
+    const r1 = extractor.processChunk(mkStop());
+    assert.ok(r1.includes('foo.ts'), `first tool detail: ${r1}`);
+
+    extractor.processChunk(mkStart('Glob'));
+    extractor.processChunk(mkDelta('{"pattern":"**/*.ts"}'));
+    const r2 = extractor.processChunk(mkStop());
+    assert.ok(r2.includes('**/*.ts'), `second tool detail: ${r2}`);
+  });
+
+  it('content_block_start text → [생성 중...] 반환', () => {
+    const extractor = new ClaudeLogExtractor();
+    const chunk = JSON.stringify({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'text' } } });
+    assert.ok(extractor.processChunk(chunk).includes('[생성 중...]'));
   });
 });
 

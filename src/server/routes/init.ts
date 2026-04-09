@@ -17,7 +17,7 @@ import {
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
-import { chunkToLogText } from '../../claude/log-extractor.js';
+import { createLogExtractor } from '../../claude/log-extractor.js';
 import { buildInitPrompt, buildCodebasePrdPrompt, type InitFormData } from '../../claude/prompts/init.js';
 import { scanCodebase, buildScanContext } from '../../codebase-scanner.js';
 import { requireRequestContext } from '../context.js';
@@ -94,10 +94,11 @@ initRoute.post('/', async (c) => {
   (async () => {
     try {
       const prompt = buildInitPrompt(body);
+      const extractor = createLogExtractor(providerModel.provider);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
-          const text = chunkToLogText(chunk, providerModel.provider);
+          const text = extractor.processChunk(chunk);
           if (text) appendJobLog(db, jobId, text);
         },
       });
@@ -253,11 +254,12 @@ initRoute.post('/from-codebase', async (c) => {
       appendJobLog(db, jobId, `스캔 컨텍스트 준비 완료 (${scanContext.length}자). PRD 생성 중...\n`);
 
       const prompt = buildCodebasePrdPrompt(scanContext);
+      const codebaseExtractor = createLogExtractor(providerModel.provider);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
         cwd: workspace.rootPath,
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
-          const text = chunkToLogText(chunk, providerModel.provider);
+          const text = codebaseExtractor.processChunk(chunk);
           if (text) appendJobLog(db, jobId, text);
         },
       });

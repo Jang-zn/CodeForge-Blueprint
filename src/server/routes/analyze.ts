@@ -15,7 +15,7 @@ import {
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
-import { chunkToLogText } from '../../claude/log-extractor.js';
+import { createLogExtractor } from '../../claude/log-extractor.js';
 import { buildReviewPlanPrompt } from '../../claude/prompts/review-plan.js';
 import { buildBackendPrompt } from '../../claude/prompts/design-backend.js';
 import { buildFrontendPrompt } from '../../claude/prompts/design-frontend.js';
@@ -143,10 +143,11 @@ analyzeRoute.post('/', async (c) => {
         return;
       }
 
+      const extractor = createLogExtractor(providerModel.provider);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
-          const text = chunkToLogText(chunk, providerModel.provider);
+          const text = extractor.processChunk(chunk);
           if (text) appendJobLog(db, jobId, text);
         },
       });

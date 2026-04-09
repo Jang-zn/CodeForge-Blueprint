@@ -116,7 +116,9 @@ export function spawnProviderWithHandle(
 ): ProviderHandle {
   if (process.env.CODEFORGE_MOCK_PROVIDER === '1') {
     const result = mockResult(prompt);
-    options?.onChunk?.(result);
+    // mock 모드에서도 UI 진행 상태가 표시되도록 최소 상태 이벤트 발송
+    options?.onChunk?.('[생성 중...]\n');
+    options?.onChunk?.('\n[완료] 문서 생성 완료\n');
     return {
       promise: Promise.resolve({ success: true, result }),
       childReady: Promise.resolve(null),
@@ -135,7 +137,8 @@ export async function spawnProvider(
 ): Promise<SpawnResult> {
   if (process.env.CODEFORGE_MOCK_PROVIDER === '1') {
     const result = mockResult(prompt);
-    options?.onChunk?.(result);
+    options?.onChunk?.('[생성 중...]\n');
+    options?.onChunk?.('\n[완료] 문서 생성 완료\n');
     return { success: true, result };
   }
   const opts: SpawnOptions = { ...options, model: config.model };

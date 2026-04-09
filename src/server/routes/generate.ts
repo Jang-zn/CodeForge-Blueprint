@@ -18,7 +18,7 @@ import {
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
-import { chunkToLogText } from '../../claude/log-extractor.js';
+import { createLogExtractor } from '../../claude/log-extractor.js';
 import { requireRequestContext } from '../context.js';
 
 const generateRoute = new Hono();
@@ -179,10 +179,11 @@ generateRoute.post('/', async (c) => {
       const prdContent = fs.readFileSync(prdPath, 'utf-8');
 
       const prompt = buildWriteDocPrompt(tab, issues, prdContent, version);
+      const extractor = createLogExtractor(providerModel.provider);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
-          const text = chunkToLogText(chunk, providerModel.provider);
+          const text = extractor.processChunk(chunk);
           if (text) appendJobLog(db, jobId, text);
         },
       });

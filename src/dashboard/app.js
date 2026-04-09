@@ -987,9 +987,7 @@ function parseJobLogEntries(logText) {
       entries.push({ type: 'info', text: t }); continue;
     }
 
-    if ((t.startsWith('{') || t.startsWith('[')) && (t.endsWith('}') || t.endsWith(']'))) {
-      try { entries.push({ type: 'json', data: JSON.parse(t) }); continue; } catch { /* treat as text */ }
-    }
+    if (t.startsWith('→')) { entries.push({ type: 'tool-detail', text: t.slice(1).trim() }); continue; }
 
     entries.push({ type: 'text', text: t });
   }
@@ -1033,8 +1031,8 @@ function renderJobLogHtml(entries) {
     if (e.type === 'info') {
       return `<div class="log-entry log-info">${escapeHtml(e.text)}</div>`;
     }
-    if (e.type === 'json') {
-      return `<div class="log-entry log-json-wrap">${renderJsonData(e.data)}</div>`;
+    if (e.type === 'tool-detail') {
+      return `<div class="log-entry log-tool-detail">→ ${escapeHtml(e.text)}</div>`;
     }
     return `<div class="log-entry log-text">${escapeHtml(e.text)}</div>`;
   }).join('');

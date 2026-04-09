@@ -554,6 +554,13 @@ html { scroll-behavior: smooth; scroll-padding-top: 24px; }
 .log-tool-name { font-family: var(--font-mono, monospace); font-size: 12px; font-weight: 600; color: #c4b5fd; flex-shrink: 0; }
 .log-tool-input { font-family: var(--font-mono, monospace); font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
 
+/* Tool detail (file path, pattern, etc.) */
+.log-tool-detail {
+  padding: 2px 10px 2px 28px;
+  font-family: var(--font-mono, monospace); font-size: 11px;
+  color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* Info lines */
 .log-info { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--text-muted); }
 
