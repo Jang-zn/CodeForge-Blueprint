@@ -203,4 +203,20 @@ describe('chunkToLogText', () => {
   it('claude provider → 파싱 불가 raw 텍스트는 빈 문자열', () => {
     assert.equal(chunkToLogText('스트리밍 텍스트', 'claude'), '');
   });
+
+  it('claude provider → mock 모드 plain-text [생성 중...] 그대로 통과', () => {
+    assert.equal(chunkToLogText('[생성 중...]\n', 'claude'), '[생성 중...]\n');
+  });
+
+  it('claude provider → mock 모드 plain-text [완료] 그대로 통과', () => {
+    assert.equal(chunkToLogText('[완료] 문서 생성 완료', 'claude'), '[완료] 문서 생성 완료\n');
+  });
+
+  it('codex provider → mock 모드 plain-text [생성 중...] 그대로 통과', () => {
+    assert.equal(chunkToLogText('[생성 중...]\n', 'codex'), '[생성 중...]\n');
+  });
+
+  it('codex provider → mock 모드 plain-text [완료] 그대로 통과', () => {
+    assert.equal(chunkToLogText('[완료] 문서 생성 완료', 'codex'), '[완료] 문서 생성 완료\n');
+  });
 });

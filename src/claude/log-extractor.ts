@@ -23,6 +23,11 @@ function isKnownLogPrefix(text: string): boolean {
   return KNOWN_PREFIXES.some(p => t.startsWith(p));
 }
 
+/** mock 모드 등 plain-text 로그 라인에 줄바꿈을 보장. trim()된 문자열 전용. */
+function ensureNewline(s: string): string {
+  return s + '\n';
+}
+
 export function pickText(event: Record<string, unknown>): string | null {
   if (typeof event.text === 'string' && event.text) return event.text;
   if (typeof event.delta === 'string' && event.delta) return event.delta;
@@ -148,7 +153,9 @@ export class ClaudeLogExtractor {
         if (text && isKnownLogPrefix(text)) {
           parts.push(text);
         }
-      } catch { /* 불완전 JSON 라인 무시 */ }
+      } catch {
+        if (isKnownLogPrefix(trimmed)) parts.push(ensureNewline(trimmed));
+      }
     }
     return parts.join('');
   }
@@ -230,12 +237,20 @@ export function extractClaudeLogText(chunk: string): string {
 /** 각 spawn 세션용 extractor 인스턴스 생성 팩토리. */
 export function createLogExtractor(provider: ProviderType): { processChunk: (chunk: string) => string } {
   if (provider === 'codex') {
-    return { processChunk: extractCodexLogText };
+    return {
+      processChunk(chunk: string): string {
+        // mock 모드는 청크 전체가 plain-text 로그 라인 — JSON 파서에 넣지 않고 청크 레벨에서 처리.
+        // 라인 레벨 fallback은 split JSON fragment를 known prefix로 오인할 위험이 있어 사용하지 않음.
+        const trimmed = chunk.trim();
+        if (isKnownLogPrefix(trimmed)) return ensureNewline(trimmed);
+        return extractCodexLogText(chunk);
+      },
+    };
   }
   return new ClaudeLogExtractor();
 }
 
 /** 프로바이더에 맞게 청크를 로그용 텍스트로 변환 (하위 호환). */
 export function chunkToLogText(chunk: string, provider: ProviderType): string {
-  return provider === 'codex' ? extractCodexLogText(chunk) : extractClaudeLogText(chunk);
+  return createLogExtractor(provider).processChunk(chunk);
 }
