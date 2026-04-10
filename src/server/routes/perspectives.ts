@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import fs from 'fs';
+import path from 'path';
 import {
   listPerspectives,
   getActivePerspectives,
@@ -10,6 +12,21 @@ import {
   type CustomPerspectiveInput,
 } from '../../db/repository.js';
 import { requireRequestContext } from '../context.js';
+
+function exportPerspectivesJson(db: any, docsPath: string): void {
+  try {
+    const allPerspectives = listPerspectives(db);
+    const dir = path.join(docsPath, '.codeforge');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'perspectives.json'),
+      JSON.stringify(allPerspectives, null, 2),
+      'utf-8',
+    );
+  } catch {
+    // non-fatal — SKILL.md will fall back to inline defaults
+  }
+}
 
 const perspectivesRoute = new Hono();
 
@@ -36,7 +53,7 @@ perspectivesRoute.get('/:id', (c) => {
 });
 
 perspectivesRoute.post('/', async (c) => {
-  const { db } = requireRequestContext(c);
+  const { db, workspace } = requireRequestContext(c);
   const body = await c.req.json<CustomPerspectiveInput>().catch(() => null);
   if (!body) return c.json({ error: '요청 본문이 필요합니다.' }, 400);
 
@@ -46,6 +63,7 @@ perspectivesRoute.post('/', async (c) => {
   }
 
   const perspective = addCustomPerspective(db, body);
+  exportPerspectivesJson(db, workspace.docsPath);
   return c.json({ perspective }, 201);
 });
 

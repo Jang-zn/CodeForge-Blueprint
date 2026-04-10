@@ -13,6 +13,7 @@ import {
   getActivePerspectives,
   type Tab,
   type IssueStatus,
+  type Perspective,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
@@ -100,9 +101,14 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+interface AnalyzeRequest {
+  tab?: Tab;
+  perspectiveIds?: string[];
+}
+
 analyzeRoute.post('/', async (c) => {
   const { db, workspace, sessionId } = requireRequestContext(c);
-  const body = await c.req.json<{ tab?: Tab }>().catch(() => ({ tab: 'review' as Tab }));
+  const body = await c.req.json<AnalyzeRequest>().catch(() => ({ tab: 'review' as Tab })) as AnalyzeRequest;
   const tab: Tab = body.tab ?? 'review';
 
   const meta = getWorkspaceMeta(db);
@@ -131,7 +137,13 @@ analyzeRoute.post('/', async (c) => {
       }
 
       // Fetch active perspectives for this analysis
-      const perspectives = getActivePerspectives(db, tab);
+      let perspectives = getActivePerspectives(db, tab);
+
+      // Filter by user-selected perspectives if provided
+      if (body.perspectiveIds && body.perspectiveIds.length > 0) {
+        const selectedIds = new Set(body.perspectiveIds);
+        perspectives = perspectives.filter((p: Perspective) => selectedIds.has(p.id));
+      }
 
       let prompt: string;
       if (tab === 'review') {
