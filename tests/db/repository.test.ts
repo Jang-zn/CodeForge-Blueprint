@@ -23,6 +23,13 @@ import {
   createJob,
   updateJob,
   getJob,
+  getPerspectives,
+  getPerspective,
+  createPerspective,
+  updatePerspective,
+  deletePerspective,
+  lockPerspective,
+  unlockPerspective,
   type Tab,
 } from '../../src/db/repository.js';
 
@@ -405,5 +412,138 @@ describe('createJob / updateJob / getJob', () => {
     updateJob(db, 'j1', 'success');
     assert.equal(getJob(db, 'j1')?.status, 'success');
     assert.equal(getJob(db, 'j2')?.status, 'running');
+  });
+});
+
+// ─── perspectives ──────────────────────────────────────────────────────────
+
+describe('createPerspective / getPerspective / getPerspectives', () => {
+  let db: any;
+
+  beforeEach(() => { db = createTestDb(); });
+
+  test('생성 후 getPerspective로 조회', () => {
+    const p = createPerspective(db, { type: 'review', name: 'Product', description: 'PM 관점' });
+    assert.ok(p.id);
+    assert.equal(p.type, 'review');
+    assert.equal(p.name, 'Product');
+    assert.equal(p.description, 'PM 관점');
+    assert.equal(p.is_locked, 0);
+  });
+
+  test('getPerspective — 존재하지 않는 ID는 null 반환', () => {
+    assert.equal(getPerspective(db, 999), null);
+  });
+
+  test('getPerspectives — 전체 조회', () => {
+    createPerspective(db, { type: 'review', name: 'Product' });
+    createPerspective(db, { type: 'review', name: 'Ops' });
+    const all = getPerspectives(db);
+    assert.equal(all.length, 2);
+  });
+
+  test('getPerspectives — type으로 필터링', () => {
+    createPerspective(db, { type: 'review', name: 'A' });
+    createPerspective(db, { type: 'review', name: 'B' });
+    createPerspective(db, { type: 'features', name: 'C' });
+    const review = getPerspectives(db, 'review');
+    assert.equal(review.length, 2);
+    assert.ok(review.every(p => p.type === 'review'));
+  });
+
+  test('getPerspectives — name으로 정렬', () => {
+    createPerspective(db, { type: 'review', name: 'Z' });
+    createPerspective(db, { type: 'review', name: 'A' });
+    const sorted = getPerspectives(db, 'review');
+    assert.equal(sorted[0].name, 'A');
+    assert.equal(sorted[1].name, 'Z');
+  });
+});
+
+describe('updatePerspective', () => {
+  let db: any;
+
+  beforeEach(() => { db = createTestDb(); });
+
+  test('name 수정', () => {
+    const p = createPerspective(db, { type: 'review', name: 'Old' });
+    const updated = updatePerspective(db, p.id, { name: 'New' });
+    assert.equal(updated.name, 'New');
+    assert.equal(updated.type, 'review');
+  });
+
+  test('description 수정', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    const updated = updatePerspective(db, p.id, { description: '새 설명' });
+    assert.equal(updated.description, '새 설명');
+  });
+
+  test('description을 null로 설정', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM', description: '기존' });
+    const updated = updatePerspective(db, p.id, { description: null });
+    assert.equal(updated.description, null);
+  });
+
+  test('존재하지 않는 ID 업데이트 시 에러 발생', () => {
+    assert.throws(() => updatePerspective(db, 999, { name: 'New' }), /not found/);
+  });
+
+  test('locked 상태에서는 수정 불가', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    lockPerspective(db, p.id);
+    assert.throws(() => updatePerspective(db, p.id, { name: 'New' }), /locked/);
+  });
+});
+
+describe('deletePerspective', () => {
+  let db: any;
+
+  beforeEach(() => { db = createTestDb(); });
+
+  test('삭제 후 getPerspective는 null 반환', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    deletePerspective(db, p.id);
+    assert.equal(getPerspective(db, p.id), null);
+  });
+
+  test('locked 상태에서는 삭제 불가', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    lockPerspective(db, p.id);
+    assert.throws(() => deletePerspective(db, p.id), /locked/);
+  });
+
+  test('존재하지 않는 ID 삭제 시 에러 없음', () => {
+    assert.doesNotThrow(() => deletePerspective(db, 999));
+  });
+});
+
+describe('lockPerspective / unlockPerspective', () => {
+  let db: any;
+
+  beforeEach(() => { db = createTestDb(); });
+
+  test('lock 후 is_locked = 1', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    const locked = lockPerspective(db, p.id);
+    assert.equal(locked.is_locked, 1);
+  });
+
+  test('unlock 후 is_locked = 0', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    lockPerspective(db, p.id);
+    const unlocked = unlockPerspective(db, p.id);
+    assert.equal(unlocked.is_locked, 0);
+  });
+
+  test('unlock 후 다시 수정 가능', () => {
+    const p = createPerspective(db, { type: 'review', name: 'PM' });
+    lockPerspective(db, p.id);
+    unlockPerspective(db, p.id);
+    const updated = updatePerspective(db, p.id, { name: 'Updated' });
+    assert.equal(updated.name, 'Updated');
+  });
+
+  test('존재하지 않는 ID lock 시 에러', () => {
+    assert.throws(() => lockPerspective(db, 999), /not found/);
   });
 });

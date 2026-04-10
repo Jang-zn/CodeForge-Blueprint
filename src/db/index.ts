@@ -31,6 +31,7 @@ import {
   MIGRATION_V28_SQL,
   MIGRATION_V29_SQL,
   MIGRATION_V30_SQL,
+  MIGRATION_V31_SQL,
 } from './schema.js';
 
 // 기본 문서 유형 시드 데이터
@@ -137,6 +138,7 @@ export function openDb(dbPath: string): any {
   try { db.exec(MIGRATION_V28_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V29_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V30_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V31_SQL); } catch { /* ignore */ }
 
   // doc_types 시드 데이터 (INSERT OR IGNORE)
   const seedStmt = db.prepare(

@@ -117,6 +117,16 @@ export interface GlossaryTerm {
   updated_at: string;
 }
 
+export interface Perspective {
+  id: number;
+  type: string;
+  name: string;
+  description: string | null;
+  is_locked: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ===== Workspace =====
 
 export function getWorkspaceMeta(db: any): WorkspaceMeta | null {
@@ -749,4 +759,83 @@ export function buildGlossaryMarkdown(db: any): string {
     lines.push('');
   }
   return lines.join('\n').trim();
+}
+
+// ===== Perspectives =====
+
+export interface PerspectiveInput {
+  type: string;
+  name: string;
+  description?: string | null;
+}
+
+export function getPerspectives(db: any, type?: string): Perspective[] {
+  if (type) {
+    return db.prepare('SELECT * FROM perspectives WHERE type = ? ORDER BY name').all(type) as Perspective[];
+  }
+  return db.prepare('SELECT * FROM perspectives ORDER BY type, name').all() as Perspective[];
+}
+
+export function getPerspective(db: any, id: number): Perspective | null {
+  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) ?? null;
+}
+
+export function createPerspective(db: any, input: PerspectiveInput): Perspective {
+  const result = db.prepare(`
+    INSERT INTO perspectives (type, name, description, is_locked)
+    VALUES (?, ?, ?, 0)
+  `).run(input.type, input.name, input.description ?? null);
+  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(result.lastInsertRowid) as Perspective;
+}
+
+export function updatePerspective(db: any, id: number, input: Partial<PerspectiveInput>): Perspective {
+  const current = getPerspective(db, id);
+  if (!current) throw new Error(`Perspective ${id} not found`);
+  if (current.is_locked === 1) throw new Error(`Perspective ${id} is locked`);
+
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if ('type' in input && input.type !== undefined) {
+    updates.push('type = ?');
+    values.push(input.type);
+  }
+  if ('name' in input && input.name !== undefined) {
+    updates.push('name = ?');
+    values.push(input.name);
+  }
+  if ('description' in input) {
+    updates.push('description = ?');
+    values.push(input.description ?? null);
+  }
+
+  if (updates.length === 0) return current;
+
+  updates.push("updated_at = datetime('now')");
+  values.push(id);
+
+  db.prepare(`UPDATE perspectives SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
+}
+
+export function deletePerspective(db: any, id: number): void {
+  const current = getPerspective(db, id);
+  if (current && current.is_locked === 1) {
+    throw new Error(`Perspective ${id} is locked`);
+  }
+  db.prepare('DELETE FROM perspectives WHERE id = ?').run(id);
+}
+
+export function lockPerspective(db: any, id: number): Perspective {
+  const current = getPerspective(db, id);
+  if (!current) throw new Error(`Perspective ${id} not found`);
+  db.prepare("UPDATE perspectives SET is_locked = 1, updated_at = datetime('now') WHERE id = ?").run(id);
+  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
+}
+
+export function unlockPerspective(db: any, id: number): Perspective {
+  const current = getPerspective(db, id);
+  if (!current) throw new Error(`Perspective ${id} not found`);
+  db.prepare("UPDATE perspectives SET is_locked = 0, updated_at = datetime('now') WHERE id = ?").run(id);
+  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
 }

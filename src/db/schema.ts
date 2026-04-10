@@ -135,6 +135,19 @@ export const MIGRATION_V30_SQL = `
 ALTER TABLE jobs ADD COLUMN cache_read_tokens INTEGER;
 `;
 
+export const MIGRATION_V31_SQL = `
+CREATE TABLE IF NOT EXISTS perspectives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_locked INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(type, name)
+);
+`;
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS workspace (
   id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -260,5 +273,16 @@ CREATE TABLE IF NOT EXISTS glossary_terms (
   aliases TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS perspectives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_locked INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(type, name)
 );
 `;
