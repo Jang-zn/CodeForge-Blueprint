@@ -10,6 +10,7 @@ import {
   getProviderModel,
   markSupersededJobs,
   isJobRunnable,
+  listPerspectives,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
@@ -99,9 +100,14 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
+interface AnalyzeRequest {
+  tab?: Tab;
+  perspectiveIds?: string[];
+}
+
 analyzeRoute.post('/', async (c) => {
   const { db, workspace, sessionId } = requireRequestContext(c);
-  const body = await c.req.json<{ tab?: Tab }>().catch(() => ({ tab: 'review' as Tab }));
+  const body = await c.req.json<AnalyzeRequest>().catch(() => ({ tab: 'review' as Tab })) as AnalyzeRequest;
   const tab: Tab = body.tab ?? 'review';
 
   const meta = getWorkspaceMeta(db);
@@ -129,15 +135,24 @@ analyzeRoute.post('/', async (c) => {
         return;
       }
 
+      // Fetch perspectives for this analysis
+      let perspectives = listPerspectives(db, tab);
+
+      // Filter by user-selected perspectives if provided
+      if (body.perspectiveIds && body.perspectiveIds.length > 0) {
+        const selectedIds = new Set(body.perspectiveIds);
+        perspectives = perspectives.filter(p => selectedIds.has(p.id));
+      }
+
       let prompt: string;
       if (tab === 'review') {
-        prompt = buildReviewPlanPrompt(ctxPackage);
+        prompt = buildReviewPlanPrompt(ctxPackage, perspectives);
       } else if (tab === 'backend') {
-        prompt = buildBackendPrompt(ctxPackage);
+        prompt = buildBackendPrompt(ctxPackage, perspectives);
       } else if (tab === 'frontend') {
-        prompt = buildFrontendPrompt(ctxPackage);
+        prompt = buildFrontendPrompt(ctxPackage, perspectives);
       } else if (tab === 'features') {
-        prompt = buildFeaturesPrompt(ctxPackage);
+        prompt = buildFeaturesPrompt(ctxPackage, perspectives);
       } else {
         updateJob(db, jobId, 'failed', `알 수 없는 탭: ${tab}`);
         return;
@@ -191,6 +206,8 @@ analyzeRoute.post('/', async (c) => {
         applied_at: null,
         source_run_id: jobId,
         confidence: issue.confidence ?? null,
+        decision_at: null,
+        decision_quality: null,
       })));
 
       if (refItems.length > 0) {

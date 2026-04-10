@@ -1,6 +1,7 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
+import { type Perspective } from '../../db/repository.js';
 
-export function buildFeaturesPrompt(ctx: ContextPackage): string {
+export function buildFeaturesPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {
   const contextBlock = formatContextForPrompt(ctx);
 
   const deferredSection = ctx.decisions?.length
@@ -9,8 +10,12 @@ export function buildFeaturesPrompt(ctx: ContextPackage): string {
       ).join('\n')}\n위 항목들을 다음 버전 기능으로 발전시킬 수 있는지 각 관점에서 평가하고, 가능하면 제안에 포함하세요.\n`
     : '';
 
+  const customPerspectivesBlock = perspectives && perspectives.length > 0
+    ? `\n\n## 커스텀 관점\n\n${perspectives.map(p => `**${p.name}**: ${p.description || '(설명 없음)'}`).join('\n')}\n\n커스텀 관점에서 추가 기능 제안이 있으면 포함하세요.`
+    : '';
+
   return `당신은 시니어 프로덕트 매니저입니다.
-아래 문서들을 분석하여 다음 버전 기능을 4개 관점에서 제안하세요.
+아래 문서들을 분석하여 다음 버전 기능을 4개 관점에서 제안하세요.${customPerspectivesBlock}
 
 ## 분석 관점
 

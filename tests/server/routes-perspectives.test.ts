@@ -2,10 +2,9 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
 import {
-  createPerspective,
-  getPerspectives,
+  listPerspectives,
   getPerspective,
-  lockPerspective,
+  addCustomPerspective,
 } from '../../src/db/repository.js';
 import perspectivesRoute from '../../src/server/routes/perspectives.js';
 import { setupTestWorkspace, withSession, jsonPost, jsonPut, type TestWorkspace } from '../helpers.js';
@@ -24,107 +23,93 @@ describe('perspectivesRoute', () => {
 
   // ─── GET / ─────────────────────────────────────────────────────
 
-  test('GET / — 전체 perspectives 반환', async () => {
-    createPerspective(tw.db, { type: 'review', name: 'Product' });
-    createPerspective(tw.db, { type: 'review', name: 'Ops' });
-
+  test('GET / — 시드 관점 전체 반환', async () => {
     const res = await app.request('/perspectives', withSession(tw.sessionId));
     assert.equal(res.status, 200);
     const json = await res.json();
     assert.ok(Array.isArray(json.perspectives));
-    assert.equal(json.perspectives.length, 2);
+    assert.ok(json.perspectives.length >= 20);
   });
 
-  test('GET / — type 파라미터로 필터링', async () => {
-    createPerspective(tw.db, { type: 'review', name: 'Product' });
-    createPerspective(tw.db, { type: 'features', name: 'Marketing' });
-
-    const res = await app.request('/perspectives?type=review', withSession(tw.sessionId));
+  test('GET /?tab=review — review 탭 관점만 반환', async () => {
+    const res = await app.request('/perspectives?tab=review', withSession(tw.sessionId));
     const json = await res.json();
-    assert.equal(json.perspectives.length, 1);
-    assert.equal(json.perspectives[0].type, 'review');
+    assert.ok(json.perspectives.every((p: any) => p.tab === 'review'));
+    assert.ok(json.perspectives.length >= 6);
+  });
+
+  // ─── GET /active ───────────────────────────────────────────────
+
+  test('GET /active?tab=review — 활성 관점만 반환', async () => {
+    const res = await app.request('/perspectives/active?tab=review', withSession(tw.sessionId));
+    assert.equal(res.status, 200);
+    const json = await res.json();
+    assert.ok(Array.isArray(json.perspectives));
+    assert.equal(json.perspectives.length, 6); // 기본 6개 locked
+  });
+
+  test('GET /active — tab 누락 시 400', async () => {
+    const res = await app.request('/perspectives/active', withSession(tw.sessionId));
+    assert.equal(res.status, 400);
   });
 
   // ─── GET /:id ──────────────────────────────────────────────────
 
   test('GET /:id — 특정 perspective 반환', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'PM' });
-
-    const res = await app.request(`/perspectives/${p.id}`, withSession(tw.sessionId));
+    const res = await app.request('/perspectives/review-planning-consistency', withSession(tw.sessionId));
     assert.equal(res.status, 200);
     const json = await res.json();
-    assert.equal(json.perspective.id, p.id);
-    assert.equal(json.perspective.name, 'PM');
+    assert.equal(json.perspective.id, 'review-planning-consistency');
+    assert.equal(json.perspective.tab, 'review');
   });
 
   test('GET /:id — 존재하지 않는 ID는 404', async () => {
-    const res = await app.request('/perspectives/999', withSession(tw.sessionId));
+    const res = await app.request('/perspectives/nonexistent-id', withSession(tw.sessionId));
     assert.equal(res.status, 404);
   });
 
   // ─── POST / ────────────────────────────────────────────────────
 
-  test('POST / — 새로운 perspective 생성', async () => {
+  test('POST / — 커스텀 관점 생성', async () => {
     const res = await app.request(
       '/perspectives',
-      jsonPost(tw.sessionId, { type: 'review', name: 'PM', description: '제품 관리자 관점' }),
+      jsonPost(tw.sessionId, { tab: 'review', name: '테스트 관점', description: '설명', prompt_instruction: '지시문', id_prefix: 'test' }),
     );
     assert.equal(res.status, 201);
     const json = await res.json();
-    assert.ok(json.perspective.id);
-    assert.equal(json.perspective.type, 'review');
-    assert.equal(json.perspective.name, 'PM');
-    assert.equal(json.perspective.description, '제품 관리자 관점');
+    assert.ok(json.perspective.id.startsWith('custom-review-'));
+    assert.equal(json.perspective.tab, 'review');
+    assert.equal(json.perspective.category, 'custom');
     assert.equal(json.perspective.is_locked, 0);
   });
 
-  test('POST / — description 생략 가능', async () => {
+  test('POST / — 필수 필드 누락 시 400', async () => {
     const res = await app.request(
       '/perspectives',
-      jsonPost(tw.sessionId, { type: 'review', name: 'PM' }),
-    );
-    assert.equal(res.status, 201);
-    const json = await res.json();
-    assert.equal(json.perspective.description, null);
-  });
-
-  test('POST / — type 누락 시 400', async () => {
-    const res = await app.request(
-      '/perspectives',
-      jsonPost(tw.sessionId, { name: 'PM' }),
-    );
-    assert.equal(res.status, 400);
-  });
-
-  test('POST / — name 누락 시 400', async () => {
-    const res = await app.request(
-      '/perspectives',
-      jsonPost(tw.sessionId, { type: 'review' }),
+      jsonPost(tw.sessionId, { tab: 'review', name: '불완전' }),
     );
     assert.equal(res.status, 400);
   });
 
   // ─── PUT /:id ──────────────────────────────────────────────────
 
-  test('PUT /:id — perspective 수정', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'Old' });
+  test('PUT /:id — 커스텀 관점 수정', async () => {
+    const p = addCustomPerspective(tw.db, { tab: 'review', name: '구버전', description: '설명', prompt_instruction: '지시문', id_prefix: 'old' });
 
     const res = await app.request(
       `/perspectives/${p.id}`,
-      jsonPut(tw.sessionId, { name: 'New', description: '새 설명' }),
+      jsonPut(tw.sessionId, { name: '신버전', description: '새 설명' }),
     );
     assert.equal(res.status, 200);
     const json = await res.json();
-    assert.equal(json.perspective.name, 'New');
-    assert.equal(json.perspective.description, '새 설명');
+    assert.equal(json.perspective.name, '신버전');
   });
 
-  test('PUT /:id — locked 상태에서는 수정 불가 (409)', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'PM' });
-    lockPerspective(tw.db, p.id);
+  test('PUT /:id — locked 관점 수정 불가 (409)', async () => {
+    const locked = listPerspectives(tw.db, 'review').find(p => p.is_locked === 1)!;
 
     const res = await app.request(
-      `/perspectives/${p.id}`,
+      `/perspectives/${locked.id}`,
       jsonPut(tw.sessionId, { name: 'New' }),
     );
     assert.equal(res.status, 409);
@@ -132,7 +117,7 @@ describe('perspectivesRoute', () => {
 
   test('PUT /:id — 존재하지 않는 ID는 404', async () => {
     const res = await app.request(
-      '/perspectives/999',
+      '/perspectives/nonexistent',
       jsonPut(tw.sessionId, { name: 'New' }),
     );
     assert.equal(res.status, 404);
@@ -140,24 +125,21 @@ describe('perspectivesRoute', () => {
 
   // ─── DELETE /:id ───────────────────────────────────────────────
 
-  test('DELETE /:id — perspective 삭제', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'PM' });
+  test('DELETE /:id — 커스텀 관점 삭제', async () => {
+    const p = addCustomPerspective(tw.db, { tab: 'backend', name: '삭제대상', description: '설명', prompt_instruction: '지시문', id_prefix: 'del' });
 
     const res = await app.request(`/perspectives/${p.id}`, {
       ...withSession(tw.sessionId),
       method: 'DELETE',
     });
     assert.equal(res.status, 204);
-
-    // DB에서 삭제 확인
     assert.equal(getPerspective(tw.db, p.id), null);
   });
 
-  test('DELETE /:id — locked 상태에서는 삭제 불가 (409)', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'PM' });
-    lockPerspective(tw.db, p.id);
+  test('DELETE /:id — locked 관점 삭제 불가 (409)', async () => {
+    const locked = listPerspectives(tw.db, 'review').find(p => p.is_locked === 1)!;
 
-    const res = await app.request(`/perspectives/${p.id}`, {
+    const res = await app.request(`/perspectives/${locked.id}`, {
       ...withSession(tw.sessionId),
       method: 'DELETE',
     });
@@ -165,92 +147,40 @@ describe('perspectivesRoute', () => {
   });
 
   test('DELETE /:id — 존재하지 않는 ID는 404', async () => {
-    const res = await app.request(`/perspectives/999`, {
+    const res = await app.request('/perspectives/nonexistent', {
       ...withSession(tw.sessionId),
       method: 'DELETE',
     });
     assert.equal(res.status, 404);
   });
 
-  // ─── POST /:id/lock ────────────────────────────────────────────
+  // ─── PUT /:id/toggle ───────────────────────────────────────────
 
-  test('POST /:id/lock — perspective lock', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'PM' });
+  test('PUT /:id/toggle — optional 관점 활성화', async () => {
+    const optional = listPerspectives(tw.db, 'review').find(p => p.category === 'optional')!;
 
-    const res = await app.request(`/perspectives/${p.id}/lock`, jsonPost(tw.sessionId, {}));
-    assert.equal(res.status, 200);
-    const json = await res.json();
-    assert.equal(json.perspective.is_locked, 1);
-
-    // 수정 불가 확인
-    const updateRes = await app.request(
-      `/perspectives/${p.id}`,
-      jsonPut(tw.sessionId, { name: 'New' }),
+    const res = await app.request(
+      `/perspectives/${optional.id}/toggle`,
+      jsonPut(tw.sessionId, { active: true }),
     );
-    assert.equal(updateRes.status, 409);
-  });
-
-  test('POST /:id/lock — 존재하지 않는 ID는 404', async () => {
-    const res = await app.request('/perspectives/999/lock', jsonPost(tw.sessionId, {}));
-    assert.equal(res.status, 404);
-  });
-
-  // ─── POST /:id/unlock ──────────────────────────────────────────
-
-  test('POST /:id/unlock — perspective unlock', async () => {
-    const p = createPerspective(tw.db, { type: 'review', name: 'PM' });
-    lockPerspective(tw.db, p.id);
-
-    const res = await app.request(`/perspectives/${p.id}/unlock`, jsonPost(tw.sessionId, {}));
     assert.equal(res.status, 200);
-    const json = await res.json();
-    assert.equal(json.perspective.is_locked, 0);
+  });
 
-    // 수정 가능 확인
-    const updateRes = await app.request(
-      `/perspectives/${p.id}`,
-      jsonPut(tw.sessionId, { name: 'New' }),
+  test('PUT /:id/toggle — locked 관점 비활성화 시 409', async () => {
+    const locked = listPerspectives(tw.db, 'review').find(p => p.is_locked === 1)!;
+
+    const res = await app.request(
+      `/perspectives/${locked.id}/toggle`,
+      jsonPut(tw.sessionId, { active: false }),
     );
-    assert.equal(updateRes.status, 200);
+    assert.equal(res.status, 409);
   });
 
-  test('POST /:id/unlock — 존재하지 않는 ID는 404', async () => {
-    const res = await app.request('/perspectives/999/unlock', jsonPost(tw.sessionId, {}));
-    assert.equal(res.status, 404);
-  });
-
-  // ─── GET /export/json ──────────────────────────────────────────
-
-  test('GET /export/json — 모든 perspectives를 JSON으로 내보내기', async () => {
-    createPerspective(tw.db, { type: 'review', name: 'PM', description: '제품' });
-    createPerspective(tw.db, { type: 'review', name: 'Ops', description: '운영' });
-    lockPerspective(tw.db, getPerspectives(tw.db)[0].id);
-
-    const res = await app.request('/perspectives/export/json', withSession(tw.sessionId));
-    assert.equal(res.status, 200);
-    assert.equal(res.headers.get('content-type'), 'application/json');
-    const json = await res.json();
-    assert.ok(Array.isArray(json));
-    assert.equal(json.length, 2);
-    assert.ok(json[0].id);
-    assert.ok(json[0].created_at);
-    assert.ok(json[0].updated_at);
-  });
-
-  test('GET /export/json — type으로 필터링', async () => {
-    createPerspective(tw.db, { type: 'review', name: 'PM' });
-    createPerspective(tw.db, { type: 'features', name: 'Marketing' });
-
-    const res = await app.request('/perspectives/export/json?type=review', withSession(tw.sessionId));
-    const json = await res.json();
-    assert.equal(json.length, 1);
-    assert.equal(json[0].type, 'review');
-  });
-
-  test('GET /export/json — 빈 배열 (perspectives 없음)', async () => {
-    const res = await app.request('/perspectives/export/json', withSession(tw.sessionId));
-    const json = await res.json();
-    assert.ok(Array.isArray(json));
-    assert.equal(json.length, 0);
+  test('PUT /:id/toggle — active 필드 누락 시 400', async () => {
+    const res = await app.request(
+      '/perspectives/review-planning-consistency/toggle',
+      jsonPut(tw.sessionId, {}),
+    );
+    assert.equal(res.status, 400);
   });
 });

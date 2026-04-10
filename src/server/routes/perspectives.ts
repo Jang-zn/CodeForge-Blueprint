@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import {
-  getPerspectives,
+  listPerspectives,
+  getActivePerspectives,
   getPerspective,
-  createPerspective,
-  updatePerspective,
-  deletePerspective,
-  lockPerspective,
-  unlockPerspective,
-  type PerspectiveInput,
+  addCustomPerspective,
+  updateCustomPerspective,
+  deleteCustomPerspective,
+  toggleActivePerspective,
+  type CustomPerspectiveInput,
 } from '../../db/repository.js';
 import { requireRequestContext } from '../context.js';
 
@@ -15,109 +15,107 @@ const perspectivesRoute = new Hono();
 
 perspectivesRoute.get('/', (c) => {
   const { db } = requireRequestContext(c);
-  const type = c.req.query('type');
-  const perspectives = getPerspectives(db, type);
+  const tab = c.req.query('tab');
+  const perspectives = listPerspectives(db, tab);
+  return c.json({ perspectives });
+});
+
+perspectivesRoute.get('/active', (c) => {
+  const { db } = requireRequestContext(c);
+  const tab = c.req.query('tab');
+  if (!tab) return c.json({ error: 'tab 파라미터가 필요합니다.' }, 400);
+  const perspectives = getActivePerspectives(db, tab);
   return c.json({ perspectives });
 });
 
 perspectivesRoute.get('/:id', (c) => {
   const { db } = requireRequestContext(c);
-  const id = parseInt(c.req.param('id'), 10);
-  const perspective = getPerspective(db, id);
+  const perspective = getPerspective(db, c.req.param('id'));
   if (!perspective) return c.json({ error: 'Perspective not found' }, 404);
   return c.json({ perspective });
 });
 
 perspectivesRoute.post('/', async (c) => {
   const { db } = requireRequestContext(c);
-  const body = await c.req.json<PerspectiveInput>();
+  const body = await c.req.json<CustomPerspectiveInput>().catch(() => null);
+  if (!body) return c.json({ error: '요청 본문이 필요합니다.' }, 400);
 
-  if (!body.type || !body.name) {
-    return c.json({ error: 'type과 name은 필수입니다.' }, 400);
+  const { tab, name, description, prompt_instruction, id_prefix } = body;
+  if (!tab || !name || !description || !prompt_instruction || !id_prefix) {
+    return c.json({ error: 'tab, name, description, prompt_instruction, id_prefix는 필수입니다.' }, 400);
   }
 
-  try {
-    const perspective = createPerspective(db, body);
-    return c.json({ perspective }, 201);
-  } catch (err: any) {
-    if (err.message.includes('UNIQUE constraint failed')) {
-      return c.json({ error: `${body.type}에 이미 "${body.name}" 관점이 존재합니다.` }, 409);
-    }
-    throw err;
-  }
+  const perspective = addCustomPerspective(db, body);
+  return c.json({ perspective }, 201);
 });
 
 perspectivesRoute.put('/:id', async (c) => {
   const { db } = requireRequestContext(c);
-  const id = parseInt(c.req.param('id'), 10);
-  const body = await c.req.json<Partial<PerspectiveInput>>();
+  const id = c.req.param('id');
+  const body = await c.req.json<Partial<CustomPerspectiveInput>>().catch(() => null);
+  if (!body) return c.json({ error: '요청 본문이 필요합니다.' }, 400);
 
   try {
-    const perspective = updatePerspective(db, id, body);
+    const perspective = updateCustomPerspective(db, id, body);
     return c.json({ perspective });
   } catch (err: any) {
-    if (err.message.includes('not found')) {
-      return c.json({ error: 'Perspective not found' }, 404);
-    }
-    if (err.message.includes('locked')) {
-      return c.json({ error: 'Perspective is locked' }, 409);
-    }
-    if (err.message.includes('UNIQUE constraint failed')) {
-      return c.json({ error: '이미 같은 이름의 관점이 존재합니다.' }, 409);
-    }
+    if (err.message.includes('not found')) return c.json({ error: 'Perspective not found' }, 404);
+    if (err.message.includes('locked')) return c.json({ error: 'Perspective is locked' }, 409);
     throw err;
   }
 });
 
 perspectivesRoute.delete('/:id', (c) => {
   const { db } = requireRequestContext(c);
-  const id = parseInt(c.req.param('id'), 10);
-  const perspective = getPerspective(db, id);
-  if (!perspective) {
-    return c.json({ error: 'Perspective not found' }, 404);
-  }
+  const id = c.req.param('id');
+  const existing = getPerspective(db, id);
+  if (!existing) return c.json({ error: 'Perspective not found' }, 404);
 
   try {
-    deletePerspective(db, id);
+    deleteCustomPerspective(db, id);
     return c.body(null, 204);
   } catch (err: any) {
-    if (err.message.includes('locked')) {
-      return c.json({ error: 'Perspective is locked' }, 409);
-    }
+    if (err.message.includes('locked')) return c.json({ error: 'Perspective is locked' }, 409);
     throw err;
   }
 });
 
-perspectivesRoute.post('/:id/lock', (c) => {
+perspectivesRoute.put('/:id/toggle', async (c) => {
   const { db } = requireRequestContext(c);
-  const id = parseInt(c.req.param('id'), 10);
-  const perspective = getPerspective(db, id);
-  if (!perspective) {
-    return c.json({ error: 'Perspective not found' }, 404);
+  const id = c.req.param('id');
+  const body = await c.req.json<{ active: boolean }>().catch(() => null);
+  if (!body || typeof body.active !== 'boolean') {
+    return c.json({ error: 'active(boolean) 필드가 필요합니다.' }, 400);
   }
 
-  const locked = lockPerspective(db, id);
-  return c.json({ perspective: locked });
-});
-
-perspectivesRoute.post('/:id/unlock', (c) => {
-  const { db } = requireRequestContext(c);
-  const id = parseInt(c.req.param('id'), 10);
-  const perspective = getPerspective(db, id);
-  if (!perspective) {
-    return c.json({ error: 'Perspective not found' }, 404);
+  try {
+    toggleActivePerspective(db, id, body.active);
+    const perspective = getPerspective(db, id);
+    return c.json({ perspective });
+  } catch (err: any) {
+    if (err.message.includes('not found')) return c.json({ error: 'Perspective not found' }, 404);
+    if (err.message.includes('cannot be deactivated')) return c.json({ error: '기본 관점은 비활성화할 수 없습니다.' }, 409);
+    throw err;
   }
-
-  const unlocked = unlockPerspective(db, id);
-  return c.json({ perspective: unlocked });
 });
 
-perspectivesRoute.get('/export/json', (c) => {
+perspectivesRoute.get('/recommend/:tab', (c) => {
   const { db } = requireRequestContext(c);
-  const type = c.req.query('type');
-  const perspectives = getPerspectives(db, type);
-  c.header('Content-Type', 'application/json');
-  return c.json(perspectives);
+  const tab = c.req.param('tab');
+
+  // Recommendation engine: suggest custom perspectives based on:
+  // 1. Perspectives with is_locked=0 (unlocked custom perspectives)
+  // 2. Simple heuristic: return all unlocked perspectives for the tab
+  // (Future: could add ML-based recommendation based on project characteristics)
+  const allPerspectives = listPerspectives(db, tab);
+  const unlocked = allPerspectives.filter(p => p.is_locked === 0);
+  const locked = allPerspectives.filter(p => p.is_locked === 1);
+
+  return c.json({
+    recommended: unlocked.slice(0, 3), // Return top 3 unlocked perspectives
+    available: allPerspectives,
+    lockedCount: locked.length,
+  });
 });
 
 export default perspectivesRoute;

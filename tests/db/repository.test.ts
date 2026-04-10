@@ -23,13 +23,15 @@ import {
   createJob,
   updateJob,
   getJob,
-  getPerspectives,
+  listPerspectives,
+  getActivePerspectives,
   getPerspective,
-  createPerspective,
-  updatePerspective,
-  deletePerspective,
-  lockPerspective,
-  unlockPerspective,
+  addCustomPerspective,
+  updateCustomPerspective,
+  deleteCustomPerspective,
+  toggleActivePerspective,
+  getProjectMeta,
+  upsertProjectMeta,
   type Tab,
 } from '../../src/db/repository.js';
 
@@ -417,133 +419,134 @@ describe('createJob / updateJob / getJob', () => {
 
 // ─── perspectives ──────────────────────────────────────────────────────────
 
-describe('createPerspective / getPerspective / getPerspectives', () => {
+describe('perspectives — seedPerspectives + listPerspectives', () => {
   let db: any;
 
   beforeEach(() => { db = createTestDb(); });
 
-  test('생성 후 getPerspective로 조회', () => {
-    const p = createPerspective(db, { type: 'review', name: 'Product', description: 'PM 관점' });
-    assert.ok(p.id);
-    assert.equal(p.type, 'review');
-    assert.equal(p.name, 'Product');
-    assert.equal(p.description, 'PM 관점');
+  test('시드 데이터: review 탭 기본 관점 6개 존재', () => {
+    const review = listPerspectives(db, 'review').filter(p => p.category === 'default');
+    assert.equal(review.length, 6);
+    assert.ok(review.every(p => p.is_locked === 1));
+  });
+
+  test('시드 데이터: backend 탭 기본 관점 5개 존재', () => {
+    const be = listPerspectives(db, 'backend').filter(p => p.category === 'default');
+    assert.equal(be.length, 5);
+  });
+
+  test('시드 데이터: frontend 탭 기본 관점 5개 존재', () => {
+    const fe = listPerspectives(db, 'frontend').filter(p => p.category === 'default');
+    assert.equal(fe.length, 5);
+  });
+
+  test('시드 데이터: features 탭 기본 관점 4개 존재', () => {
+    const ft = listPerspectives(db, 'features').filter(p => p.category === 'default');
+    assert.equal(ft.length, 4);
+  });
+
+  test('listPerspectives — tab 없이 전체 조회', () => {
+    const all = listPerspectives(db);
+    assert.ok(all.length >= 20);
+  });
+
+  test('getActivePerspectives — 기본 관점만 활성화', () => {
+    const active = getActivePerspectives(db, 'review');
+    assert.equal(active.length, 6);
+    assert.ok(active.every(p => p.is_locked === 1));
+  });
+});
+
+describe('addCustomPerspective / updateCustomPerspective / deleteCustomPerspective', () => {
+  let db: any;
+
+  beforeEach(() => { db = createTestDb(); });
+
+  test('커스텀 관점 추가 후 조회', () => {
+    const p = addCustomPerspective(db, { tab: 'review', name: '테스트 관점', description: '설명', prompt_instruction: '지시문', id_prefix: 'test' });
+    assert.ok(p.id.startsWith('custom-review-'));
+    assert.equal(p.tab, 'review');
+    assert.equal(p.category, 'custom');
     assert.equal(p.is_locked, 0);
   });
 
   test('getPerspective — 존재하지 않는 ID는 null 반환', () => {
-    assert.equal(getPerspective(db, 999), null);
+    assert.equal(getPerspective(db, 'nonexistent'), null);
   });
 
-  test('getPerspectives — 전체 조회', () => {
-    createPerspective(db, { type: 'review', name: 'Product' });
-    createPerspective(db, { type: 'review', name: 'Ops' });
-    const all = getPerspectives(db);
-    assert.equal(all.length, 2);
+  test('커스텀 관점 name/description 수정', () => {
+    const p = addCustomPerspective(db, { tab: 'review', name: '구버전', description: '구설명', prompt_instruction: '지시문', id_prefix: 'old' });
+    const updated = updateCustomPerspective(db, p.id, { name: '신버전', description: '신설명' });
+    assert.equal(updated.name, '신버전');
+    assert.equal(updated.description, '신설명');
   });
 
-  test('getPerspectives — type으로 필터링', () => {
-    createPerspective(db, { type: 'review', name: 'A' });
-    createPerspective(db, { type: 'review', name: 'B' });
-    createPerspective(db, { type: 'features', name: 'C' });
-    const review = getPerspectives(db, 'review');
-    assert.equal(review.length, 2);
-    assert.ok(review.every(p => p.type === 'review'));
+  test('locked 관점 수정 시 에러', () => {
+    const locked = listPerspectives(db, 'review').find(p => p.is_locked === 1)!;
+    assert.throws(() => updateCustomPerspective(db, locked.id, { name: '수정' }), /locked/);
   });
 
-  test('getPerspectives — name으로 정렬', () => {
-    createPerspective(db, { type: 'review', name: 'Z' });
-    createPerspective(db, { type: 'review', name: 'A' });
-    const sorted = getPerspectives(db, 'review');
-    assert.equal(sorted[0].name, 'A');
-    assert.equal(sorted[1].name, 'Z');
-  });
-});
-
-describe('updatePerspective', () => {
-  let db: any;
-
-  beforeEach(() => { db = createTestDb(); });
-
-  test('name 수정', () => {
-    const p = createPerspective(db, { type: 'review', name: 'Old' });
-    const updated = updatePerspective(db, p.id, { name: 'New' });
-    assert.equal(updated.name, 'New');
-    assert.equal(updated.type, 'review');
-  });
-
-  test('description 수정', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    const updated = updatePerspective(db, p.id, { description: '새 설명' });
-    assert.equal(updated.description, '새 설명');
-  });
-
-  test('description을 null로 설정', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM', description: '기존' });
-    const updated = updatePerspective(db, p.id, { description: null });
-    assert.equal(updated.description, null);
-  });
-
-  test('존재하지 않는 ID 업데이트 시 에러 발생', () => {
-    assert.throws(() => updatePerspective(db, 999, { name: 'New' }), /not found/);
-  });
-
-  test('locked 상태에서는 수정 불가', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    lockPerspective(db, p.id);
-    assert.throws(() => updatePerspective(db, p.id, { name: 'New' }), /locked/);
-  });
-});
-
-describe('deletePerspective', () => {
-  let db: any;
-
-  beforeEach(() => { db = createTestDb(); });
-
-  test('삭제 후 getPerspective는 null 반환', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    deletePerspective(db, p.id);
+  test('커스텀 관점 삭제', () => {
+    const p = addCustomPerspective(db, { tab: 'backend', name: '삭제 대상', description: '설명', prompt_instruction: '지시문', id_prefix: 'del' });
+    deleteCustomPerspective(db, p.id);
     assert.equal(getPerspective(db, p.id), null);
   });
 
-  test('locked 상태에서는 삭제 불가', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    lockPerspective(db, p.id);
-    assert.throws(() => deletePerspective(db, p.id), /locked/);
-  });
-
-  test('존재하지 않는 ID 삭제 시 에러 없음', () => {
-    assert.doesNotThrow(() => deletePerspective(db, 999));
+  test('locked 관점 삭제 시 에러', () => {
+    const locked = listPerspectives(db, 'review').find(p => p.is_locked === 1)!;
+    assert.throws(() => deleteCustomPerspective(db, locked.id), /locked/);
   });
 });
 
-describe('lockPerspective / unlockPerspective', () => {
+describe('toggleActivePerspective', () => {
   let db: any;
 
   beforeEach(() => { db = createTestDb(); });
 
-  test('lock 후 is_locked = 1', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    const locked = lockPerspective(db, p.id);
-    assert.equal(locked.is_locked, 1);
+  test('optional 관점 활성화', () => {
+    const optional = listPerspectives(db, 'review').find(p => p.category === 'optional')!;
+    toggleActivePerspective(db, optional.id, true);
+    const active = getActivePerspectives(db, 'review');
+    assert.ok(active.some(p => p.id === optional.id));
   });
 
-  test('unlock 후 is_locked = 0', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    lockPerspective(db, p.id);
-    const unlocked = unlockPerspective(db, p.id);
-    assert.equal(unlocked.is_locked, 0);
+  test('optional 관점 비활성화', () => {
+    const optional = listPerspectives(db, 'review').find(p => p.category === 'optional')!;
+    toggleActivePerspective(db, optional.id, true);
+    toggleActivePerspective(db, optional.id, false);
+    const active = getActivePerspectives(db, 'review');
+    assert.ok(!active.some(p => p.id === optional.id));
   });
 
-  test('unlock 후 다시 수정 가능', () => {
-    const p = createPerspective(db, { type: 'review', name: 'PM' });
-    lockPerspective(db, p.id);
-    unlockPerspective(db, p.id);
-    const updated = updatePerspective(db, p.id, { name: 'Updated' });
-    assert.equal(updated.name, 'Updated');
+  test('locked 관점 비활성화 시 에러', () => {
+    const locked = listPerspectives(db, 'review').find(p => p.is_locked === 1)!;
+    assert.throws(() => toggleActivePerspective(db, locked.id, false), /cannot be deactivated/);
+  });
+});
+
+describe('getProjectMeta / upsertProjectMeta', () => {
+  let db: any;
+
+  beforeEach(() => { db = createTestDb(); });
+
+  test('초기 상태는 null', () => {
+    assert.equal(getProjectMeta(db), null);
   });
 
-  test('존재하지 않는 ID lock 시 에러', () => {
-    assert.throws(() => lockPerspective(db, 999), /not found/);
+  test('프로젝트 메타 저장 및 조회', () => {
+    upsertProjectMeta(db, { project_type: 'service-product', current_stage: 'idea' });
+    const meta = getProjectMeta(db);
+    assert.ok(meta);
+    assert.equal(meta.project_type, 'service-product');
+    assert.equal(meta.current_stage, 'idea');
+  });
+
+  test('부분 업데이트 — 기존 값 보존', () => {
+    upsertProjectMeta(db, { project_type: 'dev-tool', launch_purpose: 'portfolio' });
+    upsertProjectMeta(db, { current_stage: 'prototype' });
+    const meta = getProjectMeta(db);
+    assert.ok(meta);
+    assert.equal(meta.project_type, 'dev-tool');
+    assert.equal(meta.current_stage, 'prototype');
   });
 });

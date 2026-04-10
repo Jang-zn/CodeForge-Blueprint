@@ -85,6 +85,17 @@ argument-hint: [path to PRD] [optional: path to BE design doc]
 - 다크모드 토큰 매핑 (지원하는 경우)
 - 반응형 브레이크포인트
 
+**Custom Perspectives (Runtime-Loaded)**
+
+시스템에는 5개 표준 섹션 (A-E) 외에 **커스텀 관점**이 런타임에 데이터베이스에서 로드될 수 있습니다 (`perspectives` 테이블, type='frontend', `is_locked=0`).
+
+- 각 커스텀 관점은 `name`과 선택적 `description`을 가짐
+- 커스텀 관점은 프롬프트에 표준 5개 섹션 외 추가 설계 고려사항으로 주입됨
+- 설계 시 커스텀 관점이 있으면: 표준 5개 섹션과 함께 그 추가 관점들도 검토
+- 커스텀 관점은 표준 섹션에서 다루지 않는 도메인별 또는 프로젝트별 FE 아키텍처 관심사 포함
+
+커스텀 관점이 있으면 설계 프롬프트에 자동으로 포함됩니다. 추가 관점에서 설계 영향을 찾는 데 집중하세요.
+
 ### Step 5: Multi-Agent Parallel Analysis (5 agents)
 
 5개 에이전트를 병렬로 실행. 각 에이전트는 `frontend-wizard` subagent_type 사용.

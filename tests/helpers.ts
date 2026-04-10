@@ -6,7 +6,7 @@ import os from 'os';
 import path from 'path';
 import { createRequire } from 'module';
 import { Hono } from 'hono';
-import { SCHEMA_SQL, MIGRATION_V2_SQL } from '../src/db/schema.js';
+import { SCHEMA_SQL, MIGRATION_V2_SQL, seedPerspectives } from '../src/db/schema.js';
 import { openDb, resetDb, closeAllDbs, getDb } from '../src/db/index.js';
 import { initAppDb, closeAppDb } from '../src/db/app-db.js';
 import { openWorkspace, type WorkspaceContext } from '../src/workspace.js';
@@ -28,12 +28,13 @@ export function cleanDir(dir: string): void {
 
 // ─── 데이터베이스 ────────────────────────────────────────────────────────────
 
-/** 인메모리 SQLite DB 생성 (스키마 + 마이그레이션 적용) */
+/** 인메모리 SQLite DB 생성 (스키마 + 마이그레이션 + 시드 적용) */
 export function createTestDb(): any {
   const db = new BetterSqlite3(':memory:');
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA_SQL);
   try { db.exec(MIGRATION_V2_SQL); } catch { /* ignore */ }
+  seedPerspectives(db);
   return db;
 }
 

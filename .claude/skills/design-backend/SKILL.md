@@ -82,6 +82,17 @@ Ask the user these questions before proceeding:
 - Cross-cutting concerns: logging, error handling, transaction boundaries
 - Domain event design (if applicable)
 
+**Custom Perspectives (Runtime-Loaded)**
+
+In addition to the 5 standard design sections (A-E), the system may include **custom perspectives** loaded from the database at runtime (`perspectives` table, type='backend', `is_locked=0`).
+
+- Each custom perspective has a `name` and optional `description`
+- Custom perspectives are injected into the prompt as additional design considerations BEYOND the standard 5 sections
+- When designing, if custom perspectives exist: evaluate each design decision through those additional lenses
+- Custom perspectives allow domain-specific or project-specific architectural concerns not covered by the standard sections
+
+If custom perspectives are present, the design prompt will automatically include them in the instructions. Focus on identifying design implications for those additional viewpoints.
+
 ### Step 5: Multi-Agent Parallel Analysis (5 agents)
 
 Launch 5 agents in parallel, one per section. Each agent uses `subagent_type: "senior-backend-architect"`.

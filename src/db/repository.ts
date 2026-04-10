@@ -33,6 +33,8 @@ export interface Issue {
   applied_at: string | null;
   source_run_id: string | null;
   confidence: number | null;
+  decision_at: string | null;
+  decision_quality: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -118,11 +120,25 @@ export interface GlossaryTerm {
 }
 
 export interface Perspective {
-  id: number;
-  type: string;
+  id: string;
+  tab: string;
   name: string;
-  description: string | null;
+  description: string;
+  category: string;
   is_locked: number;
+  prompt_instruction: string;
+  skill_checklist: string | null;
+  id_prefix: string;
+  sort_order: number;
+}
+
+export interface ProjectMeta {
+  id: number;
+  start_path: string | null;
+  project_type: string | null;
+  launch_purpose: string | null;
+  tech_nature: string | null;
+  current_stage: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -763,79 +779,182 @@ export function buildGlossaryMarkdown(db: any): string {
 
 // ===== Perspectives =====
 
-export interface PerspectiveInput {
-  type: string;
+export interface CustomPerspectiveInput {
+  tab: string;
   name: string;
-  description?: string | null;
+  description: string;
+  prompt_instruction: string;
+  skill_checklist?: string | null;
+  id_prefix: string;
 }
 
-export function getPerspectives(db: any, type?: string): Perspective[] {
-  if (type) {
-    return db.prepare('SELECT * FROM perspectives WHERE type = ? ORDER BY name').all(type) as Perspective[];
+export function listPerspectives(db: any, tab?: string): Perspective[] {
+  if (tab) {
+    return db.prepare('SELECT * FROM perspectives WHERE tab = ? ORDER BY sort_order, id').all(tab) as Perspective[];
   }
-  return db.prepare('SELECT * FROM perspectives ORDER BY type, name').all() as Perspective[];
+  return db.prepare('SELECT * FROM perspectives ORDER BY tab, sort_order, id').all() as Perspective[];
 }
 
-export function getPerspective(db: any, id: number): Perspective | null {
+export function getActivePerspectives(db: any, tab: string): Perspective[] {
+  return db.prepare(`
+    SELECT p.* FROM perspectives p
+    INNER JOIN active_perspectives ap ON ap.perspective_id = p.id AND ap.tab = p.tab
+    WHERE p.tab = ?
+    ORDER BY p.sort_order, p.id
+  `).all(tab) as Perspective[];
+}
+
+export function getPerspective(db: any, id: string): Perspective | null {
   return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) ?? null;
 }
 
-export function createPerspective(db: any, input: PerspectiveInput): Perspective {
-  const result = db.prepare(`
-    INSERT INTO perspectives (type, name, description, is_locked)
-    VALUES (?, ?, ?, 0)
-  `).run(input.type, input.name, input.description ?? null);
-  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(result.lastInsertRowid) as Perspective;
-}
-
-export function updatePerspective(db: any, id: number, input: Partial<PerspectiveInput>): Perspective {
-  const current = getPerspective(db, id);
-  if (!current) throw new Error(`Perspective ${id} not found`);
-  if (current.is_locked === 1) throw new Error(`Perspective ${id} is locked`);
-
-  const updates: string[] = [];
-  const values: any[] = [];
-
-  if ('type' in input && input.type !== undefined) {
-    updates.push('type = ?');
-    values.push(input.type);
-  }
-  if ('name' in input && input.name !== undefined) {
-    updates.push('name = ?');
-    values.push(input.name);
-  }
-  if ('description' in input) {
-    updates.push('description = ?');
-    values.push(input.description ?? null);
-  }
-
-  if (updates.length === 0) return current;
-
-  updates.push("updated_at = datetime('now')");
-  values.push(id);
-
-  db.prepare(`UPDATE perspectives SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+export function addCustomPerspective(db: any, input: CustomPerspectiveInput): Perspective {
+  const id = `custom-${input.tab}-${Date.now()}`;
+  db.prepare(`
+    INSERT INTO perspectives (id, tab, name, description, category, is_locked, prompt_instruction, skill_checklist, id_prefix, sort_order)
+    VALUES (?, ?, ?, ?, 'custom', 0, ?, ?, ?, 100)
+  `).run(id, input.tab, input.name, input.description, input.prompt_instruction, input.skill_checklist ?? null, input.id_prefix);
   return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
 }
 
-export function deletePerspective(db: any, id: number): void {
+export function updateCustomPerspective(db: any, id: string, input: Partial<CustomPerspectiveInput>): Perspective {
   const current = getPerspective(db, id);
-  if (current && current.is_locked === 1) {
-    throw new Error(`Perspective ${id} is locked`);
+  if (!current) throw new Error(`Perspective ${id} not found`);
+  if (current.is_locked === 1) throw new Error(`Perspective ${id} is locked and cannot be modified`);
+
+  const updates: string[] = [];
+  const values: unknown[] = [];
+  if (input.name !== undefined) { updates.push('name = ?'); values.push(input.name); }
+  if (input.description !== undefined) { updates.push('description = ?'); values.push(input.description); }
+  if (input.prompt_instruction !== undefined) { updates.push('prompt_instruction = ?'); values.push(input.prompt_instruction); }
+  if ('skill_checklist' in input) { updates.push('skill_checklist = ?'); values.push(input.skill_checklist ?? null); }
+  if (input.id_prefix !== undefined) { updates.push('id_prefix = ?'); values.push(input.id_prefix); }
+
+  if (updates.length > 0) {
+    values.push(id);
+    db.prepare(`UPDATE perspectives SET ${updates.join(', ')} WHERE id = ?`).run(...values);
   }
+  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
+}
+
+export function deleteCustomPerspective(db: any, id: string): void {
+  const current = getPerspective(db, id);
+  if (!current) return;
+  if (current.is_locked === 1) throw new Error(`Perspective ${id} is locked and cannot be deleted`);
+  db.prepare('DELETE FROM active_perspectives WHERE perspective_id = ?').run(id);
   db.prepare('DELETE FROM perspectives WHERE id = ?').run(id);
 }
 
-export function lockPerspective(db: any, id: number): Perspective {
-  const current = getPerspective(db, id);
-  if (!current) throw new Error(`Perspective ${id} not found`);
-  db.prepare("UPDATE perspectives SET is_locked = 1, updated_at = datetime('now') WHERE id = ?").run(id);
-  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
+export function toggleActivePerspective(db: any, perspectiveId: string, active: boolean): void {
+  const p = getPerspective(db, perspectiveId);
+  if (!p) throw new Error(`Perspective ${perspectiveId} not found`);
+  if (active) {
+    db.prepare('INSERT OR IGNORE INTO active_perspectives (perspective_id, tab) VALUES (?, ?)').run(perspectiveId, p.tab);
+  } else {
+    if (p.is_locked === 1) throw new Error(`Default perspective ${perspectiveId} cannot be deactivated`);
+    db.prepare('DELETE FROM active_perspectives WHERE perspective_id = ? AND tab = ?').run(perspectiveId, p.tab);
+  }
 }
 
-export function unlockPerspective(db: any, id: number): Perspective {
-  const current = getPerspective(db, id);
-  if (!current) throw new Error(`Perspective ${id} not found`);
-  db.prepare("UPDATE perspectives SET is_locked = 0, updated_at = datetime('now') WHERE id = ?").run(id);
-  return db.prepare('SELECT * FROM perspectives WHERE id = ?').get(id) as Perspective;
+// ===== Project Meta =====
+
+export function getProjectMeta(db: any): ProjectMeta | null {
+  return db.prepare('SELECT * FROM project_meta WHERE id = 1').get() ?? null;
+}
+
+export function upsertProjectMeta(db: any, data: Partial<Omit<ProjectMeta, 'id' | 'created_at' | 'updated_at'>>): void {
+  const fields = Object.keys(data) as (keyof typeof data)[];
+  if (fields.length === 0) return;
+  const setClauses = fields.map(f => `${f} = ?`).join(', ');
+  const values = fields.map(f => data[f] ?? null);
+  db.prepare(`
+    INSERT INTO project_meta (id, ${fields.join(', ')}, updated_at)
+    VALUES (1, ${fields.map(() => '?').join(', ')}, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET ${setClauses}, updated_at = datetime('now')
+  `).run(...values, ...values);
+}
+
+// ===== Review Completion Metrics =====
+
+export interface ReviewMetrics {
+  totalIssues: number;
+  decidedIssues: number;
+  resolvePct: number;
+  deferPct: number;
+  dismissPct: number;
+  completionPct: number;
+}
+
+export function getReviewMetrics(db: any, tab: Tab): ReviewMetrics {
+  const issues = getIssues(db, tab);
+  const total = issues.length;
+
+  if (total === 0) {
+    return {
+      totalIssues: 0,
+      decidedIssues: 0,
+      resolvePct: 0,
+      deferPct: 0,
+      dismissPct: 0,
+      completionPct: 0,
+    };
+  }
+
+  const resolved = issues.filter(i => i.status === 'resolved').length;
+  const deferred = issues.filter(i => i.status === 'deferred').length;
+  const dismissed = issues.filter(i => i.status === 'dismissed').length;
+  const decided = resolved + deferred + dismissed;
+
+  return {
+    totalIssues: total,
+    decidedIssues: decided,
+    resolvePct: Math.round((resolved / total) * 100),
+    deferPct: Math.round((deferred / total) * 100),
+    dismissPct: Math.round((dismissed / total) * 100),
+    completionPct: Math.round((decided / total) * 100),
+  };
+}
+
+// ===== Issue Preview =====
+
+export interface IssuePreview {
+  id: number;
+  issue_id: string;
+  preview_status: IssueStatus;
+  preview_memo: string;
+  created_at: string;
+}
+
+export function createIssuePreview(db: any, issueId: string, status: IssueStatus, memo: string = ''): IssuePreview {
+  const result = db.prepare(`
+    INSERT OR REPLACE INTO issue_preview (issue_id, preview_status, preview_memo)
+    VALUES (?, ?, ?)
+  `).run(issueId, status, memo);
+
+  const preview = db.prepare('SELECT * FROM issue_preview WHERE issue_id = ?').get(issueId);
+  return preview as IssuePreview;
+}
+
+export function getIssuePreview(db: any, issueId: string): IssuePreview | null {
+  return db.prepare('SELECT * FROM issue_preview WHERE issue_id = ?').get(issueId) ?? null;
+}
+
+export function getAllIssuePreviews(db: any, tab: Tab): IssuePreview[] {
+  const issueIds = getIssues(db, tab).map(i => i.id);
+  if (issueIds.length === 0) return [];
+
+  const placeholders = issueIds.map(() => '?').join(',');
+  return db.prepare(`SELECT * FROM issue_preview WHERE issue_id IN (${placeholders})`).all(...issueIds) as IssuePreview[];
+}
+
+export function deleteIssuePreview(db: any, issueId: string): void {
+  db.prepare('DELETE FROM issue_preview WHERE issue_id = ?').run(issueId);
+}
+
+export function clearAllPreviewsForTab(db: any, tab: Tab): void {
+  const issueIds = getIssues(db, tab).map(i => i.id);
+  if (issueIds.length === 0) return;
+
+  const placeholders = issueIds.map(() => '?').join(',');
+  db.prepare(`DELETE FROM issue_preview WHERE issue_id IN (${placeholders})`).run(...issueIds);
 }

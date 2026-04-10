@@ -114,6 +114,18 @@ NOT contradictions — reference points for implementation. No decisions needed,
 
 All Ref items found during analysis are stored in `state-review.refItems` (string array) only — they are **NOT rendered in panel-review HTML**. The Ref section is not shown in the review tab because these items are FE design inputs for `/design-frontend`, not planning issues. When `/design-frontend` runs, these items are automatically extracted from `state-review.refItems` and mapped to the relevant FE sections.
 
+**Custom Perspectives (Runtime-Loaded)**
+
+In addition to the 6 standard perspectives (A-F), the system may include **custom perspectives** loaded from the database at runtime (`perspectives` table, type='review', `is_locked=0`).
+
+- Each custom perspective has a `name` and optional `description`
+- Custom perspectives are injected into the prompt as additional analysis viewpoints BEYOND the standard 6
+- When analyzing, if custom perspectives exist: treat them as additional required lenses alongside A-F
+- In the output JSON, custom perspective issues should use an appropriate issue ID pattern (e.g., `custom1`, `custom2`, etc.)
+- Custom perspectives allow domain-specific or client-specific analysis rules not covered by the standard perspectives
+
+If custom perspectives are present, the analysis prompt will automatically include them in the instructions. Focus on finding NEW issues from those additional viewpoints.
+
 #### Mode B: Checklist Mode (Rough Documents)
 
 Provide conditional checkpoints: "If you have X, you need to define Y."

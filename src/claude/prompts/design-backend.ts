@@ -1,18 +1,39 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
+import { type Perspective } from '../../db/repository.js';
 
-export function buildBackendPrompt(ctx: ContextPackage): string {
+// 기본 관점 (DB 없을 때 폴백)
+const DEFAULT_PERSPECTIVES = [
+  { id_prefix: 'be-api', name: 'API 설계', prompt_instruction: 'REST 엔드포인트 구조, 인증/인가 방식, 페이지네이션, 에러 응답 포맷을 설계하라' },
+  { id_prefix: 'be-db', name: 'DB 스키마', prompt_instruction: '핵심 엔티티와 관계, ERD, 마이그레이션 전략, 소프트 딜리트 방식을 설계하라' },
+  { id_prefix: 'be-infra', name: '인프라', prompt_instruction: '배포 환경, 캐시 전략, 메시지 큐 필요성, 월간 비용 추정을 설계하라' },
+  { id_prefix: 'be-lib', name: '라이브러리/의존성', prompt_instruction: '필요한 라이브러리 목록, 버전 호환성, 의존성 최소화 원칙을 검토하라' },
+  { id_prefix: 'be-svc', name: '서비스 레이어', prompt_instruction: '비즈니스 로직 레이어 구조, 유스케이스 흐름, 트랜잭션 경계, 로깅 전략을 설계하라' },
+];
+
+export function buildBackendPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {
   const contextBlock = formatContextForPrompt(ctx);
 
+  const activePerspectives = perspectives && perspectives.length > 0
+    ? perspectives
+    : DEFAULT_PERSPECTIVES;
+
+  const perspectiveLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const sectionLines = activePerspectives.map((p, i) => {
+    const letter = perspectiveLetters[i] ?? String(i + 1);
+    const prefix = p.id_prefix.toUpperCase();
+    return `**${letter}. ${p.name} (${prefix})**: ${p.prompt_instruction}`;
+  }).join('\n');
+
+  const idPatternLines = activePerspectives.map(p => {
+    return `${p.id_prefix}1~${p.id_prefix}9`;
+  }).join(', ');
+
   return `당신은 시니어 백엔드 아키텍트입니다.
-아래 문서들을 분석하여 백엔드 아키텍처를 5개 섹션으로 설계하세요.
+아래 문서들을 분석하여 백엔드 아키텍처를 ${activePerspectives.length}개 섹션으로 설계하세요.
 
 ## 설계 섹션
 
-**A. API 설계 (BE-API)**: REST 엔드포인트 정의, HTTP 메서드/URL/요청-응답 스키마, 인증 레벨, 페이지네이션 전략, 에러 포맷
-**B. DB 스키마 (BE-DB)**: 도메인별 엔티티, 컬럼 정의(타입/인덱스/제약), ERD 관계, 소프트 딜리트 적용 여부, 마이그레이션 전략
-**C. 인프라 (BE-INFRA)**: 배포 토폴로지, 메시지 큐/이벤트 설계, 캐시 전략(캐시 대상/TTL/무효화), 파일 스토리지
-**D. 라이브러리 (BE-LIB)**: 추가 필요 라이브러리, 버전 호환성 이슈, 선택 근거 및 트레이드오프
-**E. 서비스 레이어 (BE-SVC)**: 핵심 유스케이스 및 처리 흐름, 레이어 구조, 트랜잭션 경계, 도메인 이벤트
+${sectionLines}
 
 ## 출력 형식
 
@@ -37,7 +58,8 @@ export function buildBackendPrompt(ctx: ContextPackage): string {
 \`\`\`
 
 **규칙:**
-- id 패턴: be-api1~9, be-db1~9, be-infra1~9, be-lib1~9, be-svc1~9
+- id 패턴: ${idPatternLines}
+- category는 해당 관점의 id_prefix 대문자 (예: BE-API, BE-DB...)
 - tag: "decision" | "trade-off" | "dependency"
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)

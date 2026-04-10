@@ -101,6 +101,7 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabId}`));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   buildStatusSidebar();
+  loadPerspectives(tabId);
   if (typeof mermaid !== 'undefined') {
     try { mermaid.run({ querySelector: `#panel-${tabId} pre.mermaid:not([data-processed])` }); } catch (e) { /* ignore */ }
   }
@@ -444,8 +445,91 @@ function showToast(msg) {
   toastTimer = setTimeout(() => { _toast.style.opacity = '0'; }, 2500);
 }
 
+// ========== Perspectives Management ==========
+let loadedPerspectives = {};
+let selectedPerspectives = {};
+
+async function loadPerspectives(tab) {
+  try {
+    const response = await fetch(`/api/perspectives?tab=${tab}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    loadedPerspectives[tab] = data.perspectives || [];
+    renderPerspectivesList(tab);
+  } catch (e) {
+    console.warn('Failed to load perspectives:', e);
+  }
+}
+
+async function loadPerspectiveRecommendations(tab) {
+  try {
+    const response = await fetch(`/api/perspectives/recommend/${tab}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    return data.recommended || [];
+  } catch (e) {
+    console.warn('Failed to load recommendations:', e);
+    return [];
+  }
+}
+
+function renderPerspectivesList(tab) {
+  const section = document.getElementById('perspectivesSection');
+  const list = document.getElementById('perspectivesList');
+  if (!section || !list) return;
+
+  const perspectives = loadedPerspectives[tab] || [];
+  if (!perspectives.length) {
+    section.style.display = 'none';
+    return;
+  }
+
+  list.innerHTML = '';
+  perspectives.forEach(p => {
+    if (p.is_locked === 1) return; // Skip locked perspectives
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.perspectiveId = p.id;
+    checkbox.checked = selectedPerspectives[p.id] || false;
+    checkbox.addEventListener('change', () => {
+      selectedPerspectives[p.id] = checkbox.checked;
+      localStorage.setItem(`${STORAGE_KEY}-perspectives`, JSON.stringify(selectedPerspectives));
+    });
+    const name = document.createElement('span');
+    name.textContent = p.name;
+    name.title = p.description || '';
+    label.appendChild(checkbox);
+    label.appendChild(name);
+    list.appendChild(label);
+  });
+
+  section.style.display = perspectives.length > 0 ? 'block' : 'none';
+}
+
+// Load selected perspectives from localStorage
+function restorePerspectiveSelection() {
+  const saved = localStorage.getItem(`${STORAGE_KEY}-perspectives`);
+  if (saved) {
+    try {
+      selectedPerspectives = JSON.parse(saved);
+    } catch (e) {
+      selectedPerspectives = {};
+    }
+  }
+}
+
+function getSelectedPerspectiveIds() {
+  return Object.entries(selectedPerspectives)
+    .filter(([_, selected]) => selected)
+    .map(([id, _]) => id);
+}
+
 // ========== Init ==========
+restorePerspectiveSelection();
 refreshUI();
+loadPerspectives(activeTab);
 if (typeof mermaid !== 'undefined') {
   try { mermaid.run({ querySelector: `#panel-${activeTab} pre.mermaid:not([data-processed])` }); } catch (e) { /* ignore */ }
 }

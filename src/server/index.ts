@@ -13,6 +13,7 @@ import issuesRoute from './routes/issues.js';
 import initRoute from './routes/init.js';
 import analyzeRoute from './routes/analyze.js';
 import applyRoute from './routes/apply.js';
+import applyPreviewRoute from './routes/apply-preview.js';
 import generateRoute from './routes/generate.js';
 import decisionsRoute from './routes/decisions.js';
 import documentsRoute from './routes/documents.js';
@@ -58,6 +59,7 @@ export async function startServer(port: number): Promise<number> {
   api.route('/init', initRoute);
   api.route('/analyze', analyzeRoute);
   api.route('/apply', applyRoute);
+  api.route('/apply-preview', applyPreviewRoute);
   api.route('/generate', generateRoute);
   api.route('/decisions', decisionsRoute);
   api.route('/documents', documentsRoute);

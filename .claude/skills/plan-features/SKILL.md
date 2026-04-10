@@ -80,6 +80,17 @@ Phase N의 확정된 기획서와 BE/FE 설계문서를 입력받아, 다음 버
 - 기술 부채 해소
 - 새로운 기술 도입 기회
 
+**Custom Perspectives (Runtime-Loaded)**
+
+시스템에는 4개 표준 관점 (마케팅/운영/서비스/기술) 외에 **커스텀 관점**이 런타임에 데이터베이스에서 로드될 수 있습니다 (`perspectives` 테이블, type='features', `is_locked=0`).
+
+- 각 커스텀 관점은 `name`과 선택적 `description`을 가짐
+- 커스텀 관점은 프롬프트에 표준 4개 관점 외 추가 기능 제안 기준으로 주입됨
+- 기능 제안 시 커스텀 관점이 있으면: 표준 4개 관점과 함께 그 추가 관점들도 평가
+- 커스텀 관점은 표준 관점에서 다루지 않는 도메인별 또는 프로젝트별 기능 아이디어 포함
+
+커스텀 관점이 있으면 기능 제안 프롬프트에 자동으로 포함됩니다. 추가 관점에서 기능 제안을 찾는 데 집중하세요.
+
 ### Step 5: Multi-Agent Parallel Analysis (4 agents)
 
 4개 에이전트를 병렬로 실행. 각 에이전트는 `product-planning-god` subagent_type 사용.

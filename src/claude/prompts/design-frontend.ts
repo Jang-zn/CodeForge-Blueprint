@@ -1,10 +1,15 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
+import { type Perspective } from '../../db/repository.js';
 
-export function buildFrontendPrompt(ctx: ContextPackage): string {
+export function buildFrontendPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {
   const contextBlock = formatContextForPrompt(ctx);
 
+  const customPerspectivesBlock = perspectives && perspectives.length > 0
+    ? `\n\n## 커스텀 관점\n\n${perspectives.map((p: Perspective) => `**${p.name}**: ${p.description || '(설명 없음)'}`).join('\n')}\n\n커스텀 관점에서 추가로 고려할 설계 결정을 포함하세요.`
+    : '';
+
   return `당신은 시니어 프론트엔드 아키텍트입니다.
-아래 문서들을 분석하여 프론트엔드 아키텍처를 5개 섹션으로 설계하세요.
+아래 문서들을 분석하여 프론트엔드 아키텍처를 5개 섹션으로 설계하세요.${customPerspectivesBlock}
 
 ## 설계 섹션
 

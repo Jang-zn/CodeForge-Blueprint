@@ -126,6 +126,8 @@ applyRoute.post('/', async (c) => {
               applied_at: null,
               source_run_id: original.source_run_id,
               confidence: original.confidence,
+              decision_at: null,
+              decision_quality: null,
             });
             if (!existingDeferred) deferredCount++;
           }

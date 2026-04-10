@@ -1,21 +1,42 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
+import { type Perspective } from '../../db/repository.js';
 
-export function buildReviewPlanPrompt(ctx: ContextPackage): string {
+// 기본 관점 (DB 없을 때 폴백)
+const DEFAULT_PERSPECTIVES = [
+  { id_prefix: 'a', name: '기획 정합성', prompt_instruction: '정책/정의 간 충돌, 미정의 항목, 논리적 모순, 범위 중복, 서비스 정체성 혼란을 검토하라' },
+  { id_prefix: 'b', name: 'MVP 범위', prompt_instruction: '핵심 가치 외 과잉 기능, Nice-to-have의 Must-have 혼입, 첫 출시 과부하 위험을 검토하라' },
+  { id_prefix: 'c', name: '구현 현실성', prompt_instruction: '기술 스택 미지정, 외부 의존성 리스크, 타임라인 현실성, 솔로 개발자 실행 가능성을 검토하라' },
+  { id_prefix: 'd', name: '운영 부담', prompt_instruction: '런칭 후 수동 작업, CS 부하, 콘텐츠 운영 필요성, 모니터링 복잡도를 검토하라' },
+  { id_prefix: 'e', name: '사용자 가치 명확성', prompt_instruction: '핵심 사용자 여정, 가치 전달 명확성, 첫 경험 설계, 이탈 지점을 검토하라' },
+  { id_prefix: 'f', name: '출시 리스크', prompt_instruction: '규제/법적 이슈, 경쟁 포지셔닝, 시장 타이밍, 초기 트랙션 전략을 검토하라' },
+];
+
+export function buildReviewPlanPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {
   const contextBlock = formatContextForPrompt(ctx);
+
+  const activePerspectives = perspectives && perspectives.length > 0
+    ? perspectives
+    : DEFAULT_PERSPECTIVES;
+
+  const perspectiveLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const sectionLines = activePerspectives.map((p, i) => {
+    const letter = perspectiveLetters[i] ?? String(i + 1);
+    const prefix = p.id_prefix.toUpperCase();
+    return `**${letter}. ${p.name} (${prefix})**: ${p.prompt_instruction}`;
+  }).join('\n');
+
+  const idPatternLines = activePerspectives.map(p => {
+    return `${p.id_prefix}1~${p.id_prefix}9 (${p.name})`;
+  }).join(', ');
 
   return `당신은 시니어 프로덕트 매니저 겸 기획 검토 전문가입니다.
 아래 문서들을 분석해서 모순, 사각지대, 운영 리스크를 찾아내세요.
 
 ## 분석 지시사항
 
-6개 관점으로 병렬 분석을 수행하세요. 각 관점에서 새로운 이슈만 발굴하세요.
+${activePerspectives.length}개 관점으로 병렬 분석을 수행하세요. 각 관점에서 새로운 이슈만 발굴하세요.
 
-**A. 기획 정합성**: 정책/정의 간 충돌, 미정의 항목, 논리적 모순, 범위 중복, 서비스 정체성 혼란
-**B. 수익/과금 모델**: 과금 구조 모순, 무료/유료 경계 미정의, 크레딧 라이프사이클, 결제 환불 정책, 단위경제학
-**C. 사용자 획득/유지**: 콜드스타트 전략, 콘텐츠 노출 알고리즘, 유입-소비 루프, 발견 경로, 리텐션 훅
-**D. 구현 가능성**: 누락된 UX 플로우, 상태 관리 갭, 데이터 모델 모순, 비동기 처리 UX, 레이스 컨디션
-**E. 운영 확장성**: 수동 프로세스 병목, 외부 데이터 의존성, 모더레이션 갭, SLA 강제 가능성
-**F. 법적/규제 리스크**: 개인정보 동의 플로우, 외부 플랫폼 ToS 위반, 초상권, 계정 삭제 정책
+${sectionLines}
 
 ## 출력 형식
 
@@ -45,7 +66,8 @@ export function buildReviewPlanPrompt(ctx: ContextPackage): string {
 \`\`\`
 
 **규칙:**
-- id 패턴: a1~a9 (기획정합성), b1~b9 (수익), c1~c9 (사용자), d1~d9 (구현), e1~e9 (운영), f1~f9 (법적)
+- id 패턴: ${idPatternLines}
+- category는 해당 관점의 id_prefix 대문자 (예: A, B, C...)
 - tag: "contradiction" | "blind" | "risk"
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
