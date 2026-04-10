@@ -18,6 +18,10 @@
 
 DMG를 열어 `/Applications`에 드래그하거나, Windows에서는 설치 마법사를 실행합니다.
 
+> **macOS — "열지 않음" 경고 뜨는 경우:** 앱 공증(notarization)이 없어서 Gatekeeper가 차단합니다.
+> **시스템 설정 → 개인 정보 보호 및 보안** 하단의 **"그래도 열기"** 버튼을 클릭하면 됩니다. 한 번만 허용하면 이후엔 정상 실행됩니다.
+> 또는 소스에서 바로 실행: `npm install && npm run electron:dev`
+
 > 직접 빌드하려면: `npm install && npm run electron:build -- --mac` (또는 `--win`)
 
 ### 방법 2: CLI + 브라우저
