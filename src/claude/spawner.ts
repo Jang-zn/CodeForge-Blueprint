@@ -60,6 +60,9 @@ export interface SpawnOptions {
   onChunk?: (text: string) => void;
   /** claude -p에 허용할 도구 목록. 예: ['Read'] */
   allowedTools?: string[];
+  /** 에이전트 모드(-p 생략). 도구를 자율 사용하며 서브에이전트 병렬 실행 가능.
+   *  -p(print)와 달리 --include-partial-messages 없이 result 이벤트만 수집. */
+  agentMode?: boolean;
 }
 
 export interface SpawnResult {
@@ -101,8 +104,10 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
     }
 
     return new Promise<SpawnResult>((resolve) => {
-      const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
-      if (options.allowedTools?.length) args.push('--allowedTools', ...options.allowedTools);
+      const args = options.agentMode
+        ? ['--output-format', 'stream-json', '--verbose', '--model', model, '--no-session-persistence']
+        : ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
+      if (!options.agentMode && options.allowedTools?.length) args.push('--allowedTools', ...options.allowedTools);
       const useShell = needsShell(claudePath);
       const cmd = useShell ? `"${claudePath}"` : claudePath;
       const child = spawn(cmd, args, { env: process.env, shell: useShell, cwd: options.cwd });
