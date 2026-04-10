@@ -64,6 +64,7 @@ ${sectionLines}
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
 - 각 섹션당 최소 2개, 최대 5개 항목
+- <context:user-feedback>가 있다면 반드시 반영: "확정" 방향을 따르고, "삭제"된 이슈는 재생산 금지, "보류" 주제는 건너뛰세요
 - <context:ai-guide>의 기술 제약/원칙을 설계에 반영하세요
 - <context:glossary>가 있다면 용어를 일관되게 사용하세요
 - <context:decisions>의 기존 결정과 충돌하지 않도록 하세요

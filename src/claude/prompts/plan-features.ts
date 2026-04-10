@@ -69,6 +69,7 @@ ${deferredSection}
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "green" (build) | "blue" (shrink) | "orange" (experiment) | "grey" (defer) | "red" (skip)
 - 각 관점당 최소 2개, 최대 5개 항목
+- <context:user-feedback>가 있다면 반드시 반영: "확정" 방향을 따르고, "삭제"된 이슈는 재생산 금지, "보류" 주제는 건너뛰세요
 - <context:ai-guide>의 우선순위 기준/금지사항을 반드시 반영하세요
 - <context:glossary>가 있다면 용어를 일관되게 사용하세요
 - conclusion은 반드시 "build"(다음 사이클에 만들 기능), "shrink"(축소 형태로 만들 기능), "experiment"(실험으로 먼저 검증할 기능), "defer"(이후 버전으로 미룰 기능), "skip"(안 만드는 게 나은 기능) 중 하나로 시작하고 그 이유를 작성

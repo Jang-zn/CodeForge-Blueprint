@@ -72,8 +72,8 @@ applyRoute.post('/', async (c) => {
       let deferredCount = 0;
       const changeLines: string[] = [];
 
-      const existingFeatures = tab === 'review' ? getIssues(db, 'features') : [];
-      const allIssues = tab === 'review' ? getIssues(db) : [];
+      const existingFeatures = tab !== 'features' ? getIssues(db, 'features') : [];
+      const allIssues = tab !== 'features' ? getIssues(db) : [];
       const lastLogs = getLastDecisionLogsBulk(db, issues.map(issue => issue.id));
 
       for (const issueState of issues) {
@@ -102,7 +102,7 @@ applyRoute.post('/', async (c) => {
           applied_at: issueState.status === 'resolved' ? new Date().toISOString() : null,
         });
 
-        if (issueState.status === 'deferred' && tab === 'review') {
+        if (issueState.status === 'deferred' && tab !== 'features') {
           const nextDeferredIndex = existingFeatures.length + deferredCount + 1;
           const defId = `ft-def${nextDeferredIndex}`;
           const original = allIssues.find(issue => issue.id === issueState.id);
@@ -112,7 +112,7 @@ applyRoute.post('/', async (c) => {
               id: existingDeferred?.id ?? defId,
               tab: 'features',
               category: 'FT-DEF',
-              title: `[보류→검토] ${original.title}`,
+              title: `[${tab}/보류→검토] ${original.title}`,
               html_content: original.html_content,
               tag: 'deferred',
               priority: original.priority,

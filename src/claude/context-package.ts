@@ -6,12 +6,21 @@ import {
   getDocType,
   getRecentDecisionLogs,
   getRefItems,
+  getIssues,
   buildGlossaryMarkdown,
   assembleMarkdown,
   getDocuments,
   type DocumentRecord,
   type Tab,
+  type IssueStatus,
 } from '../db/repository.js';
+
+export interface UserFeedbackItem {
+  issueId: string;
+  title: string;
+  status: IssueStatus;
+  memo: string;
+}
 
 export interface ContextPackage {
   projectOverview?: string;
@@ -21,16 +30,17 @@ export interface ContextPackage {
   decisions?: { date: string; status: string; memo: string; reason?: string | null }[];
   refItems?: string[];
   baseDocument?: string;
+  userFeedback?: UserFeedbackItem[];
 }
 
 type ContextProfile = 'default' | 'review' | 'backend' | 'frontend' | 'features';
 
 const PROFILE_DOCS: Record<ContextProfile, string[]> = {
   default:  ['project-overview', 'ai-guide', 'glossary'],
-  review:   ['project-overview', 'ai-guide', 'glossary', 'prd', 'generated:review'],
-  backend:  ['project-overview', 'ai-guide', 'glossary', 'prd', 'decisions:recent', 'generated:review', 'generated:backend'],
-  frontend: ['project-overview', 'ai-guide', 'glossary', 'prd', 'ref-items', 'decisions:recent', 'generated:review', 'generated:backend', 'generated:frontend'],
-  features: ['project-overview', 'ai-guide', 'glossary', 'prd', 'decisions:deferred', 'generated:review', 'generated:backend', 'generated:features'],
+  review:   ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'generated:review'],
+  backend:  ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'decisions:recent', 'generated:review', 'generated:backend'],
+  frontend: ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'ref-items', 'decisions:recent', 'generated:review', 'generated:backend', 'generated:frontend'],
+  features: ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'decisions:deferred', 'generated:review', 'generated:backend', 'generated:features'],
 };
 
 /**
@@ -196,6 +206,19 @@ export function buildContextPackage(
           reason: log.reason,
         }));
       }
+    } else if (item === 'user-feedback') {
+      const issues = getIssues(db, profileTab);
+      const feedbackItems = issues
+        .filter(i => i.status !== 'pending' && (i.memo?.trim() || i.status === 'dismissed'))
+        .map(i => ({
+          issueId: i.id,
+          title: i.title,
+          status: i.status as IssueStatus,
+          memo: i.memo?.trim() || `상태: ${i.status}`,
+        }));
+      if (feedbackItems.length > 0) {
+        ctx.userFeedback = feedbackItems;
+      }
     } else if (item.startsWith('generated:')) {
       // 첫 번째 generated-* 항목에서만 baseDocument 설정 (중복 방지)
       if (!ctx.baseDocument) {
@@ -227,6 +250,18 @@ export function formatContextForPrompt(ctx: ContextPackage): string {
   }
   if (ctx.refItems?.length) {
     parts.push(`<context:ref-items>\n${ctx.refItems.map((r, i) => `${i + 1}. ${r}`).join('\n')}\n</context:ref-items>`);
+  }
+  if (ctx.userFeedback?.length) {
+    const STATUS_GUIDE: Record<string, string> = {
+      resolved: '확정 — 이 방향을 따르세요',
+      reviewing: '검토중 — 메모의 의견을 고려하세요',
+      deferred: '보류 — 이 주제는 건너뛰세요',
+      dismissed: '삭제 — 이 이슈를 재생산하지 마세요',
+    };
+    const lines = ctx.userFeedback.map(f =>
+      `- [${f.issueId}] "${f.title}" → ${STATUS_GUIDE[f.status] ?? f.status}: ${f.memo}`
+    );
+    parts.push(`<context:user-feedback>\n아래는 이전 분석 결과에 대한 사용자 피드백입니다. 다음 분석에 반드시 반영하세요:\n${lines.join('\n')}\n</context:user-feedback>`);
   }
   if (ctx.decisions?.length) {
     const lines = ctx.decisions.map(d => {
