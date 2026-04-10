@@ -91,17 +91,68 @@ const CAT_LABELS = {
   'FE-ROUTE': '라우팅',
   'FE-API': 'API 연동',
   'FE-TOKEN': '디자인 시스템',
+  'BE-MVP': 'MVP 단순화',
+  'BE-EXT': '외부 서비스 대체',
+  'BE-OPS': '운영/장애',
+  'BE-REPL': '교체 용이',
+  'FE-FVX': '첫 가치 경험',
+  'FE-EMPTY': '빈/에러 상태',
+  'FE-ACTION': '핵심 액션',
+  'FE-MOBILE': '모바일 우선',
+  'FE-EFFORT': '공수 vs UX',
+  'FT-DEL': '삭제/축소',
+  'FT-EXP': '실험 가능성',
+  'FT-MONEY': '수익화',
+  'FT-LEARN': '데이터 학습',
+  'FT-EFFORT': '공수 vs 효과',
 };
 
 const TAB_ID_PATTERNS = {
-  review:   /^[a-f]\d+$/,
-  features: /^ft-[a-z]+\d+$/,
-  backend:  /^be-[a-z]+\d+$/,
-  frontend: /^fe-[a-z]+\d+$/,
+  review:   /^[a-z][-a-z0-9]*\d+$/,
+  features: /^[a-z][-a-z0-9]*\d+$/,
+  backend:  /^[a-z][-a-z0-9]*\d+$/,
+  frontend: /^[a-z][-a-z0-9]*\d+$/,
 };
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function appAlert(message) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'app-dialog-overlay';
+    overlay.innerHTML = `
+      <div class="app-dialog">
+        <p class="app-dialog-message">${escapeHtml(message)}</p>
+        <div class="app-dialog-actions">
+          <button class="app-dialog-btn app-dialog-btn-primary">확인</button>
+        </div>
+      </div>`;
+    overlay.querySelector('.app-dialog-btn-primary').addEventListener('click', () => {
+      overlay.remove();
+      resolve();
+    });
+    document.body.appendChild(overlay);
+  });
+}
+
+function appConfirm(message) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'app-dialog-overlay';
+    overlay.innerHTML = `
+      <div class="app-dialog">
+        <p class="app-dialog-message">${escapeHtml(message)}</p>
+        <div class="app-dialog-actions">
+          <button class="app-dialog-btn app-dialog-btn-secondary">취소</button>
+          <button class="app-dialog-btn app-dialog-btn-primary">확인</button>
+        </div>
+      </div>`;
+    overlay.querySelector('.app-dialog-btn-secondary').addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.querySelector('.app-dialog-btn-primary').addEventListener('click', () => { overlay.remove(); resolve(true); });
+    document.body.appendChild(overlay);
+  });
 }
 
 function timeAgo(isoStr) {
@@ -161,7 +212,7 @@ function renderWorkflowSummary(workflow) {
   const TAB_LABELS = { review: 'Review', backend: 'BE', frontend: 'FE', features: 'Feat' };
   const dirtyBadges = TABS.map(tab => {
     const count = dirty[tab] || 0;
-    const badge = count > 0 ? `<span style="color:#f5c518;font-weight:600;">${count}</span>` : `<span style="color:var(--muted)">0</span>`;
+    const badge = count > 0 ? `<span class="dirty-count-highlight">${count}</span>` : `<span class="dirty-count-zero">0</span>`;
     return `${TAB_LABELS[tab]}: ${badge}`;
   }).join(' / ');
 
@@ -179,15 +230,16 @@ function renderWorkflowSummary(workflow) {
     `<div class="workflow-card"><div class="label">현재 단계</div><div class="value">${escapeHtml(stageLabelMap[workflow.stage] || workflow.stage)}</div><div class="sub">리뷰 ${workflow.counts?.review || 0} / BE ${workflow.counts?.backend || 0} / FE ${workflow.counts?.frontend || 0}</div></div>`,
     `<div class="workflow-card"><div class="label">실행 중인 작업</div><div class="value">${running.length}</div><div class="sub">${running[0] ? escapeHtml(`${running[0].type}${running[0].tab ? ` (${running[0].tab})` : ''}`) : '현재 실행 중인 작업 없음'}</div></div>`,
     `<div class="workflow-card"><div class="label">최신 문서</div><div class="value">${latestDoc ? escapeHtml(`${latestDoc.tab} v${latestDoc.version}`) : '없음'}</div><div class="sub">${latestDoc ? escapeHtml(latestDoc.file_path.split('/').pop()) : '생성된 문서 없음'}</div></div>`,
-    `<div class="workflow-card"><div class="label">변경 이슈</div><div class="value" style="font-size:0.95rem;">${dirtyBadges}</div><div class="sub">마지막 반영 이후 변경된 이슈</div></div>`,
-    `<div class="workflow-card"><div class="label">마지막 분석</div><div class="value" style="font-size:0.85rem;line-height:1.4;">${analyzeInfo}</div><div class="sub">최신 문서: ${generateInfo}</div></div>`,
+    `<div class="workflow-card"><div class="label">변경 이슈</div><div class="value workflow-value-sm">${dirtyBadges}</div><div class="sub">마지막 반영 이후 변경된 이슈</div></div>`,
+    `<div class="workflow-card"><div class="label">마지막 분석</div><div class="value workflow-value-xs">${analyzeInfo}</div><div class="sub">최신 문서: ${generateInfo}</div></div>`,
   ].join('');
   el.classList.remove('hidden');
+  requestAnimationFrame(() => el.classList.add('animate'));
+  setTimeout(() => el.classList.remove('animate'), 1500);
 }
 
 function applyStatusDot(dot, status) {
-  dot.style.background = STATUS_DOT_COLORS[status] || 'transparent';
-  dot.style.border = status === 'pending' ? '1px solid var(--border)' : 'none';
+  dot.dataset.status = status;
 }
 
 function getIssueIds() {
@@ -313,14 +365,27 @@ function scheduleRecRefresh() {
 
 // ========== Tab System ==========
 function switchTab(tabId) {
+  // init/preview 화면이 보이면 탭 컨텐츠로 복귀
+  document.getElementById('init-screen')?.classList.add('hidden');
+  document.getElementById('prd-preview')?.classList.add('hidden');
+  document.getElementById('codebase-scan-preview')?.classList.add('hidden');
+  document.querySelector('.tab-content')?.classList.remove('hidden');
+
+  // ARIA: 탭 선택 상태 갱신
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const selected = b.dataset.tab === tabId;
+    b.classList.toggle('active', selected);
+    b.setAttribute('aria-selected', String(selected));
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabId}`));
+
   if (tabId === 'timeline' || tabId === 'docs') {
     activeTab = tabId;
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabId}`));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
     document.querySelector('.filter-bar')?.classList.add('hidden');
     document.getElementById('fab-container')?.classList.add('hidden');
     if (tabId === 'timeline') loadTimelineView();
     else loadDocsView();
+    setupScrollAnimations();
     return;
   }
 
@@ -329,8 +394,6 @@ function switchTab(tabId) {
   document.getElementById('fab-container')?.classList.remove('hidden');
 
   activeTab = tabId;
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${tabId}`));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   buildStatusSidebar();
   if (typeof mermaid !== 'undefined') {
     try { mermaid.run({ querySelector: `#panel-${tabId} pre.mermaid:not([data-processed])` }); } catch (e) { /* ignore */ }
@@ -338,6 +401,8 @@ function switchTab(tabId) {
   applyFilter();
   updateCounts();
   loadIssues(tabId);
+  loadPerspectivesPanel(tabId);
+  setupScrollAnimations();
 }
 
 // ========== Issue Controls Injection ==========
@@ -354,7 +419,7 @@ function injectIssueControls(tab = activeTab) {
       ctrl.dataset.issueId = id;
 
       const btnGroup = document.createElement('div');
-      btnGroup.style.cssText = 'display:flex;gap:4px;';
+      btnGroup.className = 'issue-btn-group';
       Object.entries(STATUS_MAP).forEach(([key, {label}]) => {
         const btn = document.createElement('button');
         btn.className = 'status-btn';
@@ -470,7 +535,7 @@ function buildStatusSidebar() {
 
     const toggle = document.createElement('div');
     toggle.className = 'nav-group-toggle' + (isCollapsed ? ' collapsed' : '');
-    toggle.innerHTML = `<span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block;"></span>${label} <span class="toggle-count">${totalCount}</span></span><span class="toggle-arrow">▾</span>`;
+    toggle.innerHTML = `<span class="nav-toggle-label"><span class="nav-toggle-dot" data-status="${status}"></span>${label} <span class="toggle-count">${totalCount}</span></span><span class="toggle-arrow">▾</span>`;
 
     const itemsDiv = document.createElement('div');
     itemsDiv.className = 'nav-group-items' + (isCollapsed ? ' collapsed' : '');
@@ -494,14 +559,14 @@ function buildStatusSidebar() {
         const fullTitle = h3 ? h3.textContent.trim() : id;
         const a = document.createElement('a');
         a.href = '#' + id;
-        a.style.cssText = 'display:flex;align-items:center;gap:4px;';
+        a.className = 'sidebar-issue-link';
 
         const dot = document.createElement('span');
         dot.className = 'status-dot';
         applyStatusDot(dot, status);
 
         const idSpan = document.createElement('span');
-        idSpan.style.cssText = 'color:var(--text-muted);font-size:11px;flex-shrink:0;text-transform:uppercase;';
+        idSpan.className = 'sidebar-issue-id';
         idSpan.textContent = id.toUpperCase() + '. ';
 
         const titleSpan = document.createElement('span');
@@ -597,8 +662,28 @@ function refreshUI() {
   updateActionButtonStates();
 }
 
+function showIssueSkeleton(tab) {
+  const panel = document.getElementById(`panel-${tab}`);
+  if (!panel) return;
+  let contentArea = panel.querySelector('.issue-content');
+  if (!contentArea) {
+    contentArea = document.createElement('div');
+    contentArea.className = 'issue-content';
+    panel.appendChild(contentArea);
+  }
+  contentArea.innerHTML = Array.from({ length: 3 }, () =>
+    `<div class="skeleton-issue">
+      <div class="skeleton-line skeleton-title"></div>
+      <div class="skeleton-line skeleton-meta"></div>
+      <div class="skeleton-line skeleton-body"></div>
+      <div class="skeleton-line skeleton-body-short"></div>
+    </div>`
+  ).join('');
+}
+
 // ========== Issue Loading ==========
 async function loadIssues(tab) {
+  showIssueSkeleton(tab);
   try {
     const data = await API.get('/issues?tab=' + tab);
     const issues = data.issues || [];
@@ -620,13 +705,13 @@ async function loadIssues(tab) {
     }
 
     if (issues.length === 0) {
-      contentArea.innerHTML = '<p style="color:var(--text-muted);padding:16px 0;">분석 결과가 없습니다. "분석하기" 버튼을 클릭하세요.</p>';
+      contentArea.innerHTML = '<p class="issue-empty-state">분석 결과가 없습니다. "분석하기" 버튼을 클릭하세요.</p>';
     } else {
       contentArea.innerHTML = issues.map(issue => {
         const tagHtml = issue.tag ? `<span class="tag tag-${escapeHtml(issue.tag)}">${escapeHtml(issue.tag)}</span> ` : '';
         const priorityHtml = issue.priority ? `<span class="tag">${escapeHtml(issue.priority)}</span>` : '';
         return `<h3 id="${escapeHtml(issue.id)}">${escapeHtml(issue.id.toUpperCase())}. ${escapeHtml(issue.title)}</h3>` +
-          `<div class="issue-meta" style="margin-bottom:6px;">${tagHtml}${priorityHtml}</div>` +
+          `<div class="issue-meta">${tagHtml}${priorityHtml}</div>` +
           `<div class="issue-body">${issue.html_content}</div>`;
       }).join('\n');
 
@@ -674,15 +759,14 @@ function collectCurrentTabState() {
 // ========== Toast ==========
 const _toast = document.createElement('div');
 _toast.id = 'app-toast';
-_toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;';
 document.body.appendChild(_toast);
 let toastTimer;
 function showToast(msg, type) {
   clearTimeout(toastTimer);
   _toast.textContent = msg;
-  _toast.style.background = type === 'error' ? '#7f1d1d' : '#1a1a18';
-  _toast.style.opacity = '1';
-  toastTimer = setTimeout(() => { _toast.style.opacity = '0'; }, 2500);
+  _toast.className = type === 'error' ? 'error' : '';
+  _toast.classList.add('visible');
+  toastTimer = setTimeout(() => { _toast.classList.remove('visible'); }, 2500);
 }
 
 // ========== Init Screen Events ==========
@@ -1165,7 +1249,13 @@ document.getElementById('btn-analyze')?.addEventListener('click', async () => {
   showJobStream('AI 분석 중...');
   showJobStatus('분석 중...');
   try {
-    const { jobId } = await API.post('/analyze', { tab: activeTab || 'review' });
+    const tab = activeTab || 'review';
+    let perspectiveIds;
+    try {
+      const { perspectives } = await API.get(`/perspectives/active?tab=${tab}`);
+      perspectiveIds = perspectives.map(p => p.id);
+    } catch { /* 서버 오류 시 서버 기본값 사용 */ }
+    const { jobId } = await API.post('/analyze', { tab, perspectiveIds });
     pollJob(jobId, (err) => {
       if (err) { showRecovery(err); showToast('분석 실패: ' + err.message, 'error'); return; }
       showToast('분석 완료!');
@@ -1363,14 +1453,36 @@ document.getElementById('workspace-path-input')?.addEventListener('keydown', (e)
   }
 });
 
+// ========== Scroll Entry Animations ==========
+let _scrollObserver = null;
+function setupScrollAnimations() {
+  if (_scrollObserver) _scrollObserver.disconnect();
+  _scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        _scrollObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
+
+  document.querySelectorAll('.issue-section, .summary-card, .workflow-card, .doc-card').forEach(el => {
+    el.classList.add('scroll-entry');
+    _scrollObserver.observe(el);
+  });
+}
+
 // ========== Initial Load ==========
 function renderApp(workspace) {
   // 이전 워크스페이스 이슈 상태 초기화
   state = {};
+  _perspCollapsed = {};
   ['review', 'backend', 'frontend', 'features'].forEach(tab => {
     const contentArea = document.querySelector(`#panel-${tab} .issue-content`);
     if (contentArea) contentArea.innerHTML = '';
+    document.querySelector(`#panel-${tab} .perspectives-panel`)?.remove();
   });
+  document.getElementById('persp-modal')?.remove();
   const statusSidebar = document.getElementById('statusSidebar');
   if (statusSidebar) statusSidebar.innerHTML = '';
 
@@ -1396,6 +1508,8 @@ function renderApp(workspace) {
     document.getElementById('fab-container')?.classList.remove('hidden');
     document.getElementById('btn-history')?.removeAttribute('disabled');
     loadIssues(activeTab);
+    loadPerspectivesPanel(activeTab);
+    setupScrollAnimations();
   } else {
     document.getElementById('init-screen').classList.remove('hidden');
     document.querySelector('.tab-content')?.classList.add('hidden');
@@ -1457,37 +1571,7 @@ const obs = new IntersectionObserver(entries => {
 document.querySelectorAll('h2[id], h3[id]').forEach(el => obs.observe(el));
 
 // ========== Diff Modal Styles ==========
-(function injectDiffStyles() {
-  const style = document.createElement('style');
-  style.textContent = `
-    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000; }
-    .modal-overlay.hidden { display:none; }
-    .modal-container { background:var(--surface,#1c2129);border:1px solid var(--border,#30363d);border-radius:12px;display:flex;flex-direction:column;overflow:hidden; }
-    .modal-header { display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border,#30363d); }
-    .modal-header h3 { margin:0;font-size:15px;font-weight:600; }
-    .modal-close-btn { background:none;border:none;color:var(--text-muted,#888);cursor:pointer;font-size:16px;padding:4px 8px;border-radius:4px; }
-    .modal-close-btn:hover { background:var(--border,#30363d);color:var(--text,#e6edf3); }
-    .modal-footer { padding:12px 20px;border-top:1px solid var(--border,#30363d);display:flex;justify-content:flex-end; }
-    .btn-primary { background:var(--blue,#1f6feb);color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500; }
-    .btn-primary:disabled { opacity:0.4;cursor:not-allowed; }
-    .btn-primary:not(:disabled):hover { background:#388bfd; }
-    .diff-modal-container { width:90vw;max-width:1200px;height:80vh; }
-    .diff-modal-body { display:flex;flex:1;overflow:hidden;gap:0;padding:16px 20px;gap:16px; }
-    .diff-version-list { width:260px;flex-shrink:0;overflow-y:auto;border-right:1px solid var(--border,#30363d);padding-right:16px; }
-    .diff-version-item { display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border,#30363d);font-size:13px; }
-    .diff-radio-label { display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap; }
-    .diff-version-info { color:var(--text-muted,#888);font-size:12px;flex:1; }
-    .diff-view { flex:1;overflow:auto; }
-    .diff-header { display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted,#888);margin-bottom:8px;padding:0 4px; }
-    .diff-content { font-size:12px;line-height:1.5;margin:0;font-family:monospace;white-space:pre-wrap;word-break:break-all; }
-    .diff-add { background:rgba(34,197,94,0.15);color:#4ade80;display:block; }
-    .diff-remove { background:rgba(239,68,68,0.15);color:#f87171;display:block; }
-    .diff-unchanged { color:var(--text-muted,#888);display:block; }
-    .empty-state,.error-state { color:var(--text-muted,#888);font-size:13px;padding:16px 0; }
-    .error-state { color:#f87171; }
-  `;
-  document.head.appendChild(style);
-})();
+// Styles moved to styles.css
 
 // ========== Diff Modal Logic ==========
 let diffSelectedLeft = null;
@@ -1648,7 +1732,7 @@ function setTemplateMode(mode) {
   if (data) renderTemplateSuggestion(data);
 }
 
-function useTemplate() {
+async function useTemplate() {
   const container = document.getElementById('template-suggestion');
   const type = container?.dataset.templateType;
   const data = _templateCache[type];
@@ -1658,7 +1742,7 @@ function useTemplate() {
   const textarea = document.getElementById('init-detail');
   if (!textarea) return;
 
-  if (textarea.value.trim() && !confirm('현재 입력 내용을 덮어씁니다. 계속하시겠습니까?')) return;
+  if (textarea.value.trim() && !(await appConfirm('현재 입력 내용을 덮어씁니다. 계속하시겠습니까?'))) return;
   textarea.value = content;
   textarea.classList.remove('error');
   document.getElementById('init-detail-error')?.setAttribute('style', 'display:none');
@@ -1687,7 +1771,7 @@ async function loadTimelineView(append = false) {
     _timelinePage = 1;
     const panel = document.getElementById('panel-timeline');
     if (!panel) return;
-    panel.innerHTML = '<div class="timeline-empty" style="margin-top:40px;">불러오는 중...</div>';
+    panel.innerHTML = '<div class="timeline-empty timeline-loading">불러오는 중...</div>';
   }
 
   try {
@@ -1704,7 +1788,7 @@ async function loadTimelineView(append = false) {
     renderTimelineView(data, append);
   } catch (e) {
     const panel = document.getElementById('panel-timeline');
-    if (panel) panel.innerHTML = `<div class="timeline-empty" style="color:var(--red)">로드 실패: ${escapeHtml(e.message)}</div>`;
+    if (panel) panel.innerHTML = `<div class="timeline-empty timeline-error">로드 실패: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -1720,9 +1804,9 @@ function renderTimelineView(data, append = false) {
     // 통계 바
     html += `<div class="timeline-stats">
       <div class="timeline-stat"><span class="timeline-stat-num">${stats.total || 0}</span>전체 결정</div>
-      <div class="timeline-stat"><span class="timeline-stat-num" style="color:var(--green)">${stats.resolved || 0}</span>확정</div>
-      <div class="timeline-stat"><span class="timeline-stat-num" style="color:var(--text-muted)">${stats.deferred || 0}</span>보류</div>
-      <div class="timeline-stat"><span class="timeline-stat-num" style="color:var(--orange)">${stats.reviewing || 0}</span>검토중</div>
+      <div class="timeline-stat"><span class="timeline-stat-num stat-resolved">${stats.resolved || 0}</span>확정</div>
+      <div class="timeline-stat"><span class="timeline-stat-num stat-deferred">${stats.deferred || 0}</span>보류</div>
+      <div class="timeline-stat"><span class="timeline-stat-num stat-reviewing">${stats.reviewing || 0}</span>검토중</div>
     </div>`;
 
     // 보류 리마인더
@@ -1884,7 +1968,7 @@ async function loadDocsView() {
     _docTypes = types;
     renderDocsGrid(panel, types, docs);
   } catch (e) {
-    panel.innerHTML = `<div class="timeline-empty" style="color:var(--red)">오류: ${escapeHtml(String(e))}</div>`;
+    panel.innerHTML = `<div class="timeline-empty timeline-error">오류: ${escapeHtml(String(e))}</div>`;
   }
 }
 
@@ -1938,7 +2022,7 @@ async function openDocEditor(docTypeSlug) {
       await API.post('/documents', { doc_type: docTypeSlug });
       doc = await API.get(`/documents/by-type/${docTypeSlug}`);
     } catch (e) {
-      panel.innerHTML = `<div class="timeline-empty" style="color:var(--red)">오류: ${escapeHtml(String(e))}</div>`;
+      panel.innerHTML = `<div class="timeline-empty timeline-error">오류: ${escapeHtml(String(e))}</div>`;
       return;
     }
   }
@@ -1995,7 +2079,7 @@ async function saveDocSections(docId) {
       setTimeout(() => status.classList.remove('visible'), 2000);
     }
   } catch (e) {
-    alert('저장 실패: ' + String(e));
+    await appAlert('저장 실패: ' + String(e));
   }
 }
 
@@ -2014,7 +2098,7 @@ async function renderGlossaryEditor(panel) {
 
   const rows = terms.map(t => `
     <tr>
-      <td><span class="glossary-term-text">${escapeHtml(t.term)}</span>${t.aliases ? `<br><small style="color:var(--text-muted)">${escapeHtml(t.aliases)}</small>` : ''}</td>
+      <td><span class="glossary-term-text">${escapeHtml(t.term)}</span>${t.aliases ? `<br><small class="glossary-aliases">${escapeHtml(t.aliases)}</small>` : ''}</td>
       <td class="glossary-def-text">${escapeHtml(t.definition)}</td>
       <td>${t.category ? `<span class="glossary-cat-badge">${escapeHtml(t.category)}</span>` : ''}</td>
       <td>
@@ -2031,10 +2115,10 @@ async function renderGlossaryEditor(panel) {
       <div class="doc-editor-subtitle">프로젝트 고유 용어 / 기능명 / 사용자 타입 / 약어를 정의하세요. AI 분석 시 자동으로 컨텍스트에 포함됩니다.</div>
 
       <div class="glossary-add-form" id="glossary-add-form">
-        <input id="g-term" placeholder="용어" style="flex:0 0 120px">
-        <input id="g-def" placeholder="정의" style="flex:2">
-        <input id="g-cat" placeholder="카테고리 (선택)" style="flex:0 0 120px">
-        <input id="g-aliases" placeholder="별칭 (선택)" style="flex:0 0 100px">
+        <input id="g-term" class="glossary-input-term" placeholder="용어">
+        <input id="g-def" class="glossary-input-def" placeholder="정의">
+        <input id="g-cat" class="glossary-input-cat" placeholder="카테고리 (선택)">
+        <input id="g-aliases" class="glossary-input-aliases" placeholder="별칭 (선택)">
         <button class="glossary-add-btn" onclick="addGlossaryTerm()">+ 추가</button>
       </div>
 
@@ -2051,22 +2135,216 @@ async function addGlossaryTerm() {
   const def = document.getElementById('g-def')?.value.trim();
   const cat = document.getElementById('g-cat')?.value.trim() || null;
   const aliases = document.getElementById('g-aliases')?.value.trim() || null;
-  if (!term || !def) { alert('용어와 정의는 필수입니다.'); return; }
+  if (!term || !def) { await appAlert('용어와 정의는 필수입니다.'); return; }
   try {
     await API.post('/glossary', { term, definition: def, category: cat, aliases });
     const panel = document.getElementById('panel-docs');
     if (panel) await renderGlossaryEditor(panel);
-  } catch (e) { alert('추가 실패: ' + String(e)); }
+  } catch (e) { await appAlert('추가 실패: ' + String(e)); }
 }
 
 async function deleteGlossaryTerm(id) {
-  if (!confirm('이 용어를 삭제하시겠습니까?')) return;
+  if (!(await appConfirm('이 용어를 삭제하시겠습니까?'))) return;
   try {
     await API.request(`/glossary/${id}`, { method: 'DELETE' });
     const panel = document.getElementById('panel-docs');
     if (panel) await renderGlossaryEditor(panel);
-  } catch (e) { alert('삭제 실패: ' + String(e)); }
+  } catch (e) { await appAlert('삭제 실패: ' + String(e)); }
 }
+
+// ========== Perspectives Panel ==========
+// Styles moved to styles.css
+
+let _perspCollapsed = {};
+
+async function loadPerspectivesPanel(tab) {
+  if (tab === 'timeline' || tab === 'docs') return;
+  const panel = document.getElementById(`panel-${tab}`);
+  if (!panel) return;
+
+  let container = panel.querySelector('.perspectives-panel');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'perspectives-panel';
+    const h1 = panel.querySelector('h1');
+    if (h1) h1.insertAdjacentElement('afterend', container);
+    else panel.prepend(container);
+  }
+  container.innerHTML = '';
+
+  try {
+    const [allData, activeData] = await Promise.all([
+      API.get(`/perspectives?tab=${tab}`),
+      API.get(`/perspectives/active?tab=${tab}`),
+    ]);
+    const all = allData.perspectives || [];
+    const activeIds = new Set((activeData.perspectives || []).map(p => p.id));
+    renderPerspectivesPanel(container, all, activeIds, tab);
+  } catch (e) {
+    container.innerHTML = `<div class="perspectives-load-error">관점 로딩 실패</div>`;
+  }
+}
+
+function renderPerspectivesPanel(container, all, activeIds, tab) {
+  const activeCount = all.filter(p => activeIds.has(p.id)).length;
+  const collapsed = _perspCollapsed[tab];
+
+  const items = all.map(p => {
+    const isActive = activeIds.has(p.id);
+    const isLocked = p.is_locked === 1;
+    const isCustom = p.category === 'custom';
+    const lockIcon = isLocked ? `<span class="persp-lock" title="기본 관점 — 항상 활성">🔒</span>` : '';
+    const delBtn = isCustom ? `<button class="persp-del-btn" onclick="deleteCustomPerspective('${escapeHtml(p.id)}','${escapeHtml(tab)}')" title="삭제">✕</button>` : '';
+    return `<div class="persp-item">
+      <input type="checkbox" ${isActive ? 'checked' : ''} ${isLocked ? 'disabled' : ''} onchange="togglePerspective('${escapeHtml(p.id)}',this.checked,'${escapeHtml(tab)}')">
+      ${lockIcon}
+      <span class="persp-name">${escapeHtml(p.name)}</span>
+      <span class="persp-prefix">${escapeHtml(p.id_prefix.toUpperCase())}</span>
+      ${delBtn}
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="persp-header" onclick="togglePerspectivesCollapse('${escapeHtml(tab)}')">
+      <span class="persp-title">분석 관점 <span class="persp-count">(${activeCount}개 활성)</span></span>
+      <span class="persp-chevron${collapsed ? ' collapsed' : ''}">▾</span>
+    </div>
+    <div class="persp-body${collapsed ? ' hidden' : ''}">
+      <div class="persp-list">${items}</div>
+      <button class="persp-add-btn" onclick="openAddPerspectiveModal('${escapeHtml(tab)}')">+ 커스텀 관점 추가</button>
+    </div>`;
+}
+
+function togglePerspectivesCollapse(tab) {
+  _perspCollapsed[tab] = !_perspCollapsed[tab];
+  const panel = document.getElementById(`panel-${tab}`)?.querySelector('.perspectives-panel');
+  if (!panel) return;
+  panel.querySelector('.persp-chevron')?.classList.toggle('collapsed', !!_perspCollapsed[tab]);
+  panel.querySelector('.persp-body')?.classList.toggle('hidden', !!_perspCollapsed[tab]);
+}
+
+async function togglePerspective(id, active, tab) {
+  try {
+    await API.put(`/perspectives/${encodeURIComponent(id)}/toggle`, { active });
+    loadPerspectivesPanel(tab);
+  } catch (e) {
+    showToast('관점 변경 실패: ' + e.message, 'error');
+    loadPerspectivesPanel(tab); // revert checkbox state
+  }
+}
+
+async function deleteCustomPerspective(id, tab) {
+  if (!(await appConfirm('이 관점을 삭제하시겠습니까?'))) return;
+  try {
+    await API.request(`/perspectives/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    loadPerspectivesPanel(tab);
+  } catch (e) {
+    showToast('삭제 실패: ' + e.message, 'error');
+  }
+}
+
+function openAddPerspectiveModal(tab) {
+  let modal = document.getElementById('persp-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'persp-modal';
+    modal.className = 'persp-modal-overlay hidden';
+    modal.innerHTML = `
+      <div class="persp-modal" onclick="event.stopPropagation()">
+        <h3>커스텀 관점 추가</h3>
+        <div class="persp-field"><label>관점 이름 *</label><input id="pm-name" placeholder="예: 법적 리스크 관점"></div>
+        <div class="persp-field"><label>설명 *</label><input id="pm-desc" placeholder="이 관점이 무엇을 검토하는지"></div>
+        <div class="persp-field"><label>프롬프트 지시문 *</label><textarea id="pm-instr" placeholder="AI에게 전달할 지시문 (예: 법적 규제 리스크, GDPR 준수 여부를 검토하라)"></textarea></div>
+        <div class="persp-field"><label>ID 접두어 * (소문자, 하이픈 허용, 예: rv-legal)</label><input id="pm-prefix" placeholder="rv-legal"></div>
+        <div class="persp-modal-actions">
+          <button class="persp-cancel-btn" onclick="closeAddPerspectiveModal()">취소</button>
+          <button class="persp-save-btn" id="pm-save-btn" onclick="submitCustomPerspective()">추가</button>
+        </div>
+      </div>`;
+    modal.addEventListener('click', closeAddPerspectiveModal);
+    document.body.appendChild(modal);
+  }
+  modal.dataset.tab = tab;
+  ['pm-name','pm-desc','pm-instr','pm-prefix'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  modal.classList.remove('hidden');
+}
+
+function closeAddPerspectiveModal() {
+  document.getElementById('persp-modal')?.classList.add('hidden');
+}
+
+async function submitCustomPerspective() {
+  const modal = document.getElementById('persp-modal');
+  const tab = modal?.dataset.tab;
+  const name = document.getElementById('pm-name')?.value.trim();
+  const description = document.getElementById('pm-desc')?.value.trim();
+  const prompt_instruction = document.getElementById('pm-instr')?.value.trim();
+  const id_prefix = document.getElementById('pm-prefix')?.value.trim();
+  if (!name || !description || !prompt_instruction || !id_prefix) {
+    showToast('모든 필드를 입력하세요.', 'error');
+    return;
+  }
+  const btn = document.getElementById('pm-save-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await API.post('/perspectives', { tab, name, description, prompt_instruction, id_prefix });
+    closeAddPerspectiveModal();
+    loadPerspectivesPanel(tab);
+    showToast('관점이 추가되었습니다.');
+  } catch (e) {
+    showToast('추가 실패: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ========== Sidebar Toggle ==========
+(function setupSidebarToggle() {
+  const toggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.querySelector('.sidebar');
+  const main = document.querySelector('.main');
+  if (!toggle || !sidebar) return;
+
+  const COLLAPSED_KEY = 'cf_sidebar_collapsed';
+
+  function applySidebarState(collapsed) {
+    sidebar.classList.toggle('collapsed', collapsed);
+    if (main) main.classList.toggle('sidebar-collapsed', collapsed);
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.title = collapsed ? '사이드바 펼치기' : '사이드바 접기';
+  }
+
+  applySidebarState(localStorage.getItem(COLLAPSED_KEY) === '1');
+
+  toggle.addEventListener('click', () => {
+    const isCollapsed = !sidebar.classList.contains('collapsed');
+    applySidebarState(isCollapsed);
+    localStorage.setItem(COLLAPSED_KEY, isCollapsed ? '1' : '0');
+  });
+})();
+
+// ========== Tab Keyboard Navigation ==========
+document.querySelector('.tab-nav')?.addEventListener('keydown', (e) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...document.querySelectorAll('.tab-nav .tab-btn')];
+  const current = tabs.findIndex(b => b.dataset.tab === activeTab);
+  if (current === -1) return;
+
+  let next;
+  if (e.key === 'ArrowRight') next = (current + 1) % tabs.length;
+  else if (e.key === 'ArrowLeft') next = (current - 1 + tabs.length) % tabs.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = tabs.length - 1;
+
+  if (next !== undefined) {
+    e.preventDefault();
+    tabs[next].focus();
+    switchTab(tabs[next].dataset.tab);
+  }
+});
 
 // ========== Boot ==========
 loadInitialState();

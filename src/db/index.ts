@@ -38,6 +38,7 @@ import {
   MIGRATION_V35_SQL,
   MIGRATION_V36_SQL,
   MIGRATION_V37_SQL,
+  MIGRATION_V38_SQL,
   seedPerspectives,
 } from './schema.js';
 
@@ -152,6 +153,7 @@ export function openDb(dbPath: string): any {
   try { db.exec(MIGRATION_V35_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V36_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V37_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V38_SQL); } catch { /* ignore */ }
 
   // doc_types 시드 데이터 (INSERT OR IGNORE)
   const seedStmt = db.prepare(

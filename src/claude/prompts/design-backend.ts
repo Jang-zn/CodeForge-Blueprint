@@ -3,11 +3,11 @@ import { type Perspective } from '../../db/repository.js';
 
 // 기본 관점 (DB 없을 때 폴백)
 const DEFAULT_PERSPECTIVES = [
-  { id_prefix: 'be-api', name: 'API 설계', prompt_instruction: 'REST 엔드포인트 구조, 인증/인가 방식, 페이지네이션, 에러 응답 포맷을 설계하라' },
-  { id_prefix: 'be-db', name: 'DB 스키마', prompt_instruction: '핵심 엔티티와 관계, ERD, 마이그레이션 전략, 소프트 딜리트 방식을 설계하라' },
-  { id_prefix: 'be-infra', name: '인프라', prompt_instruction: '배포 환경, 캐시 전략, 메시지 큐 필요성, 월간 비용 추정을 설계하라' },
-  { id_prefix: 'be-lib', name: '라이브러리/의존성', prompt_instruction: '필요한 라이브러리 목록, 버전 호환성, 의존성 최소화 원칙을 검토하라' },
-  { id_prefix: 'be-svc', name: '서비스 레이어', prompt_instruction: '비즈니스 로직 레이어 구조, 유스케이스 흐름, 트랜잭션 경계, 로깅 전략을 설계하라' },
+  { id_prefix: 'be-api', name: 'API 설계', prompt_instruction: 'MVP에서 FE 개발을 차단하지 않는 최소 API 계약을 설계하라. 엔드포인트를 줄이고, 인증 단순화, 에러 포맷 통일에 집중하라' },
+  { id_prefix: 'be-db', name: 'DB 스키마', prompt_instruction: '핵심 가치를 증명하는 데 필요한 최소 엔티티와 관계만 설계하라. 과도한 정규화 없이 실제 쿼리 패턴 중심으로 스키마를 잡아라' },
+  { id_prefix: 'be-infra', name: '인프라', prompt_instruction: '솔로 개발자가 새벽 2시 장애에도 혼자 진단하고 복구할 수 있는 가장 단순한 배포 구조를 설계하라. 관리형 서비스를 우선 사용하고 자체 운영 컴포넌트를 최소화하라' },
+  { id_prefix: 'be-lib', name: '라이브러리/의존성', prompt_instruction: '라이브러리 선택 시 구현 속도와 장기 유지보수 부담을 현실적으로 평가하라. 유지보수가 중단된 라이브러리, 과도한 추상화, 솔로 개발자에게 불필요한 복잡성을 지적하라' },
+  { id_prefix: 'be-svc', name: '서비스 레이어', prompt_instruction: '솔로 개발자가 6개월 후에도 읽고 수정할 수 있는 서비스 레이어를 설계하라. 과도한 추상화 없이 유스케이스별 흐름이 한눈에 보이는 구조를 잡아라' },
 ];
 
 export function buildBackendPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {

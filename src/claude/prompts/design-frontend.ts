@@ -3,11 +3,11 @@ import { type Perspective } from '../../db/repository.js';
 
 // 기본 관점 (DB 없을 때 폴백)
 const DEFAULT_PERSPECTIVES = [
-  { id_prefix: 'fe-comp', name: '화면/컴포넌트 계층', prompt_instruction: '화면 인벤토리, 컴포넌트 계층 구조, 공용 컴포넌트 후보, 화면-컴포넌트 매핑을 설계하라' },
-  { id_prefix: 'fe-state', name: '상태 관리', prompt_instruction: '글로벌/로컬 상태 경계, 도메인별 상태 형태, 서버 상태 캐시 전략, 낙관적 업데이트 대상을 설계하라' },
-  { id_prefix: 'fe-route', name: '네비게이션/라우팅', prompt_instruction: '네비게이션 스택, 딥링크 스키마, 인증 게이트 라우트, 딥링크-화면 매핑을 설계하라' },
-  { id_prefix: 'fe-api', name: 'API 연동 레이어', prompt_instruction: 'API 클라이언트 아키텍처, 공통 요청/응답 타입, 에러 핸들링 전략, 로딩/성공/실패 상태 관리를 설계하라' },
-  { id_prefix: 'fe-token', name: '디자인 시스템', prompt_instruction: '컬러 토큰, 타이포그래피/스페이싱 스케일, 컴포넌트 변형, 다크모드 토큰, 반응형 브레이크포인트를 설계하라' },
+  { id_prefix: 'fe-comp', name: '화면/컴포넌트 계층', prompt_instruction: 'v1에 꼭 필요한 화면만 남기고, 핵심 사용자 여정 중심으로 컴포넌트를 구성하라. 화면 수를 줄이고 재사용 컴포넌트를 식별하라' },
+  { id_prefix: 'fe-state', name: '상태 관리', prompt_instruction: '사용자 행동 흐름이 끊기지 않도록 최소한의 상태 모델을 정의하라. 불필요한 글로벌 상태를 줄이고, 서버 상태 캐시로 대체 가능한 클라이언트 상태를 식별하라' },
+  { id_prefix: 'fe-route', name: '네비게이션/라우팅', prompt_instruction: '신규 사용자가 핵심 가치를 경험하기까지 탭/화면 이동을 최소화하는 라우팅 구조를 설계하라. 불필요한 중간 화면을 제거하라' },
+  { id_prefix: 'fe-api', name: 'API 연동 레이어', prompt_instruction: 'API 실패 시 사용자 경험이 망가지지 않도록 에러 상태, 재시도, 폴백 메시지를 설계하라. 로딩/성공/실패 상태를 사용자 관점에서 설계하라' },
+  { id_prefix: 'fe-token', name: '디자인 시스템', prompt_instruction: '디자이너 없이 혼자 일관된 UI를 빠르게 만들 수 있는 최소 디자인 규칙을 정의하라. 기존 UI 라이브러리를 최대한 활용하고 커스텀을 최소화하라' },
 ];
 
 export function buildFrontendPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {
