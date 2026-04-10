@@ -9,7 +9,6 @@ import {
   buildGlossaryMarkdown,
   assembleMarkdown,
   getDocuments,
-  getDocument,
   type DocumentRecord,
   type Tab,
 } from '../db/repository.js';

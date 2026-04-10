@@ -1,6 +1,14 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 import { type Perspective } from '../../db/repository.js';
 
+// 기본 관점 (DB 없을 때 폴백)
+const DEFAULT_PERSPECTIVES = [
+  { id_prefix: 'ft-mkt', name: '마케팅 관점', prompt_instruction: '바이럴 루프, 레퍼럴 프로그램, 브랜드 포지셔닝, 유저 그로스 드라이버, 시즌/이벤트 기능을 제안하라' },
+  { id_prefix: 'ft-ops', name: '운영 관점', prompt_instruction: '자동화 도구, 운영 모니터링 대시보드, CS 효율화, 비용 절감, 어뷰징 방지, 내부 관리 도구를 제안하라' },
+  { id_prefix: 'ft-svc', name: '서비스 기획 관점', prompt_instruction: '사용자 여정 갭 메우기, 리텐션 훅, 인게이지먼트 루프, 커뮤니티 기능, 개인화/추천을 제안하라' },
+  { id_prefix: 'ft-tech', name: '기술 관점', prompt_instruction: '인프라 확장, 성능 최적화, 데이터 파이프라인, A/B 테스트 인프라, 기술 부채 해소를 제안하라' },
+];
+
 export function buildFeaturesPrompt(ctx: ContextPackage, perspectives?: Perspective[]): string {
   const contextBlock = formatContextForPrompt(ctx);
 
@@ -10,19 +18,27 @@ export function buildFeaturesPrompt(ctx: ContextPackage, perspectives?: Perspect
       ).join('\n')}\n위 항목들을 다음 버전 기능으로 발전시킬 수 있는지 각 관점에서 평가하고, 가능하면 제안에 포함하세요.\n`
     : '';
 
-  const customPerspectivesBlock = perspectives && perspectives.length > 0
-    ? `\n\n## 커스텀 관점\n\n${perspectives.map(p => `**${p.name}**: ${p.description || '(설명 없음)'}`).join('\n')}\n\n커스텀 관점에서 추가 기능 제안이 있으면 포함하세요.`
-    : '';
+  const activePerspectives = perspectives && perspectives.length > 0
+    ? perspectives
+    : DEFAULT_PERSPECTIVES;
+
+  const perspectiveLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const sectionLines = activePerspectives.map((p, i) => {
+    const letter = perspectiveLetters[i] ?? String(i + 1);
+    const prefix = p.id_prefix.toUpperCase();
+    return `**${letter}. ${p.name} (${prefix})**: ${p.prompt_instruction}`;
+  }).join('\n');
+
+  const idPatternLines = activePerspectives.map(p => {
+    return `${p.id_prefix}1~${p.id_prefix}9`;
+  }).join(', ');
 
   return `당신은 시니어 프로덕트 매니저입니다.
-아래 문서들을 분석하여 다음 버전 기능을 4개 관점에서 제안하세요.${customPerspectivesBlock}
+아래 문서들을 분석하여 다음 버전 기능을 ${activePerspectives.length}개 관점에서 제안하세요.
 
 ## 분석 관점
 
-**마케팅 관점 (FT-MKT)**: 바이럴 루프, 레퍼럴 프로그램, 브랜드 포지셔닝, 유저 그로스 드라이버, 시즌/이벤트 기능
-**운영 관점 (FT-OPS)**: 자동화 도구, 운영 모니터링 대시보드, CS 효율화, 비용 절감, 어뷰징 방지, 내부 관리 도구
-**서비스 기획 관점 (FT-SVC)**: 사용자 여정 갭 메우기, 리텐션 훅, 인게이지먼트 루프, 커뮤니티 기능, 개인화/추천
-**기술 관점 (FT-TECH)**: 인프라 확장, 성능 최적화, 데이터 파이프라인, A/B 테스트 인프라, 기술 부채 해소
+${sectionLines}
 ${deferredSection}
 ## 출력 형식
 
@@ -47,7 +63,8 @@ ${deferredSection}
 \`\`\`
 
 **규칙:**
-- id 패턴: ft-mkt1~9, ft-ops1~9, ft-svc1~9, ft-tech1~9
+- id 패턴: ${idPatternLines}
+- category는 해당 관점의 id_prefix 대문자 (예: FT-MKT, FT-OPS...)
 - tag: "marketing" | "ops" | "service" | "tech"
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "green" (build) | "orange" (defer) | "red" (skip)

@@ -13,6 +13,7 @@ import {
   listPerspectives,
   type Tab,
   type IssueStatus,
+  type Perspective,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
@@ -141,7 +142,7 @@ analyzeRoute.post('/', async (c) => {
       // Filter by user-selected perspectives if provided
       if (body.perspectiveIds && body.perspectiveIds.length > 0) {
         const selectedIds = new Set(body.perspectiveIds);
-        perspectives = perspectives.filter(p => selectedIds.has(p.id));
+        perspectives = perspectives.filter((p: Perspective) => selectedIds.has(p.id));
       }
 
       let prompt: string;
