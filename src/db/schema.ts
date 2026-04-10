@@ -246,6 +246,24 @@ WHERE id IN (
 );
 `;
 
+export const MIGRATION_V39_SQL = `
+CREATE TABLE IF NOT EXISTS issue_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  issue_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  html_content TEXT NOT NULL,
+  category TEXT,
+  tag TEXT,
+  priority TEXT,
+  status TEXT,
+  memo TEXT,
+  source_run_id TEXT,
+  confidence REAL,
+  snapshot_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_snapshots_issue ON issue_snapshots(issue_id);
+`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;

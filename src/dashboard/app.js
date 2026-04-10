@@ -249,7 +249,7 @@ function getIssueIds() {
     .filter(id => pattern.test(id));
 }
 
-function getIssueState(id) { return state[id] || { status: 'pending', memo: '' }; }
+function getIssueState(id) { return state[id] || { status: 'pending', memo: '', serverStatus: 'pending' }; }
 
 async function setIssueState(id, patch) {
   state[id] = { ...getIssueState(id), ...patch };
@@ -432,6 +432,13 @@ function injectIssueControls(tab = activeTab) {
         });
         btnGroup.appendChild(btn);
       });
+      const snapshotBtn = document.createElement('button');
+      snapshotBtn.className = 'snapshot-history-btn';
+      snapshotBtn.title = '분석 히스토리';
+      snapshotBtn.textContent = '히스토리';
+      snapshotBtn.addEventListener('click', () => openSnapshotModal(id));
+      btnGroup.appendChild(snapshotBtn);
+
       ctrl.appendChild(btnGroup);
 
       const memoLabel = document.createElement('div');
@@ -645,9 +652,10 @@ function setButtonEnabled(id, enabled, disabledTitle) {
 function updateActionButtonStates() {
   const issues = collectCurrentTabState();
   const anyMemo = issues.some(i => (i.memo || '').trim() !== '');
+  const anyStatusChanged = issues.some(i => i.status !== i.serverStatus);
 
-  setButtonEnabled('btn-apply',    anyMemo,   '변경사항 메모를 작성해주세요');
-  setButtonEnabled('btn-generate', !anyMemo,  '반영하기를 먼저 눌러 변경사항을 반영하세요');
+  setButtonEnabled('btn-apply',    anyMemo || anyStatusChanged,   '변경사항 메모를 작성해주세요');
+  setButtonEnabled('btn-generate', !(anyMemo || anyStatusChanged),  '반영하기를 먼저 눌러 변경사항을 반영하세요');
 
   const tabVersions = currentWorkflow?.tabVersions || {};
   const latestDoc = (currentWorkflow?.documents || []).find(d => d.tab === activeTab);
@@ -693,7 +701,7 @@ async function loadIssues(tab) {
 
     // Sync local state from server (status + memo)
     issues.forEach(issue => {
-      state[issue.id] = { status: issue.status || 'pending', memo: issue.memo || '' };
+      state[issue.id] = { status: issue.status || 'pending', memo: issue.memo || '', serverStatus: issue.status || 'pending' };
     });
 
     // Get or create issue-content area (preserves filter-bar / action-bar siblings)
@@ -752,7 +760,7 @@ async function loadIssues(tab) {
 function collectCurrentTabState() {
   return getIssueIds().map(id => {
     const s = getIssueState(id);
-    return { id, status: s.status, memo: s.memo };
+    return { id, status: s.status, memo: s.memo, serverStatus: s.serverStatus };
   });
 }
 
@@ -1672,6 +1680,55 @@ document.getElementById('diff-modal-close')?.addEventListener('click', () => {
   document.getElementById('diff-modal').classList.add('hidden');
 });
 document.getElementById('diff-modal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+});
+
+// ========== Snapshot History Modal ==========
+async function openSnapshotModal(issueId) {
+  const modal = document.getElementById('snapshot-modal');
+  const list = document.getElementById('snapshot-list');
+  const content = document.getElementById('snapshot-content');
+  document.getElementById('snapshot-modal-title').textContent = `${issueId.toUpperCase()} 분석 히스토리`;
+
+  try {
+    const { snapshots } = await API.get(`/issues/${issueId}/snapshots`);
+    if (!snapshots || !snapshots.length) {
+      list.innerHTML = '<p class="empty-state">이전 분석 버전이 없습니다</p>';
+      content.innerHTML = '';
+    } else {
+      list.innerHTML = snapshots.map((s, i) => {
+        const statusLabel = STATUS_MAP[s.status]?.label || s.status || '';
+        return `<div class="snapshot-entry" data-idx="${i}">
+          <span class="snapshot-date">${s.snapshot_at}</span>
+          <span class="snapshot-title">${escapeHtml(s.title)}</span>
+          ${statusLabel ? `<span class="snapshot-run">${escapeHtml(statusLabel)}</span>` : ''}
+        </div>`;
+      }).join('');
+      let activeEntry = null;
+      list.addEventListener('click', (e) => {
+        const el = e.target.closest('.snapshot-entry');
+        if (!el) return;
+        const s = snapshots[Number(el.dataset.idx)];
+        const statusLabel = STATUS_MAP[s.status]?.label || s.status || '';
+        const memoHtml = s.memo ? `<div class="snapshot-memo-block"><strong>메모:</strong> ${escapeHtml(s.memo)}</div>` : '';
+        const statusHtml = statusLabel ? `<div class="snapshot-status-block"><strong>상태:</strong> ${escapeHtml(statusLabel)}</div>` : '';
+        content.innerHTML = `<h4>${escapeHtml(s.title)}</h4>${statusHtml}${memoHtml}<hr class="snapshot-divider">${s.html_content}`;
+        activeEntry?.classList.remove('active');
+        el.classList.add('active');
+        activeEntry = el;
+      });
+      list.querySelector('.snapshot-entry')?.click();
+    }
+    modal.classList.remove('hidden');
+  } catch (e) {
+    showToast('히스토리 로드 실패: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('snapshot-modal-close')?.addEventListener('click', () => {
+  document.getElementById('snapshot-modal').classList.add('hidden');
+});
+document.getElementById('snapshot-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
 });
 

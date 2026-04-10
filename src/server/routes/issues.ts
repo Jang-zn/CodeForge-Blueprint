@@ -4,6 +4,7 @@ import {
   updateIssueStatus,
   getDecisionLogs,
   getDecisionLogsBulk,
+  getIssueSnapshots,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
@@ -24,6 +25,12 @@ issuesRoute.get('/:id/logs', (c) => {
   const { db } = requireRequestContext(c);
   const logs = getDecisionLogs(db, c.req.param('id'));
   return c.json({ logs });
+});
+
+issuesRoute.get('/:id/snapshots', (c) => {
+  const { db } = requireRequestContext(c);
+  const snapshots = getIssueSnapshots(db, c.req.param('id'));
+  return c.json({ snapshots });
 });
 
 issuesRoute.get('/recommendations', (c) => {

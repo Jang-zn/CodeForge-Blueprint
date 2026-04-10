@@ -7,6 +7,7 @@ import {
   getRecentDecisionLogs,
   getRefItems,
   getIssues,
+  getLastDecisionLogsBulk,
   buildGlossaryMarkdown,
   assembleMarkdown,
   getDocuments,
@@ -208,16 +209,25 @@ export function buildContextPackage(
       }
     } else if (item === 'user-feedback') {
       const issues = getIssues(db, profileTab);
-      const feedbackItems = issues
-        .filter(i => i.status !== 'pending' && (i.memo?.trim() || i.status === 'dismissed'))
-        .map(i => ({
-          issueId: i.id,
-          title: i.title,
-          status: i.status as IssueStatus,
-          memo: i.memo?.trim() || `상태: ${i.status}`,
-        }));
-      if (feedbackItems.length > 0) {
-        ctx.userFeedback = feedbackItems;
+      const nonPending = issues.filter(i => i.status !== 'pending');
+      if (nonPending.length > 0) {
+        const lastLogs = getLastDecisionLogsBulk(db, nonPending.map(i => i.id));
+        const feedbackItems = nonPending
+          .map(i => {
+            const log = lastLogs[i.id];
+            const memo = log?.memo?.trim() || i.memo?.trim() || '';
+            if (!memo && i.status !== 'dismissed') return null;
+            return {
+              issueId: i.id,
+              title: i.title,
+              status: i.status as IssueStatus,
+              memo: memo || `상태: ${i.status}`,
+            };
+          })
+          .filter((f): f is UserFeedbackItem => f !== null);
+        if (feedbackItems.length > 0) {
+          ctx.userFeedback = feedbackItems;
+        }
       }
     } else if (item.startsWith('generated:')) {
       // 첫 번째 generated-* 항목에서만 baseDocument 설정 (중복 방지)

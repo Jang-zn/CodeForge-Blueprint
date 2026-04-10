@@ -50,6 +50,21 @@ export interface DecisionLog {
   reason: string | null;
 }
 
+export interface IssueSnapshot {
+  id: number;
+  issue_id: string;
+  title: string;
+  html_content: string;
+  category: string | null;
+  tag: string | null;
+  priority: string | null;
+  status: string | null;
+  memo: string | null;
+  source_run_id: string | null;
+  confidence: number | null;
+  snapshot_at: string;
+}
+
 export interface Job {
   id: string;
   type: string;
@@ -269,9 +284,33 @@ export function deleteIssue(db: any, id: string): void {
   db.prepare('DELETE FROM issues WHERE id = ?').run(id);
 }
 
+export function snapshotIssueIfExists(db: any, issueId: string): void {
+  db.prepare(`
+    INSERT INTO issue_snapshots (issue_id, title, html_content, category, tag, priority, status, memo, source_run_id, confidence)
+    SELECT i.id, i.title, i.html_content, i.category, i.tag, i.priority, i.status,
+      CASE WHEN i.status != 'pending' THEN COALESCE(dl.memo, i.memo) ELSE i.memo END,
+      i.source_run_id, i.confidence
+    FROM issues i
+    LEFT JOIN (
+      SELECT issue_id, memo FROM decision_logs
+      WHERE id IN (SELECT MAX(id) FROM decision_logs WHERE issue_id = ? GROUP BY issue_id)
+    ) dl ON dl.issue_id = i.id
+    WHERE i.id = ?
+  `).run(issueId, issueId);
+}
+
+export function getIssueSnapshots(db: any, issueId: string): IssueSnapshot[] {
+  return db.prepare(
+    'SELECT * FROM issue_snapshots WHERE issue_id = ? ORDER BY snapshot_at DESC'
+  ).all(issueId);
+}
+
 export function bulkUpsertIssues(db: any, issues: Omit<Issue, 'created_at' | 'updated_at'>[]): void {
   const tx = db.transaction(() => {
-    for (const issue of issues) upsertIssue(db, issue);
+    for (const issue of issues) {
+      snapshotIssueIfExists(db, issue.id);
+      upsertIssue(db, issue);
+    }
   });
   tx();
 }

@@ -32,6 +32,8 @@ import {
   toggleActivePerspective,
   getProjectMeta,
   upsertProjectMeta,
+  snapshotIssueIfExists,
+  getIssueSnapshots,
   type Tab,
 } from '../../src/db/repository.js';
 
@@ -548,5 +550,38 @@ describe('getProjectMeta / upsertProjectMeta', () => {
     assert.ok(meta);
     assert.equal(meta.project_type, 'dev-tool');
     assert.equal(meta.current_stage, 'prototype');
+  });
+});
+
+describe('snapshotIssueIfExists', () => {
+  let db: any;
+  beforeEach(() => { db = createTestDb(); });
+
+  test('pending 이슈: decision_log memo가 있어도 스냅샷에 반영하지 않음', () => {
+    upsertIssue(db, makeIssue({ id: 'rv1', status: 'pending', memo: '' }));
+    addDecisionLog(db, { issue_id: 'rv1', date: '2026-01-01', status: 'resolved', memo: '이전 사이클 확정 메모', old_status: 'pending', tab: 'review', reason: '' });
+    // 재분석 시뮬레이션: 이슈가 다시 pending/memo=''으로 리셋된 상태에서 스냅샷
+    snapshotIssueIfExists(db, 'rv1');
+    const snapshots = getIssueSnapshots(db, 'rv1');
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].memo, '');
+    assert.equal(snapshots[0].status, 'pending');
+  });
+
+  test('non-pending 이슈: decision_log memo를 스냅샷 memo로 fallback', () => {
+    upsertIssue(db, makeIssue({ id: 'rv2', status: 'resolved', memo: '' }));
+    addDecisionLog(db, { issue_id: 'rv2', date: '2026-01-01', status: 'resolved', memo: '확정 이유', old_status: 'pending', tab: 'review', reason: '' });
+    snapshotIssueIfExists(db, 'rv2');
+    const snapshots = getIssueSnapshots(db, 'rv2');
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].memo, '확정 이유');
+  });
+
+  test('non-pending + decision_log 없음: issue.memo 사용', () => {
+    upsertIssue(db, makeIssue({ id: 'rv3', status: 'resolved', memo: '인라인 메모' }));
+    snapshotIssueIfExists(db, 'rv3');
+    const snapshots = getIssueSnapshots(db, 'rv3');
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].memo, '인라인 메모');
   });
 });

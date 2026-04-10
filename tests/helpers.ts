@@ -6,7 +6,7 @@ import os from 'os';
 import path from 'path';
 import { createRequire } from 'module';
 import { Hono } from 'hono';
-import { SCHEMA_SQL, MIGRATION_V2_SQL, seedPerspectives } from '../src/db/schema.js';
+import { SCHEMA_SQL, MIGRATION_V2_SQL, MIGRATION_V39_SQL, seedPerspectives } from '../src/db/schema.js';
 import { openDb, resetDb, closeAllDbs, getDb } from '../src/db/index.js';
 import { initAppDb, closeAppDb } from '../src/db/app-db.js';
 import { openWorkspace, type WorkspaceContext } from '../src/workspace.js';
@@ -34,6 +34,7 @@ export function createTestDb(): any {
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA_SQL);
   try { db.exec(MIGRATION_V2_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V39_SQL); } catch { /* ignore */ }
   seedPerspectives(db);
   return db;
 }

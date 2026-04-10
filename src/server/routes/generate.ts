@@ -14,6 +14,7 @@ import {
   isJobRunnable,
   addDocumentRecord,
   getDocuments,
+  getLastDecisionLogsBulk,
   type Tab,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
@@ -91,16 +92,35 @@ function parseFileDelimitedOutput(raw: string): ParsedSection[] {
 
 /* ── Prompt builder ── */
 
-function buildWriteDocPrompt(tab: Tab, issues: ReturnType<typeof getIssues>, prdContent: string, version: string): string {
+function buildWriteDocPrompt(
+  tab: Tab,
+  issues: ReturnType<typeof getIssues>,
+  prdContent: string,
+  version: string,
+  lastLogs: Record<string, { memo: string; status: string }>,
+): string {
   const resolvedIssues = issues.filter(issue => issue.status === 'resolved');
   const deferredIssues = issues.filter(issue => issue.status === 'deferred');
+  const dismissedIssues = issues.filter(issue => issue.status === 'dismissed');
+  const reviewingIssues = issues.filter(issue => issue.status === 'reviewing');
+
+  const getMemo = (issue: (typeof issues)[0], fallback: string) =>
+    lastLogs[issue.id]?.memo?.trim() || issue.memo?.trim() || fallback;
 
   const issuesSummary = resolvedIssues.map(issue =>
-    `- [${issue.id}] ${issue.title}: ${issue.memo || '확정'}`
+    `- [${issue.id}] ${issue.title}: ${getMemo(issue, '확정')}`
   ).join('\n');
 
   const deferredSummary = deferredIssues.map(issue =>
-    `- [${issue.id}] ${issue.title}: ${issue.memo || '보류'}`
+    `- [${issue.id}] ${issue.title}: ${getMemo(issue, '보류')}`
+  ).join('\n');
+
+  const dismissedSummary = dismissedIssues.map(issue =>
+    `- [${issue.id}] ${issue.title}: ${getMemo(issue, '삭제')}`
+  ).join('\n');
+
+  const reviewingSummary = reviewingIssues.map(issue =>
+    `- [${issue.id}] ${issue.title}: ${getMemo(issue, '검토중')}`
   ).join('\n');
 
   const docType = {
@@ -123,6 +143,12 @@ ${issuesSummary || '없음'}
 
 ## 보류된 항목 (${deferredIssues.length}건, 다음 버전 검토)
 ${deferredSummary || '없음'}
+
+## 삭제된 항목 (${dismissedIssues.length}건, 문서에 포함하지 마세요)
+${dismissedSummary || '없음'}
+
+## 검토중 항목 (${reviewingIssues.length}건, 메모의 방향을 참고하세요)
+${reviewingSummary || '없음'}
 
 ## 출력 형식 지시사항
 
@@ -176,9 +202,10 @@ generateRoute.post('/', async (c) => {
   (async () => {
     try {
       const issues = getIssues(db, tab);
+      const lastLogs = getLastDecisionLogsBulk(db, issues.map(i => i.id));
       const prdContent = fs.readFileSync(prdPath, 'utf-8');
 
-      const prompt = buildWriteDocPrompt(tab, issues, prdContent, version);
+      const prompt = buildWriteDocPrompt(tab, issues, prdContent, version, lastLogs);
       const extractor = createLogExtractor(providerModel.provider);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
         onChunk: (chunk) => {
