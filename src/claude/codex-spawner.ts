@@ -37,11 +37,15 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
       // Windows shell 환경에서는 positional arg 이스케이프 이슈 회피를 위해 항상 stdin 파이프 사용
       const usePipe = prompt.length > LARGE_PROMPT_THRESHOLD || useShell;
 
+      // allowedTools 설정 시 read-only 샌드박스, 그 외엔 기본 workspace-write
+      const sandboxArgs: string[] = options.allowedTools?.length
+        ? ['--sandbox', 'read-only']
+        : ['--full-auto'];
       // 긴 프롬프트는 stdin 파이프, 짧은 프롬프트는 positional 인자
       // 100KB 초과 프롬프트는 OS arg 한계 회피를 위해 stdin 파이프 사용
       const args = usePipe
-        ? ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, '-']
-        : ['exec', '--json', '--full-auto', '--ephemeral', '-m', model, prompt];
+        ? ['exec', '--json', ...sandboxArgs, '--ephemeral', '-m', model, '-']
+        : ['exec', '--json', ...sandboxArgs, '--ephemeral', '-m', model, prompt];
 
       const cmd = useShell ? `"${codexPath}"` : codexPath;
       const child = spawn(cmd, args, { env: process.env, shell: useShell, cwd: options.cwd });

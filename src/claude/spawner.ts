@@ -58,6 +58,8 @@ export interface SpawnOptions {
   idleTimeout?: number;
   cwd?: string;
   onChunk?: (text: string) => void;
+  /** claude -p에 허용할 도구 목록. 예: ['Read'] */
+  allowedTools?: string[];
 }
 
 export interface SpawnResult {
@@ -100,6 +102,7 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
 
     return new Promise<SpawnResult>((resolve) => {
       const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--model', model, '--no-session-persistence'];
+      if (options.allowedTools?.length) args.push('--allowedTools', ...options.allowedTools);
       const useShell = needsShell(claudePath);
       const cmd = useShell ? `"${claudePath}"` : claudePath;
       const child = spawn(cmd, args, { env: process.env, shell: useShell, cwd: options.cwd });
