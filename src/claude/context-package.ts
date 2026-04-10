@@ -56,14 +56,19 @@ function readDocContent(db: any, docType: string, docsPath: string): string | un
   }
 
   // 디스크 파일 fallback
-  const filePath = path.isAbsolute(doc.file_path)
-    ? doc.file_path
-    : path.join(docsPath, doc.file_path);
+  const filePath = resolveDocPath(doc.file_path, docsPath);
   try {
     return fs.readFileSync(filePath, 'utf-8');
   } catch {
     return undefined;
   }
+}
+
+/**
+ * 문서 경로를 절대 경로로 변환
+ */
+function resolveDocPath(filePath: string, docsPath: string): string {
+  return path.isAbsolute(filePath) ? filePath : path.join(docsPath, filePath);
 }
 
 /**
@@ -85,7 +90,7 @@ function readGeneratedDocSet(db: any, tab: Tab, docsPath: string): string | unde
     // 최신순으로 정렬해서 가능한 모든 생성 문서를 시도
     const generatedDocs = docs
       .filter(d => d.kind === 'generated-doc')
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
     for (const doc of generatedDocs) {
       const content = readGeneratedDocContent(db, doc, docsPath);
@@ -102,15 +107,14 @@ function readGeneratedDocSet(db: any, tab: Tab, docsPath: string): string | unde
  * 레거시 단일 파일의 경우: 파일 직접 읽음
  */
 function readGeneratedDocContent(db: any, doc: DocumentRecord, docsPath: string): string | undefined {
-  const filePath = path.isAbsolute(doc.file_path)
-    ? doc.file_path
-    : path.join(docsPath, doc.file_path);
+  const filePath = resolveDocPath(doc.file_path, docsPath);
 
   // 폴더 기반 문서 (index.md)
   if (filePath.endsWith('index.md')) {
     const folderPath = path.dirname(filePath);
     try {
-      if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
+      const stat = fs.statSync(folderPath);
+      if (!stat.isDirectory()) {
         return undefined;
       }
 
@@ -136,7 +140,6 @@ function readGeneratedDocContent(db: any, doc: DocumentRecord, docsPath: string)
 
   // 레거시 단일 파일 문서
   try {
-    if (!fs.existsSync(filePath)) return undefined;
     return fs.readFileSync(filePath, 'utf-8');
   } catch {
     return undefined;

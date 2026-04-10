@@ -10,10 +10,9 @@ import {
   getProviderModel,
   markSupersededJobs,
   isJobRunnable,
-  listPerspectives,
+  getActivePerspectives,
   type Tab,
   type IssueStatus,
-  type Perspective,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
@@ -101,14 +100,9 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-interface AnalyzeRequest {
-  tab?: Tab;
-  perspectiveIds?: string[];
-}
-
 analyzeRoute.post('/', async (c) => {
   const { db, workspace, sessionId } = requireRequestContext(c);
-  const body = await c.req.json<AnalyzeRequest>().catch(() => ({ tab: 'review' as Tab })) as AnalyzeRequest;
+  const body = await c.req.json<{ tab?: Tab }>().catch(() => ({ tab: 'review' as Tab }));
   const tab: Tab = body.tab ?? 'review';
 
   const meta = getWorkspaceMeta(db);
@@ -136,14 +130,8 @@ analyzeRoute.post('/', async (c) => {
         return;
       }
 
-      // Fetch perspectives for this analysis
-      let perspectives = listPerspectives(db, tab);
-
-      // Filter by user-selected perspectives if provided
-      if (body.perspectiveIds && body.perspectiveIds.length > 0) {
-        const selectedIds = new Set(body.perspectiveIds);
-        perspectives = perspectives.filter((p: Perspective) => selectedIds.has(p.id));
-      }
+      // Fetch active perspectives for this analysis
+      const perspectives = getActivePerspectives(db, tab);
 
       let prompt: string;
       if (tab === 'review') {
