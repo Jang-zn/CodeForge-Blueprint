@@ -82,7 +82,6 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
 
   const promise: Promise<SpawnResult> = (async () => {
     const model = options.model ?? 'claude-sonnet-4-6';
-    const timeout = options.timeout ?? 600_000;
 
     const claudePath = await findClaudeBinary();
     if (!claudePath) {
@@ -118,13 +117,13 @@ export function spawnClaudeWithHandle(prompt: string, options: SpawnOptions = {}
         clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           child.kill();
-          resolve({ success: false, result: '', error: 'Timeout: Claude CLI가 5분간 응답이 없습니다.' });
+          resolve({ success: false, result: '', error: `Timeout: Claude CLI가 ${idleMs / 60000}분간 응답이 없습니다.` });
         }, idleMs);
       };
       resetIdle();
       const hardTimer = setTimeout(() => {
         child.kill();
-        resolve({ success: false, result: '', error: 'Timeout: 최대 실행 시간(30분)을 초과했습니다.' });
+        resolve({ success: false, result: '', error: `Timeout: 최대 실행 시간(${hardMs / 60000}분)을 초과했습니다.` });
       }, hardMs);
 
       child.stdout.on('data', (chunk: Buffer) => {

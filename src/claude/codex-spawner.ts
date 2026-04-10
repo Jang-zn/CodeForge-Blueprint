@@ -16,7 +16,6 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
 
   const promise: Promise<SpawnResult> = (async () => {
     const model = options.model ?? 'o4-mini';
-    const timeout = options.timeout ?? 300_000;
 
     const codexPath = await findCodexBinary();
     if (!codexPath) {
@@ -59,13 +58,13 @@ export function spawnCodexWithHandle(prompt: string, options: SpawnOptions = {})
         clearTimeout(idleTimer);
         idleTimer = setTimeout(() => {
           child.kill();
-          resolve({ success: false, result: '', error: 'Timeout: Codex CLI가 5분간 응답이 없습니다.' });
+          resolve({ success: false, result: '', error: `Timeout: Codex CLI가 ${idleMs / 60000}분간 응답이 없습니다.` });
         }, idleMs);
       };
       resetIdle();
       const hardTimer = setTimeout(() => {
         child.kill();
-        resolve({ success: false, result: '', error: 'Timeout: 최대 실행 시간(30분)을 초과했습니다.' });
+        resolve({ success: false, result: '', error: `Timeout: 최대 실행 시간(${hardMs / 60000}분)을 초과했습니다.` });
       }, hardMs);
 
       child.stdout.on('data', (chunk: Buffer) => {

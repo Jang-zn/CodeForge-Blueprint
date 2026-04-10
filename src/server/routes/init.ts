@@ -257,6 +257,7 @@ initRoute.post('/from-codebase', async (c) => {
       const codebaseExtractor = createLogExtractor(providerModel.provider);
       const handle = spawnProviderWithHandle(prompt, providerModel, {
         cwd: workspace.rootPath,
+        idleTimeout: 600_000,  // 10분 — 코드베이스 PRD는 프롬프트가 크므로 여유 확보
         onChunk: (chunk) => {
           if (!isJobRunnable(db, jobId)) return;
           const text = codebaseExtractor.processChunk(chunk);
