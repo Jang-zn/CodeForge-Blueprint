@@ -68,13 +68,14 @@ perspectivesRoute.post('/', async (c) => {
 });
 
 perspectivesRoute.put('/:id', async (c) => {
-  const { db } = requireRequestContext(c);
+  const { db, workspace } = requireRequestContext(c);
   const id = c.req.param('id');
   const body = await c.req.json<Partial<CustomPerspectiveInput>>().catch(() => null);
   if (!body) return c.json({ error: '요청 본문이 필요합니다.' }, 400);
 
   try {
     const perspective = updateCustomPerspective(db, id, body);
+    exportPerspectivesJson(db, workspace.docsPath);
     return c.json({ perspective });
   } catch (err: any) {
     if (err.message.includes('not found')) return c.json({ error: 'Perspective not found' }, 404);
@@ -84,13 +85,14 @@ perspectivesRoute.put('/:id', async (c) => {
 });
 
 perspectivesRoute.delete('/:id', (c) => {
-  const { db } = requireRequestContext(c);
+  const { db, workspace } = requireRequestContext(c);
   const id = c.req.param('id');
   const existing = getPerspective(db, id);
   if (!existing) return c.json({ error: 'Perspective not found' }, 404);
 
   try {
     deleteCustomPerspective(db, id);
+    exportPerspectivesJson(db, workspace.docsPath);
     return c.body(null, 204);
   } catch (err: any) {
     if (err.message.includes('locked')) return c.json({ error: 'Perspective is locked' }, 409);
@@ -99,7 +101,7 @@ perspectivesRoute.delete('/:id', (c) => {
 });
 
 perspectivesRoute.put('/:id/toggle', async (c) => {
-  const { db } = requireRequestContext(c);
+  const { db, workspace } = requireRequestContext(c);
   const id = c.req.param('id');
   const body = await c.req.json<{ active: boolean }>().catch(() => null);
   if (!body || typeof body.active !== 'boolean') {
@@ -108,6 +110,7 @@ perspectivesRoute.put('/:id/toggle', async (c) => {
 
   try {
     toggleActivePerspective(db, id, body.active);
+    exportPerspectivesJson(db, workspace.docsPath);
     const perspective = getPerspective(db, id);
     return c.json({ perspective });
   } catch (err: any) {
