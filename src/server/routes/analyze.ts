@@ -23,6 +23,7 @@ import { buildBackendPrompt } from '../../claude/prompts/design-backend.js';
 import { buildFrontendPrompt } from '../../claude/prompts/design-frontend.js';
 import { buildFeaturesPrompt } from '../../claude/prompts/plan-features.js';
 import { buildContextPackage } from '../../claude/context-package.js';
+import type { SpawnResult, UsageTotals } from '../../claude/spawner.js';
 import { requireRequestContext } from '../context.js';
 import { validateAnalyzeResults } from '../analysis-schema.js';
 
@@ -127,7 +128,6 @@ analyzeRoute.post('/', async (c) => {
     source_version: sourceVersion,
     workspace_root: workspace.rootPath,
   });
-  appendJobLog(db, jobId, `[${providerModel.provider}:${providerModel.model}] 분석 시작...\n`);
 
   (async () => {
     try {
@@ -136,54 +136,80 @@ analyzeRoute.post('/', async (c) => {
         return;
       }
 
-      // Fetch active perspectives for this analysis
       let perspectives = getActivePerspectives(db, tab);
-
-      // Filter by user-selected perspectives if provided
       if (body.perspectiveIds && body.perspectiveIds.length > 0) {
         const selectedIds = new Set(body.perspectiveIds);
         perspectives = perspectives.filter((p: Perspective) => selectedIds.has(p.id));
       }
 
-      let prompt: string;
+      let promptBuilder: (ctx: typeof ctxPackage, perspectives?: Perspective[]) => string;
       if (tab === 'review') {
-        prompt = buildReviewPlanPrompt(ctxPackage, perspectives);
+        promptBuilder = buildReviewPlanPrompt;
       } else if (tab === 'backend') {
-        prompt = buildBackendPrompt(ctxPackage, perspectives);
+        promptBuilder = buildBackendPrompt;
       } else if (tab === 'frontend') {
-        prompt = buildFrontendPrompt(ctxPackage, perspectives);
+        promptBuilder = buildFrontendPrompt;
       } else if (tab === 'features') {
-        prompt = buildFeaturesPrompt(ctxPackage, perspectives);
+        promptBuilder = buildFeaturesPrompt;
       } else {
         updateJob(db, jobId, 'failed', `알 수 없는 탭: ${tab}`);
         return;
       }
 
-      const extractor = createLogExtractor(providerModel.provider);
-      const handle = spawnProviderWithHandle(prompt, providerModel, {
-        onChunk: (chunk) => {
-          if (!isJobRunnable(db, jobId)) return;
-          const text = extractor.processChunk(chunk);
-          if (text) appendJobLog(db, jobId, text);
-        },
-      });
-      handle.childReady.then(child => {
-        if (child) registerProcess(jobId, child);
-      });
-      let result: Awaited<typeof handle.promise>;
-      try {
-        result = await handle.promise;
-      } finally {
-        unregisterProcess(jobId);
-      }
+      appendJobLog(db, jobId, `[${providerModel.provider}:${providerModel.model}] 분석 시작 (${perspectives.length}개 관점 병렬)...\n`);
+
+      // Spawn one AI process per perspective in parallel
+      const settledResults = await Promise.allSettled(
+        perspectives.map(async (perspective: Perspective) => {
+          const prompt = promptBuilder(ctxPackage, [perspective]);
+          const extractor = createLogExtractor(providerModel.provider);
+
+          const handle = spawnProviderWithHandle(prompt, providerModel, {
+            onChunk: (chunk) => {
+              if (!isJobRunnable(db, jobId)) return;
+              const text = extractor.processChunk(chunk);
+              if (text) appendJobLog(db, jobId, `[${perspective.name}] ${text}`);
+            },
+          });
+
+          const child = await handle.childReady;
+          if (child) registerProcess(jobId, child);
+
+          let result: Awaited<typeof handle.promise>;
+          try {
+            result = await handle.promise;
+          } finally {
+            if (child) unregisterProcess(jobId, child);
+          }
+
+          if (!result.success) {
+            throw new Error(result.error ?? `관점 "${perspective.name}" 분석 실패`);
+          }
+
+          return result;
+        })
+      );
+
       if (!isJobRunnable(db, jobId)) return;
-      if (!result.success) {
-        updateJob(db, jobId, 'failed', result.error);
+
+      const fulfilled = settledResults.filter(
+        (r): r is PromiseFulfilledResult<SpawnResult> =>
+          r.status === 'fulfilled'
+      );
+      const rejected = settledResults.filter(r => r.status === 'rejected');
+
+      if (rejected.length > 0) {
+        const failMessages = (rejected as PromiseRejectedResult[])
+          .map(r => String(r.reason))
+          .join('; ');
+        updateJob(db, jobId, 'failed', `${rejected.length}개 관점 분석 실패: ${failMessages}`);
         return;
       }
 
-      const parsed = extractCandidates(result.result);
+      const combinedText = fulfilled.map(r => r.value.result).join('\n');
+      const parsed = extractCandidates(combinedText);
       const { issues: validIssues, refItems } = validateAnalyzeResults(parsed, tab);
+
       if (validIssues.length === 0) {
         updateJob(db, jobId, 'failed', '분석 결과가 유효한 JSON 스키마를 만족하지 않습니다.');
         return;
@@ -215,7 +241,22 @@ analyzeRoute.post('/', async (c) => {
         bulkSetRefItems(db, refItems.map(content => ({ content })));
       }
 
-      updateJob(db, jobId, 'completed', undefined, { usage: result.usage });
+      // Sum token usage across all successful results
+      const totalUsage = fulfilled.reduce<UsageTotals>(
+        (acc, r) => {
+          const u = r.value.usage;
+          if (!u) return acc;
+          return {
+            inputTokens: acc.inputTokens + u.inputTokens,
+            outputTokens: acc.outputTokens + u.outputTokens,
+            cacheCreationTokens: acc.cacheCreationTokens + u.cacheCreationTokens,
+            cacheReadTokens: acc.cacheReadTokens + u.cacheReadTokens,
+          };
+        },
+        { inputTokens: 0, outputTokens: 0, cacheCreationTokens: 0, cacheReadTokens: 0 }
+      );
+
+      updateJob(db, jobId, 'completed', undefined, { usage: totalUsage });
     } catch (e) {
       if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));

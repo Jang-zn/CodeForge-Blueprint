@@ -36,14 +36,14 @@ describe('registerProcess / unregisterProcess', () => {
     assert.equal(killProcess('job-2'), false);
   });
 
-  test('같은 jobId로 재등록 시 기존 엔트리를 덮어씀', () => {
+  test('같은 jobId로 여러 프로세스 등록 시 모두 kill됨', () => {
     const child1 = mockChild();
     const child2 = mockChild();
     registerProcess('job-3', child1);
     registerProcess('job-3', child2);
     killProcess('job-3');
-    assert.equal((child2 as any)._kills.length, 1);
-    assert.equal((child1 as any)._kills.length, 0, '이전 프로세스는 kill되지 않아야 함');
+    assert.equal((child1 as any)._kills.length, 1, 'child1도 kill되어야 함');
+    assert.equal((child2 as any)._kills.length, 1, 'child2도 kill되어야 함');
   });
 });
 

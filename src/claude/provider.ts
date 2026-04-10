@@ -94,7 +94,7 @@ LLM 출력 포맷 흔들림
     });
   }
 
-  if (prompt.includes('다음 버전 기능을 4개 관점')) {
+  if (prompt.includes('다음 버전 기능을') && prompt.includes('관점에서 제안하세요')) {
     return JSON.stringify({
       issues: [
         { id: 'ft-mkt1', category: 'FT-MKT', title: '템플릿 갤러리', tag: 'marketing', priority: 'P1', description: '공개 템플릿으로 유입을 늘립니다.', evidence: '초기 유입 루프가 약합니다.', conclusion: 'build: 공유 가능한 결과물이 유입 경로가 됩니다.', callout_type: 'green' },
