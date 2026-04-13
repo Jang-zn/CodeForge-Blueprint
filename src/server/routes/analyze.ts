@@ -11,6 +11,9 @@ import {
   markSupersededJobs,
   isJobRunnable,
   getActivePerspectives,
+  createOrResumeCycle,
+  updateCycleStatus,
+  hasPendingDrafts,
   type Tab,
   type IssueStatus,
   type Perspective,
@@ -112,6 +115,13 @@ analyzeRoute.post('/', async (c) => {
   const body = await c.req.json<AnalyzeRequest>().catch(() => ({ tab: 'review' as Tab })) as AnalyzeRequest;
   const tab: Tab = body.tab ?? 'review';
 
+  if (hasPendingDrafts(db, tab)) {
+    return c.json(
+      { error: '반영하지 않은 변경사항이 있습니다. "반영하기"를 먼저 실행하세요.', recovery: '"반영하기" 버튼을 클릭하여 변경사항을 반영한 후 다시 시도하세요.' },
+      400
+    );
+  }
+
   const meta = getWorkspaceMeta(db);
   const ctxPackage = buildContextPackage(db, workspace.docsPath, tab as any, meta?.prd_path ?? null);
 
@@ -129,10 +139,14 @@ analyzeRoute.post('/', async (c) => {
     workspace_root: workspace.rootPath,
   });
 
+  const cycle = createOrResumeCycle(db, tab);
+  const cycleId = cycle.id;
+
   (async () => {
     try {
       if (!ctxPackage.prd && !ctxPackage.projectOverview) {
         updateJob(db, jobId, 'failed', 'PRD 또는 프로젝트 개요 문서가 없습니다. 먼저 문서를 작성하세요.');
+        updateCycleStatus(db, cycleId, 'failed');
         return;
       }
 
@@ -153,6 +167,7 @@ analyzeRoute.post('/', async (c) => {
         promptBuilder = buildFeaturesPrompt;
       } else {
         updateJob(db, jobId, 'failed', `알 수 없는 탭: ${tab}`);
+        updateCycleStatus(db, cycleId, 'failed');
         return;
       }
 
@@ -203,6 +218,7 @@ analyzeRoute.post('/', async (c) => {
           .map(r => String(r.reason))
           .join('; ');
         updateJob(db, jobId, 'failed', `${rejected.length}개 관점 분석 실패: ${failMessages}`);
+        updateCycleStatus(db, cycleId, 'failed');
         return;
       }
 
@@ -212,6 +228,7 @@ analyzeRoute.post('/', async (c) => {
 
       if (validIssues.length === 0) {
         updateJob(db, jobId, 'failed', '분석 결과가 유효한 JSON 스키마를 만족하지 않습니다.');
+        updateCycleStatus(db, cycleId, 'failed');
         return;
       }
 
@@ -260,6 +277,7 @@ analyzeRoute.post('/', async (c) => {
     } catch (e) {
       if (!isJobRunnable(db, jobId)) return;
       updateJob(db, jobId, 'failed', String(e));
+      updateCycleStatus(db, cycleId, 'failed');
     }
   })();
 

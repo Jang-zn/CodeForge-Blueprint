@@ -431,6 +431,7 @@
 <div id="fab-container" class="fab-container hidden">
   <div id="job-status" class="job-status hidden"></div>
   <div class="fab-actions" id="fab-actions">
+    <span id="cycle-indicator" class="cycle-indicator hidden"></span>
     <button id="btn-history" class="btn-action btn-history" disabled>히스토리</button>
     <button id="btn-generate" class="btn-action btn-generate" disabled>문서 생성하기</button>
     <button id="btn-apply" class="btn-action btn-apply" disabled>반영하기</button>
@@ -462,21 +463,6 @@
   </div>
 </div>
 
-<!-- Snapshot Modal -->
-<div id="snapshot-modal" class="modal-overlay hidden">
-  <div class="modal-container snapshot-modal-container">
-    <div class="modal-header">
-      <h3 id="snapshot-modal-title">분석 히스토리</h3>
-      <button id="snapshot-modal-close" class="modal-close-btn">&times;</button>
-    </div>
-    <div class="snapshot-modal-body">
-      <div class="snapshot-list" id="snapshot-list"></div>
-      <div class="snapshot-content" id="snapshot-content">
-        <p class="empty-state">왼쪽에서 버전을 선택하세요</p>
-      </div>
-    </div>
-  </div>
-</div>
 
 <script src="vendor/diff.min.js"></script>
 <script src="app.js"></script>

@@ -2,7 +2,7 @@
 import type { UsageTotals } from '../claude/spawner.js';
 
 export type Tab = 'review' | 'backend' | 'frontend' | 'features';
-export type IssueStatus = 'pending' | 'reviewing' | 'resolved' | 'deferred' | 'dismissed';
+export type IssueStatus = 'pending' | 'reviewing' | 'resolved' | 'deferred' | 'dismissed' | 'candidate' | 'promoted' | 'archived';
 export type JobStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'superseded';
 
 export interface WorkspaceMeta {
@@ -48,6 +48,7 @@ export interface DecisionLog {
   old_status: string | null;
   tab: string | null;
   reason: string | null;
+  cycle_id: number | null;
 }
 
 export interface IssueSnapshot {
@@ -354,8 +355,8 @@ export function setTabVersion(db: any, tab: Tab, version: string): void {
 
 export function addDecisionLog(db: any, log: Omit<DecisionLog, 'id'>): void {
   db.prepare(
-    'INSERT INTO decision_logs (issue_id, date, status, memo, old_status, tab, reason) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(log.issue_id, log.date, log.status, log.memo, log.old_status ?? null, log.tab ?? null, log.reason ?? null);
+    'INSERT INTO decision_logs (issue_id, date, status, memo, old_status, tab, reason, cycle_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(log.issue_id, log.date, log.status, log.memo, log.old_status ?? null, log.tab ?? null, log.reason ?? null, log.cycle_id ?? null);
 }
 
 export function getDecisionLogs(db: any, issue_id: string): DecisionLog[] {
@@ -376,6 +377,73 @@ export function getDecisionLogsBulk(db: any, issueIds: string[]): Record<string,
   return result;
 }
 
+// ===== Timeline (Snapshots + Decision Logs merged) =====
+
+export interface TimelineEntry {
+  type: 'snapshot' | 'decision';
+  date: string;
+  seq: number;  // 동일 날짜 내 정렬용 (snapshot: id, decision: id)
+  issue_id: string;
+  title?: string;
+  html_content?: string;
+  category?: string | null;
+  tag?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  memo?: string | null;
+  old_status?: string | null;
+  reason?: string | null;
+  confidence?: number | null;
+  source_run_id?: string | null;
+}
+
+export function getIssueTimeline(db: any, issueId: string): TimelineEntry[] {
+  const snapshots: IssueSnapshot[] = db.prepare(
+    'SELECT * FROM issue_snapshots WHERE issue_id = ? ORDER BY snapshot_at DESC'
+  ).all(issueId);
+
+  const logs: DecisionLog[] = db.prepare(
+    'SELECT * FROM decision_logs WHERE issue_id = ? ORDER BY id DESC'
+  ).all(issueId);
+
+  const entries: TimelineEntry[] = [];
+
+  for (const s of snapshots) {
+    entries.push({
+      type: 'snapshot',
+      date: s.snapshot_at,
+      seq: s.id,
+      issue_id: s.issue_id,
+      title: s.title,
+      html_content: s.html_content,
+      category: s.category,
+      tag: s.tag,
+      priority: s.priority,
+      status: s.status,
+      memo: s.memo,
+      confidence: s.confidence,
+      source_run_id: s.source_run_id,
+    });
+  }
+
+  for (const l of logs) {
+    entries.push({
+      type: 'decision',
+      date: l.date,
+      seq: l.id,
+      issue_id: l.issue_id,
+      status: l.status,
+      memo: l.memo,
+      old_status: l.old_status,
+      reason: l.reason,
+    });
+  }
+
+  entries.sort((a, b) => b.date > a.date ? 1 : b.date < a.date ? -1 : b.seq - a.seq);
+
+  return entries;
+}
+
 export function getLastDecisionLogsBulk(db: any, issueIds: string[]): Record<string, DecisionLog> {
   if (issueIds.length === 0) return {};
   const placeholders = issueIds.map(() => '?').join(',');
@@ -386,6 +454,37 @@ export function getLastDecisionLogsBulk(db: any, issueIds: string[]): Record<str
     )
   `).all(...issueIds) as DecisionLog[];
   return Object.fromEntries(logs.map(log => [log.issue_id, log]));
+}
+
+// ===== Applied Decisions =====
+
+export interface AppliedDecision {
+  issueId: string;
+  title: string;
+  status: IssueStatus;
+  memo: string;
+}
+
+/** 사용자 피드백이 반영된 이슈 목록 (pending 제외) */
+export function getAppliedDecisions(db: any, tab?: Tab): AppliedDecision[] {
+  const issues = getIssues(db, tab);
+  const nonPending = issues.filter(i => i.status !== 'pending');
+  if (nonPending.length === 0) return [];
+
+  const lastLogs = getLastDecisionLogsBulk(db, nonPending.map(i => i.id));
+  return nonPending
+    .map(i => {
+      const log = lastLogs[i.id];
+      const memo = (log?.status === i.status ? log?.memo?.trim() : null) || i.memo?.trim() || '';
+      if (!memo && i.status !== 'dismissed') return null;
+      return {
+        issueId: i.id,
+        title: i.title,
+        status: i.status as IssueStatus,
+        memo: memo || `상태: ${i.status}`,
+      };
+    })
+    .filter((f): f is AppliedDecision => f !== null);
 }
 
 // ===== Changelogs =====
@@ -524,11 +623,12 @@ export function getRunningJobs(db: any): Job[] {
 export function addDocumentRecord(
   db: any,
   doc: Omit<DocumentRecord, 'id' | 'created_at' | 'doc_type' | 'summary'> & { doc_type?: string | null; summary?: string | null },
-): void {
-  db.prepare(`
+): number {
+  const result = db.prepare(`
     INSERT INTO documents (tab, version, kind, file_path, source_version, source_job_id, doc_type, summary)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(doc.tab, doc.version, doc.kind, doc.file_path, doc.source_version ?? null, doc.source_job_id ?? null, doc.doc_type ?? null, doc.summary ?? null);
+  return Number(result.lastInsertRowid);
 }
 
 export function getDocuments(db: any, tab?: Tab): DocumentRecord[] {
@@ -1017,4 +1117,61 @@ export function clearAllPreviewsForTab(db: any, tab: Tab): void {
 
   const placeholders = issueIds.map(() => '?').join(',');
   db.prepare(`DELETE FROM issue_preview WHERE issue_id IN (${placeholders})`).run(...issueIds);
+}
+
+// ===== Review Cycles =====
+
+export type CycleStatus = 'pending' | 'analyzing' | 'applied' | 'completed' | 'failed';
+
+export interface ReviewCycle {
+  id: number;
+  tab: string;
+  cycle_number: number;
+  base_doc_id: number | null;
+  result_doc_id: number | null;
+  status: CycleStatus;
+  started_at: string;
+  completed_at: string | null;
+}
+
+/** 현재 탭의 미완료 사이클 조회 (apply/generate에서 사용) */
+export function getCurrentCycle(db: any, tab: Tab): ReviewCycle | null {
+  return db.prepare(
+    `SELECT * FROM review_cycles WHERE tab = ? AND status IN ('pending','analyzing','applied') ORDER BY id DESC LIMIT 1`
+  ).get(tab) ?? null;
+}
+
+/** 분석 시작 시 사이클 생성 또는 기존 analyzing 사이클 재사용. applied 사이클은 새 사이클로 롤오버 */
+export function createOrResumeCycle(db: any, tab: Tab): ReviewCycle {
+  const existing = getCurrentCycle(db, tab);
+  if (existing && (existing.status === 'pending' || existing.status === 'analyzing')) {
+    if (existing.status === 'pending') {
+      db.prepare(`UPDATE review_cycles SET status = 'analyzing' WHERE id = ?`).run(existing.id);
+      return { ...existing, status: 'analyzing' as CycleStatus };
+    }
+    return existing;
+  }
+  const maxCycle = db.prepare(
+    'SELECT COALESCE(MAX(cycle_number), 0) as max_num FROM review_cycles WHERE tab = ?'
+  ).get(tab) as { max_num: number };
+  const nextNum = maxCycle.max_num + 1;
+  const info = db.prepare(
+    `INSERT INTO review_cycles (tab, cycle_number, status) VALUES (?, ?, 'analyzing')`
+  ).run(tab, nextNum);
+  return {
+    id: Number(info.lastInsertRowid),
+    tab,
+    cycle_number: nextNum,
+    base_doc_id: null,
+    result_doc_id: null,
+    status: 'analyzing',
+    started_at: new Date().toISOString(),
+    completed_at: null,
+  };
+}
+
+export function updateCycleStatus(db: any, cycleId: number, status: CycleStatus, resultDocId?: number): void {
+  db.prepare(
+    `UPDATE review_cycles SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN datetime('now') ELSE completed_at END, result_doc_id = COALESCE(?, result_doc_id) WHERE id = ?`
+  ).run(status, status, resultDocId ?? null, cycleId);
 }

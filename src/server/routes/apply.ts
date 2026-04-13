@@ -16,6 +16,8 @@ import {
   appendJobLog,
   getLastDecisionLogsBulk,
   markSupersededJobs,
+  getCurrentCycle,
+  updateCycleStatus,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
@@ -36,6 +38,9 @@ const STATUS_LABELS: Record<string, string> = {
   dismissed: '삭제',
   reviewing: '검토중',
   pending: '미검토',
+  candidate: '후보',
+  promoted: '승격',
+  archived: '보관',
 };
 
 function bumpMinorVersion(version: string): string {
@@ -97,6 +102,7 @@ applyRoute.post('/', async (c) => {
       let deferredCount = 0;
       const changeLines: string[] = [];
 
+      const cycle = getCurrentCycle(db, tab);
       const existingFeatures = tab !== 'features' ? getIssues(db, 'features') : [];
       const allIssues = tab !== 'features' ? getIssues(db) : [];
       const lastLogs = getLastDecisionLogsBulk(db, issues.map(issue => issue.id));
@@ -120,6 +126,7 @@ applyRoute.post('/', async (c) => {
           old_status: lastLog?.status ?? null,
           tab: issue?.tab ?? tab,
           reason: issueState.reason?.trim() || null,
+          cycle_id: cycle?.id ?? null,
         });
 
         updateIssueStatus(db, issueState.id, issueState.status, '', {
@@ -171,6 +178,11 @@ applyRoute.post('/', async (c) => {
 
       const changelogDesc = `v${newVersion} 리뷰 반영 (${changeLines.length}건)\n${changeLines.join('\n')}`;
       addChangelog(db, { tab, version: newVersion, date: todayStr, description: changelogDesc });
+
+      // 사이클 상태를 'applied'로 업데이트
+      if (cycle) {
+        updateCycleStatus(db, cycle.id, 'applied');
+      }
 
       clearAllPreviewsForTab(db, tab);
       updateJob(db, jobId, 'completed');

@@ -9,6 +9,8 @@ import {
   getDecisionLogs,
   getDecisionLogsBulk,
   getIssueSnapshots,
+  getIssueTimeline,
+  getCurrentCycle,
   type Tab,
   type IssueStatus,
 } from '../../db/repository.js';
@@ -29,6 +31,14 @@ issuesRoute.get('/', (c) => {
   });
 });
 
+issuesRoute.get('/cycle', (c) => {
+  const { db } = requireRequestContext(c);
+  const tab = c.req.query('tab') as Tab | undefined;
+  if (!tab) return c.json({ error: '탭이 필요합니다.' }, 400);
+  const cycle = getCurrentCycle(db, tab);
+  return c.json({ cycle });
+});
+
 issuesRoute.get('/:id/logs', (c) => {
   const { db } = requireRequestContext(c);
   const logs = getDecisionLogs(db, c.req.param('id'));
@@ -41,6 +51,12 @@ issuesRoute.get('/:id/snapshots', (c) => {
   return c.json({ snapshots });
 });
 
+issuesRoute.get('/:id/timeline', (c) => {
+  const { db } = requireRequestContext(c);
+  const entries = getIssueTimeline(db, c.req.param('id'));
+  return c.json({ entries });
+});
+
 issuesRoute.get('/recommendations', (c) => {
   const { db } = requireRequestContext(c);
   const tab = c.req.query('tab') as Tab | undefined;
@@ -50,13 +66,22 @@ issuesRoute.get('/recommendations', (c) => {
   return c.json(recommendations);
 });
 
+const FEATURES_ONLY_STATUSES: Set<IssueStatus> = new Set(['candidate', 'promoted', 'archived']);
+
 issuesRoute.put('/:id', async (c) => {
   const { db } = requireRequestContext(c);
   const id = c.req.param('id');
   const body = await c.req.json<{ status: IssueStatus; memo: string }>();
 
   const issue = getIssue(db, id);
-  const appliedStatus = issue?.status ?? 'pending';
+  if (!issue) return c.json({ error: '이슈를 찾을 수 없습니다.' }, 404);
+
+  // Tab-aware status validation: candidate/promoted/archived only allowed on features tab
+  if (FEATURES_ONLY_STATUSES.has(body.status) && issue.tab !== 'features') {
+    return c.json({ error: `"${body.status}" 상태는 features 탭에서만 사용할 수 있습니다.` }, 400);
+  }
+
+  const appliedStatus = issue.status ?? 'pending';
   const memoEmpty = !body.memo?.trim();
 
   if (body.status === appliedStatus && memoEmpty) {

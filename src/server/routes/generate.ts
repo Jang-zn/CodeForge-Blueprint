@@ -16,6 +16,8 @@ import {
   getDocuments,
   getLastDecisionLogsBulk,
   hasPendingDrafts,
+  getCurrentCycle,
+  updateCycleStatus,
   type Tab,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
@@ -100,9 +102,9 @@ function buildWriteDocPrompt(
   version: string,
   lastLogs: Record<string, { memo: string; status: string }>,
 ): string {
-  const resolvedIssues = issues.filter(issue => issue.status === 'resolved');
+  const resolvedIssues = issues.filter(issue => issue.status === 'resolved' || issue.status === 'candidate' || issue.status === 'promoted');
   const deferredIssues = issues.filter(issue => issue.status === 'deferred');
-  const dismissedIssues = issues.filter(issue => issue.status === 'dismissed');
+  const dismissedIssues = issues.filter(issue => issue.status === 'dismissed' || issue.status === 'archived');
   const reviewingIssues = issues.filter(issue => issue.status === 'reviewing');
 
   const getMemo = (issue: (typeof issues)[0], fallback: string) =>
@@ -209,6 +211,10 @@ generateRoute.post('/', async (c) => {
     source_version: version,
     workspace_root: workspace.rootPath,
   });
+  // Capture cycle at job creation time to avoid race with concurrent analyses
+  const cycle = getCurrentCycle(db, tab);
+  const cycleId = cycle?.id ?? null;
+
   appendJobLog(db, jobId, `[${providerModel.provider}:${providerModel.model}] 문서 생성 시작...\n`);
 
   (async () => {
@@ -258,7 +264,11 @@ generateRoute.post('/', async (c) => {
       }
 
       const indexPath = path.join(outputDir, 'index.md');
-      addDocumentRecord(db, { tab, version, kind: 'generated-doc', file_path: indexPath, source_version: version, source_job_id: jobId });
+      const docId = addDocumentRecord(db, { tab, version, kind: 'generated-doc', file_path: indexPath, source_version: version, source_job_id: jobId });
+
+      if (cycleId) {
+        updateCycleStatus(db, cycleId, 'completed', docId);
+      }
 
       updateJob(db, jobId, 'completed', undefined, { result_path: indexPath, usage: result.usage });
     } catch (e) {

@@ -271,6 +271,12 @@ export const MIGRATION_V40B_SQL = `ALTER TABLE issue_snapshots ADD COLUMN memo T
 // V41: 마커 마이그레이션 (실제 데이터 이전은 openDb()에서 TypeScript로 처리)
 export const MIGRATION_V41_SQL = `CREATE TABLE IF NOT EXISTS _migration_v41_done (id INTEGER PRIMARY KEY)`;
 
+// V42: review_cycles에 result_doc_id 컬럼 추가 (생성 문서 추적)
+export const MIGRATION_V42_SQL = `ALTER TABLE review_cycles ADD COLUMN result_doc_id INTEGER REFERENCES documents(id);`;
+
+// V43: decision_logs에 cycle_id 컬럼 추가 (사이클 추적)
+export const MIGRATION_V43_SQL = `ALTER TABLE decision_logs ADD COLUMN cycle_id INTEGER REFERENCES review_cycles(id);`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;

@@ -62,12 +62,18 @@ const STATUS_MAP = {
   reviewing: { label: '검토중', cls: 'active-reviewing' },
   resolved:  { label: '확정',   cls: 'active-resolved' },
   deferred:  { label: '보류',   cls: 'active-deferred' },
-  dismissed: { label: '삭제',   cls: 'active-dismissed' }
+  dismissed: { label: '삭제',   cls: 'active-dismissed' },
+  candidate: { label: '후보',   cls: 'active-candidate' },
+  promoted:  { label: '승격',   cls: 'active-promoted' },
+  archived:  { label: '보관',   cls: 'active-archived' }
 };
 const STATUS_DOT_COLORS = {
   pending: 'transparent', reviewing: 'var(--orange)', resolved: 'var(--green)',
-  deferred: 'var(--text-muted)', dismissed: 'var(--red)'
+  deferred: 'var(--text-muted)', dismissed: 'var(--red)',
+  candidate: 'var(--blue)', promoted: 'var(--green)', archived: 'var(--text-muted)'
 };
+const DEFAULT_STATUS_ENTRIES = Object.entries(STATUS_MAP).filter(([k]) => !['candidate', 'promoted', 'archived'].includes(k));
+const FEATURES_STATUS_ENTRIES = Object.entries(STATUS_MAP).filter(([k]) => ['pending', 'candidate', 'promoted', 'archived', 'dismissed'].includes(k));
 
 const CAT_LABELS = {
   'A': '기획 정합성',
@@ -421,7 +427,10 @@ function injectIssueControls(tab = activeTab) {
 
       const btnGroup = document.createElement('div');
       btnGroup.className = 'issue-btn-group';
-      Object.entries(STATUS_MAP).forEach(([key, {label}]) => {
+      const filteredEntries = tab === 'features'
+        ? FEATURES_STATUS_ENTRIES
+        : DEFAULT_STATUS_ENTRIES;
+      filteredEntries.forEach(([key, {label}]) => {
         const btn = document.createElement('button');
         btn.className = 'status-btn';
         btn.textContent = label;
@@ -663,7 +672,23 @@ function updateActionButtonStates() {
   const tabVersions = currentWorkflow?.tabVersions || {};
   const latestDoc = (currentWorkflow?.documents || []).find(d => d.tab === activeTab);
   const upToDate = latestDoc && latestDoc.version === tabVersions[activeTab];
-  setButtonEnabled('btn-analyze', !upToDate, '변경사항을 검토후 반영하여 새버전을 반영하세요');
+  setButtonEnabled('btn-analyze', !hasPendingChanges && !upToDate, hasPendingChanges ? '반영하기를 먼저 눌러 변경사항을 반영하세요' : '변경사항을 검토후 반영하여 새버전을 반영하세요');
+}
+
+async function updateCycleIndicator(tab) {
+  const el = document.getElementById('cycle-indicator');
+  if (!el) return;
+  try {
+    const data = await API.get(`/issues/cycle?tab=${tab}`);
+    if (data && data.cycle != null) {
+      el.textContent = `Cycle #${data.cycle.cycle_number}`;
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+  } catch {
+    el.classList.add('hidden');
+  }
 }
 
 function refreshUI() {
@@ -763,6 +788,7 @@ async function loadIssues(tab) {
 
     refreshUI();
     loadRecommendations(tab);
+    updateCycleIndicator(tab);
   } catch (e) {
     showRecovery(e);
     console.error('Failed to load issues:', e);
@@ -1696,54 +1722,101 @@ document.getElementById('diff-modal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
 });
 
-// ========== Snapshot History Modal ==========
+// ========== Issue Timeline Modal (Snapshots + Decisions) ==========
 async function openSnapshotModal(issueId) {
-  const modal = document.getElementById('snapshot-modal');
-  const list = document.getElementById('snapshot-list');
-  const content = document.getElementById('snapshot-content');
-  document.getElementById('snapshot-modal-title').textContent = `${issueId.toUpperCase()} 분석 히스토리`;
+  // Remove existing overlay if any
+  document.getElementById('timeline-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'timeline-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  const container = document.createElement('div');
+  container.className = 'modal-container timeline-modal-container';
+  container.innerHTML = `
+    <div class="modal-header">
+      <h3>${escapeHtml(issueId.toUpperCase())} 타임라인</h3>
+      <button class="modal-close-btn" id="timeline-modal-close">&times;</button>
+    </div>
+    <div class="timeline-modal-body">
+      <div class="timeline-loading">로딩 중...</div>
+    </div>`;
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+
+  container.querySelector('#timeline-modal-close').addEventListener('click', () => overlay.remove());
 
   try {
-    const { snapshots } = await API.get(`/issues/${issueId}/snapshots`);
-    if (!snapshots || !snapshots.length) {
-      list.innerHTML = '<p class="empty-state">이전 분석 버전이 없습니다</p>';
-      content.innerHTML = '';
-    } else {
-      list.innerHTML = snapshots.map((s, i) => {
-        const statusLabel = STATUS_MAP[s.status]?.label || s.status || '';
-        return `<div class="snapshot-entry" data-idx="${i}">
-          <span class="snapshot-date">${s.snapshot_at}</span>
-          <span class="snapshot-title">${escapeHtml(s.title)}</span>
-          ${statusLabel ? `<span class="snapshot-run">${escapeHtml(statusLabel)}</span>` : ''}
-        </div>`;
-      }).join('');
-      let activeEntry = null;
-      list.addEventListener('click', (e) => {
-        const el = e.target.closest('.snapshot-entry');
-        if (!el) return;
-        const s = snapshots[Number(el.dataset.idx)];
-        const statusLabel = STATUS_MAP[s.status]?.label || s.status || '';
-        const memoHtml = s.memo ? `<div class="snapshot-memo-block"><strong>메모:</strong> ${escapeHtml(s.memo)}</div>` : '';
-        const statusHtml = statusLabel ? `<div class="snapshot-status-block"><strong>상태:</strong> ${escapeHtml(statusLabel)}</div>` : '';
-        content.innerHTML = `<h4>${escapeHtml(s.title)}</h4>${statusHtml}${memoHtml}<hr class="snapshot-divider">${s.html_content}`;
-        activeEntry?.classList.remove('active');
-        el.classList.add('active');
-        activeEntry = el;
-      });
-      list.querySelector('.snapshot-entry')?.click();
+    const { entries } = await API.get(`/issues/${issueId}/timeline`);
+    const body = container.querySelector('.timeline-modal-body');
+
+    if (!entries || !entries.length) {
+      body.innerHTML = '<p class="empty-state">타임라인 항목이 없습니다.</p>';
+      return;
     }
-    modal.classList.remove('hidden');
+
+    let detailPanel = null;
+    body.innerHTML = `<div class="timeline-split">
+      <div class="timeline-list"></div>
+      <div class="timeline-detail"><p class="text-muted">항목을 선택하세요</p></div>
+    </div>`;
+
+    const listEl = body.querySelector('.timeline-list');
+    const detailEl = body.querySelector('.timeline-detail');
+
+    listEl.innerHTML = entries.map((entry, i) => {
+      const isSnapshot = entry.type === 'snapshot';
+      const markerClass = isSnapshot ? 'timeline-marker-snapshot' : 'timeline-marker-decision';
+      const label = isSnapshot ? '분석' : '결정';
+      const statusLabel = entry.status ? (STATUS_MAP[entry.status]?.label || entry.status) : '';
+      const title = isSnapshot ? escapeHtml(entry.title || '') : statusLabel;
+      const subtitle = isSnapshot ? '' : (entry.old_status ? `${STATUS_MAP[entry.old_status]?.label || entry.old_status} → ${statusLabel}` : statusLabel);
+
+      return `<div class="timeline-entry" data-idx="${i}">
+        <div class="timeline-marker ${markerClass}"></div>
+        <div class="timeline-entry-content">
+          <span class="timeline-date">${escapeHtml(entry.date)}</span>
+          <span class="timeline-label">${label}</span>
+          <span class="timeline-title">${title}</span>
+          ${subtitle ? `<span class="timeline-subtitle">${escapeHtml(subtitle)}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    let activeEl = null;
+    listEl.addEventListener('click', (e) => {
+      const el = e.target.closest('.timeline-entry');
+      if (!el) return;
+      const entry = entries[Number(el.dataset.idx)];
+      activeEl?.classList.remove('active');
+      el.classList.add('active');
+      activeEl = el;
+
+      if (entry.type === 'snapshot') {
+        const statusLabel = entry.status ? (STATUS_MAP[entry.status]?.label || entry.status) : '';
+        const memoHtml = entry.memo ? `<div class="snapshot-memo-block"><strong>메모:</strong> ${escapeHtml(entry.memo)}</div>` : '';
+        const statusHtml = statusLabel ? `<div class="snapshot-status-block"><strong>상태:</strong> ${escapeHtml(statusLabel)}</div>` : '';
+        detailEl.innerHTML = `<h4>${escapeHtml(entry.title || '')}</h4>${statusHtml}${memoHtml}<hr class="snapshot-divider">${entry.html_content || ''}`;
+      } else {
+        const statusLabel = entry.status ? (STATUS_MAP[entry.status]?.label || entry.status) : '';
+        const oldLabel = entry.old_status ? (STATUS_MAP[entry.old_status]?.label || entry.old_status) : '';
+        const reasonHtml = entry.reason ? `<div class="timeline-reason"><strong>사유:</strong> ${escapeHtml(entry.reason)}</div>` : '';
+        const memoHtml = entry.memo ? `<div class="snapshot-memo-block"><strong>메모:</strong> ${escapeHtml(entry.memo)}</div>` : '';
+        detailEl.innerHTML = `<h4>상태 변경</h4>` +
+          (oldLabel ? `<div class="timeline-status-change">${escapeHtml(oldLabel)} → ${escapeHtml(statusLabel)}</div>` : `<div class="timeline-status-change">${escapeHtml(statusLabel)}</div>`) +
+          reasonHtml + memoHtml;
+      }
+    });
+
+    // 첫 항목 자동 선택
+    listEl.querySelector('.timeline-entry')?.click();
   } catch (e) {
-    showToast('히스토리 로드 실패: ' + e.message, 'error');
+    showToast('타임라인 로드 실패: ' + e.message, 'error');
   }
 }
-
-document.getElementById('snapshot-modal-close')?.addEventListener('click', () => {
-  document.getElementById('snapshot-modal').classList.add('hidden');
-});
-document.getElementById('snapshot-modal')?.addEventListener('click', (e) => {
-  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
-});
 
 // ========== Template Suggestion ==========
 const SERVICE_TYPE_TO_TEMPLATE = {
