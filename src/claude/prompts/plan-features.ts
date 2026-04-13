@@ -1,5 +1,6 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 import { type Perspective } from '../../db/repository.js';
+import { ID_CONTINUITY_RULES } from './index.js';
 
 // 기본 관점 (DB 없을 때 폴백)
 const DEFAULT_PERSPECTIVES = [
@@ -49,6 +50,7 @@ ${deferredSection}
   "issues": [
     {
       "id": "ft-mkt1",
+      "basis_issue_id": "ft-mkt1",
       "category": "FT-MKT",
       "title": "기능 제목",
       "tag": "marketing",
@@ -64,6 +66,7 @@ ${deferredSection}
 
 **규칙:**
 - id 패턴: ${idPatternLines}
+${ID_CONTINUITY_RULES}
 - category는 해당 관점의 id_prefix 대문자 (예: FT-MKT, FT-OPS...)
 - tag: "marketing" | "ops" | "service" | "tech"
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)

@@ -14,8 +14,8 @@ import {
   createOrResumeCycle,
   updateCycleStatus,
   hasPendingDrafts,
+  getIssues,
   type Tab,
-  type IssueStatus,
   type Perspective,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
@@ -29,6 +29,7 @@ import { buildContextPackage } from '../../claude/context-package.js';
 import type { SpawnResult, UsageTotals } from '../../claude/spawner.js';
 import { requireRequestContext } from '../context.js';
 import { validateAnalyzeResults } from '../analysis-schema.js';
+import { reconcileAnalyzeIssues } from '../issue-reconciliation.js';
 
 const analyzeRoute = new Hono();
 
@@ -123,7 +124,8 @@ analyzeRoute.post('/', async (c) => {
   }
 
   const meta = getWorkspaceMeta(db);
-  const ctxPackage = buildContextPackage(db, workspace.docsPath, tab as any, meta?.prd_path ?? null);
+  const promptIssues = getIssues(db, tab);
+  const ctxPackage = buildContextPackage(db, workspace.docsPath, tab as any, meta?.prd_path ?? null, { prefetchedIssues: promptIssues });
 
   const jobId = crypto.randomUUID();
   const providerModel = getProviderModel(db);
@@ -232,27 +234,11 @@ analyzeRoute.post('/', async (c) => {
         return;
       }
 
-      bulkUpsertIssues(db, validIssues.map((issue, idx) => ({
-        id: issue.id,
-        tab,
-        category: issue.category,
-        title: issue.title,
-        html_content: buildIssueHtml(issue),
-        tag: issue.tag ?? null,
-        priority: issue.priority ?? null,
-        badge: null,
-        status: 'pending' as IssueStatus,
-        memo: '',
-        sort_order: idx,
-        origin_id: null,
-        assignee: null,
-        updated_by: 'ai',
-        applied_at: null,
-        source_run_id: jobId,
-        confidence: issue.confidence ?? null,
-        decision_at: null,
-        decision_quality: null,
-      })));
+      // 최신 이슈 상태로 재조회 (AI 실행 중 사용자 변경 반영)
+      const freshIssues = getIssues(db, tab);
+      const globalIssueIds = new Set(getIssues(db).map(i => i.id));
+      const reconciledIssues = reconcileAnalyzeIssues(validIssues, freshIssues, tab, jobId, buildIssueHtml, { globalIssueIds });
+      bulkUpsertIssues(db, reconciledIssues);
 
       if (refItems.length > 0) {
         bulkSetRefItems(db, refItems.map(content => ({ content })));

@@ -7,6 +7,7 @@ import {
   getRecentDecisionLogs,
   getRefItems,
   getAppliedDecisions,
+  getIssues,
   buildGlossaryMarkdown,
   assembleMarkdown,
   getDocuments,
@@ -22,6 +23,13 @@ export interface UserFeedbackItem {
   memo: string;
 }
 
+export interface ExistingIssueItem {
+  id: string;
+  title: string;
+  status: IssueStatus;
+  memo: string;
+}
+
 export interface ContextPackage {
   projectOverview?: string;
   aiGuide?: string;
@@ -31,16 +39,17 @@ export interface ContextPackage {
   refItems?: string[];
   baseDocument?: string;
   userFeedback?: UserFeedbackItem[];
+  existingIssues?: ExistingIssueItem[];
 }
 
 type ContextProfile = 'default' | 'review' | 'backend' | 'frontend' | 'features';
 
 const PROFILE_DOCS: Record<ContextProfile, string[]> = {
   default:  ['project-overview', 'ai-guide', 'glossary'],
-  review:   ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'generated:review'],
-  backend:  ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'decisions:recent', 'generated:review', 'generated:backend'],
-  frontend: ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'ref-items', 'decisions:recent', 'generated:review', 'generated:backend', 'generated:frontend'],
-  features: ['project-overview', 'ai-guide', 'glossary', 'prd', 'user-feedback', 'decisions:deferred', 'generated:review', 'generated:backend', 'generated:features'],
+  review:   ['project-overview', 'ai-guide', 'glossary', 'prd', 'existing-issues', 'user-feedback', 'generated:review'],
+  backend:  ['project-overview', 'ai-guide', 'glossary', 'prd', 'existing-issues', 'user-feedback', 'decisions:recent', 'generated:review', 'generated:backend'],
+  frontend: ['project-overview', 'ai-guide', 'glossary', 'prd', 'existing-issues', 'user-feedback', 'ref-items', 'decisions:recent', 'generated:review', 'generated:backend', 'generated:frontend'],
+  features: ['project-overview', 'ai-guide', 'glossary', 'prd', 'existing-issues', 'user-feedback', 'decisions:deferred', 'generated:review', 'generated:backend', 'generated:features'],
 };
 
 /**
@@ -156,11 +165,16 @@ function readGeneratedDocContent(db: any, doc: DocumentRecord, docsPath: string)
   }
 }
 
+export interface BuildContextOptions {
+  prefetchedIssues?: { id: string; title: string; status: IssueStatus; memo: string }[];
+}
+
 export function buildContextPackage(
   db: any,
   docsPath: string,
   profile: string,
   legacyPrdPath?: string | null,
+  options?: BuildContextOptions,
 ): ContextPackage {
   const ctx: ContextPackage = {};
   const includes = PROFILE_DOCS[profile as ContextProfile] ?? PROFILE_DOCS.default;
@@ -206,6 +220,16 @@ export function buildContextPackage(
           reason: log.reason,
         }));
       }
+    } else if (item === 'existing-issues') {
+      const allIssues = options?.prefetchedIssues ?? getIssues(db, profileTab);
+      if (allIssues.length > 0) {
+        ctx.existingIssues = allIssues.map(i => ({
+          id: i.id,
+          title: i.title,
+          status: i.status,
+          memo: (i.memo || '').slice(0, 80),
+        }));
+      }
     } else if (item === 'user-feedback') {
       const feedbackItems = getAppliedDecisions(db, profileTab);
       if (feedbackItems.length > 0) {
@@ -242,6 +266,12 @@ export function formatContextForPrompt(ctx: ContextPackage): string {
   }
   if (ctx.refItems?.length) {
     parts.push(`<context:ref-items>\n${ctx.refItems.map((r, i) => `${i + 1}. ${r}`).join('\n')}\n</context:ref-items>`);
+  }
+  if (ctx.existingIssues?.length) {
+    const lines = ctx.existingIssues.map(i =>
+      `- [${i.id}] "${i.title}" (status: ${i.status}${i.memo ? `, memo: ${i.memo}` : ''})`
+    );
+    parts.push(`<context:existing-issues>\n아래는 현재 탭의 기존 이슈입니다. ID 연속성 규칙에 따라 반드시 참조하세요:\n${lines.join('\n')}\n</context:existing-issues>`);
   }
   if (ctx.userFeedback?.length) {
     const STATUS_GUIDE: Record<string, string> = {

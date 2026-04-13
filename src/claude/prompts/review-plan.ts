@@ -1,5 +1,6 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 import { type Perspective } from '../../db/repository.js';
+import { ID_CONTINUITY_RULES } from './index.js';
 
 // 기본 관점 (DB 없을 때 폴백)
 const DEFAULT_PERSPECTIVES = [
@@ -48,6 +49,7 @@ ${sectionLines}
   "issues": [
     {
       "id": "a1",
+      "basis_issue_id": "a1",
       "category": "A",
       "title": "이슈 제목",
       "tag": "contradiction",
@@ -67,6 +69,7 @@ ${sectionLines}
 
 **규칙:**
 - id 패턴: ${idPatternLines}
+${ID_CONTINUITY_RULES}
 - category는 해당 관점의 id_prefix 대문자 (예: A, B, C...)
 - tag: "contradiction" | "blind" | "risk"
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)

@@ -2,6 +2,7 @@ import type { Tab } from '../db/repository.js';
 
 export interface AnalyzeIssueInput {
   id?: unknown;
+  basis_issue_id?: unknown;
   category?: unknown;
   title?: unknown;
   tag?: unknown;
@@ -20,6 +21,7 @@ export interface AnalyzeResultInput {
 
 export interface ValidAnalyzeIssue {
   id: string;
+  basis_issue_id?: string | null;
   category: string;
   title: string;
   tag?: string;
@@ -69,9 +71,12 @@ export function validateAnalyzeResults(items: AnalyzeResultInput[], tab: Tab): {
       if (!id || !category || !title || !description) continue;
       if (issueIds.has(id)) continue;
 
+      const basis_issue_id = normalizeString(raw.basis_issue_id) ?? null;
+
       issueIds.add(id);
       validIssues.push({
         id,
+        basis_issue_id,
         category,
         title,
         description,
