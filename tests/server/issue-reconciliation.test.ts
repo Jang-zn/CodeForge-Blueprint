@@ -69,8 +69,8 @@ describe('reconcileAnalyzeIssues', () => {
     assert.equal(reconciled[1].origin_id, 'a1');
   });
 
-  // Tier 1: basis_issue_id가 없으면 제목이 같아도 pool 매칭하지 않는다
-  test('basis_issue_id 없음: 제목이 같아도 AI가 다른 id를 주면 새 이슈로 처리된다', () => {
+  // Tier 3: basis_issue_id 없어도 제목이 같으면 풀 매칭으로 계승
+  test('basis_issue_id 없음: 제목이 같으면 Tier3 풀 매칭으로 기존 id와 상태를 계승한다', () => {
     existing = [
       makeIssue({ id: 'p1', tab: 'review', category: 'P', title: '온보딩 단계 정의가 불명확함', status: 'resolved', memo: '기존 메모' }),
     ];
@@ -85,10 +85,54 @@ describe('reconcileAnalyzeIssues', () => {
     ];
 
     const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-3', html);
-    // basis_issue_id 없으면 기존 p1에 묶이지 않고 새 ID a1로 생성
-    assert.equal(reconciled[0].id, 'a1');
+    // basis_issue_id 없어도 Tier3 풀 매칭으로 p1 계승
+    assert.equal(reconciled[0].id, 'p1');
+    assert.equal(reconciled[0].status, 'resolved');
+    assert.equal(reconciled[0].memo, '기존 메모');
+  });
+
+  // Tier 1 안전 검사: 잘못된 basis_issue_id는 차단
+  test('Tier 1 안전 검사: 카테고리도 다르고 제목 유사도도 낮으면 basis_issue_id를 무시한다', () => {
+    existing = [
+      makeIssue({ id: 'be-api1', tab: 'backend', category: 'BE-API', title: '인증 API 설계', status: 'pending', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'fe-comp1',
+        basis_issue_id: 'be-api1',
+        category: 'FE-COMP',
+        title: '화면 컴포넌트 계층 구조',
+        description: '완전히 다른 도메인의 이슈',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'frontend', 'job-safe', html);
+    // 카테고리 다름 + 제목 유사도 낮음 → Tier 1 차단 → fe-comp1로 신규 생성
+    assert.equal(reconciled[0].id, 'fe-comp1');
     assert.equal(reconciled[0].status, 'pending');
     assert.equal(reconciled[0].memo, '');
+  });
+
+  // Tier 3 풀 매칭에서 dismissed 제외
+  test('Tier 3 풀 매칭: dismissed 이슈는 풀에서 제외되어 매칭되지 않는다', () => {
+    existing = [
+      makeIssue({ id: 'a1', tab: 'review', category: 'A', title: '동일한 제목의 이슈', status: 'dismissed', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'a2',
+        category: 'A',
+        title: '동일한 제목의 이슈',
+        description: '같은 제목이지만 dismissed라 풀 매칭 제외',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-pool-dismissed', html);
+    // dismissed는 풀에서 제외 → a2로 신규 생성
+    assert.equal(reconciled[0].id, 'a2');
+    assert.equal(reconciled[0].status, 'pending');
   });
 
   // Tier 2: 직접 ID 매칭 (basis_issue_id 없이도 같은 id + 같은 제목이면 계승)
@@ -216,5 +260,51 @@ describe('reconcileAnalyzeIssues', () => {
     const globalIds = new Set(['a1', 'b1', 'c1']);
     const reconciled = reconcileAnalyzeIssues(analyzed, [], 'backend', 'job-g1', html, { globalIssueIds: globalIds });
     assert.equal(reconciled[0].id, 'a2');
+  });
+
+  // Tier 3 카테고리 격리: 카테고리가 다른 동일 제목 이슈는 풀 매칭 제외
+  test('Tier 3 풀 매칭: 카테고리가 다르면 제목이 같아도 매칭하지 않는다', () => {
+    existing = [
+      makeIssue({ id: 'be1', tab: 'backend', category: 'BE', title: '동일한 제목의 이슈', status: 'resolved', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'fe1',
+        category: 'FE',
+        title: '동일한 제목의 이슈',
+        description: '카테고리가 달라서 풀 매칭 제외',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'frontend', 'job-cat1', html);
+    // 카테고리 불일치 → 신규 이슈
+    assert.equal(reconciled[0].id, 'fe1');
+    assert.equal(reconciled[0].status, 'pending');
+  });
+
+  // 거부된 basis_issue_id는 Tier 3 풀 매칭으로 fallthrough하지 않는다
+  test('거부된 basis_issue_id: Tier 1 차단 후 같은 제목 풀 이슈가 있어도 신규 생성된다', () => {
+    existing = [
+      makeIssue({ id: 'a1', tab: 'review', category: 'A', title: '기존 이슈 제목', status: 'resolved', memo: '' }),
+      makeIssue({ id: 'b1', tab: 'review', category: 'B', title: '완전히 다른 이슈', status: 'pending', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'a2',
+        basis_issue_id: 'b1',       // b1은 카테고리 다르고 제목 유사도 낮음 → Tier 1 거부
+        category: 'A',
+        title: '기존 이슈 제목',     // a1과 제목 동일하지만 basis_issue_id가 거부됐으므로 Tier 3 진입 불가
+        description: '거부된 참조',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-reject1', html);
+    // Tier 1 거부 → Tier 3 건너뜀 → Tier 4 신규
+    assert.equal(reconciled[0].status, 'pending');
+    assert.equal(reconciled[0].memo, '');
+    // a1과 충돌하므로 a2 또는 그 이상
+    assert.notEqual(reconciled[0].id, 'a1');
   });
 });

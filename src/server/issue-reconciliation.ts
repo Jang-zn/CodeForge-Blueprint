@@ -37,11 +37,12 @@ function extractIdPrefix(id: string): string {
   return (match?.[1] ?? id).trim();
 }
 
-function titleSimilarity(a: string, b: string): number {
-  const aTokens = new Set(normalizeText(a).split(' ').filter(Boolean));
-  const bTokens = new Set(normalizeText(b).split(' ').filter(Boolean));
-  if (aTokens.size === 0 || bTokens.size === 0) return 0;
+function tokenize(text: string): Set<string> {
+  return new Set(normalizeText(text).split(' ').filter(Boolean));
+}
 
+function tokenSimilarity(aTokens: Set<string>, bTokens: Set<string>): number {
+  if (aTokens.size === 0 || bTokens.size === 0) return 0;
   let overlap = 0;
   for (const token of aTokens) {
     if (bTokens.has(token)) overlap += 1;
@@ -49,10 +50,43 @@ function titleSimilarity(a: string, b: string): number {
   return (2 * overlap) / (aTokens.size + bTokens.size);
 }
 
+function titleSimilarity(a: string, b: string): number {
+  return tokenSimilarity(tokenize(a), tokenize(b));
+}
+
 function isSafeDirectIdMatch(issue: ValidAnalyzeIssue, existing: Issue): boolean {
-  if (normalizeText(issue.title) === normalizeText(existing.title)) return true;
+  const issueNorm = normalizeText(issue.title);
+  const existingNorm = normalizeText(existing.title);
+  if (issueNorm === existingNorm) return true;
   if (existing.category !== issue.category) return false;
-  return titleSimilarity(issue.title, existing.title) >= 0.55;
+  const issueTokens = new Set(issueNorm.split(' ').filter(Boolean));
+  const existingTokens = new Set(existingNorm.split(' ').filter(Boolean));
+  return tokenSimilarity(issueTokens, existingTokens) >= 0.55;
+}
+
+function findBestMatch(issue: ValidAnalyzeIssue, candidates: Issue[]): Issue | null {
+  const issueNorm = normalizeText(issue.title);
+  const issueTokens = new Set(issueNorm.split(' ').filter(Boolean));
+  const ranked = candidates
+    .map(c => {
+      const candNorm = normalizeText(c.title);
+      const score = tokenSimilarity(issueTokens, new Set(candNorm.split(' ').filter(Boolean)));
+      return {
+        c,
+        score,
+        exact: candNorm === issueNorm,
+        sameCategory: c.category === issue.category,
+        samePrefix: extractIdPrefix(c.id) === extractIdPrefix(issue.id),
+      };
+    })
+    .filter(item => item.sameCategory && (item.exact || item.score >= 0.55))
+    .sort((a, b) => {
+      if (a.exact !== b.exact) return a.exact ? -1 : 1;
+      if (a.sameCategory !== b.sameCategory) return a.sameCategory ? -1 : 1;
+      if (a.samePrefix !== b.samePrefix) return a.samePrefix ? -1 : 1;
+      return b.score - a.score;
+    });
+  return ranked[0]?.c ?? null;
 }
 
 function nextAvailableId(rawId: string, usedIds: Set<string>, allIds: Set<string>): string {
@@ -85,15 +119,20 @@ export function reconcileAnalyzeIssues(
   const usedIds = new Set<string>();
   // 전체 테이블 ID로 충돌 방지 (다른 탭 이슈 보호)
   const allIds = options?.globalIssueIds ?? new Set(existingMap.keys());
+  // dismissed 이슈는 어느 티어에서도 매칭 불가 — 루프 외부에서 선필터
+  const activeExisting = existingIssues.filter(e => e.status !== 'dismissed');
 
   return issues.map((issue, idx) => {
     let matched: Issue | null = null;
     let finalId: string;
 
-    // Tier 1: AI가 명시한 basis_issue_id 기반 매칭
+    // Tier 1: AI가 명시한 basis_issue_id 기반 매칭 (카테고리 일치 또는 유사도 ≥ 0.35 안전 검사)
     const basisTarget = issue.basis_issue_id ? existingMap.get(issue.basis_issue_id) : undefined;
-    if (basisTarget && basisTarget.status !== 'dismissed') {
-      matched = basisTarget;
+    const basisSafe = basisTarget
+      && basisTarget.status !== 'dismissed'
+      && (basisTarget.category === issue.category || titleSimilarity(issue.title, basisTarget.title) >= 0.35);
+    if (basisSafe) {
+      matched = basisTarget!;
       finalId = issue.id === issue.basis_issue_id
         ? matched.id
         : nextAvailableId(issue.id, usedIds, allIds);
@@ -108,7 +147,18 @@ export function reconcileAnalyzeIssues(
         finalId = nextAvailableId(issue.id, usedIds, allIds);
       }
     }
-    // Tier 3: 신규 이슈
+    // Tier 3: 풀 기반 제목 매칭 폴백 (basis_issue_id가 없을 때만 — 거부된 참조는 Tier 4로)
+    else if (!issue.basis_issue_id) {
+      const pool = activeExisting.filter(e => !usedIds.has(e.id));
+      const poolMatch = findBestMatch(issue, pool);
+      if (poolMatch) {
+        matched = poolMatch;
+        finalId = poolMatch.id;
+      } else {
+        finalId = nextAvailableId(issue.id, usedIds, allIds);
+      }
+    }
+    // Tier 4: 신규 이슈 (basis_issue_id가 거부됐거나 매칭 없음)
     else {
       finalId = nextAvailableId(issue.id, usedIds, allIds);
     }
