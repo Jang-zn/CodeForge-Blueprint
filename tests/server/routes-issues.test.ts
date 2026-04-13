@@ -105,6 +105,56 @@ describe('issuesRoute', () => {
     assert.ok([200, 404].includes(res.status));
   });
 
+  // ─── PUT /:id — tab-aware status validation ──────────────────
+
+  test('PUT /:id — features 탭에서 candidate 상태 허용', async () => {
+    upsertIssue(tw.db, makeIssue({ id: 'ft-1', tab: 'features', status: 'pending' }));
+    const res = await app.request(
+      '/issues/ft-1',
+      jsonPut(tw.sessionId, { status: 'candidate', memo: 'Build 후보' }),
+    );
+    assert.equal(res.status, 200);
+    const draft = getIssuePreview(tw.db, 'ft-1');
+    assert.equal(draft?.preview_status, 'candidate');
+  });
+
+  test('PUT /:id — review 탭에서 candidate 상태 거부 (400)', async () => {
+    upsertIssue(tw.db, makeIssue({ id: 'rv-1', tab: 'review', status: 'pending' }));
+    const res = await app.request(
+      '/issues/rv-1',
+      jsonPut(tw.sessionId, { status: 'candidate', memo: '' }),
+    );
+    assert.equal(res.status, 400);
+    const json = await res.json();
+    assert.ok(json.error.includes('features'));
+  });
+
+  test('PUT /:id — backend 탭에서 promoted 상태 거부 (400)', async () => {
+    upsertIssue(tw.db, makeIssue({ id: 'be-1', tab: 'backend', status: 'pending' }));
+    const res = await app.request(
+      '/issues/be-1',
+      jsonPut(tw.sessionId, { status: 'promoted', memo: '' }),
+    );
+    assert.equal(res.status, 400);
+  });
+
+  test('PUT /:id — frontend 탭에서 archived 상태 거부 (400)', async () => {
+    upsertIssue(tw.db, makeIssue({ id: 'fe-1', tab: 'frontend', status: 'pending' }));
+    const res = await app.request(
+      '/issues/fe-1',
+      jsonPut(tw.sessionId, { status: 'archived', memo: '' }),
+    );
+    assert.equal(res.status, 400);
+  });
+
+  test('PUT /:id — 존재하지 않는 이슈는 404', async () => {
+    const res = await app.request(
+      '/issues/nonexistent-xyz',
+      jsonPut(tw.sessionId, { status: 'candidate', memo: '' }),
+    );
+    assert.equal(res.status, 404);
+  });
+
   // ─── GET /recommendations ──────────────────────────────────────
 
   test('GET /recommendations — tab 파라미터 누락 시 400', async () => {

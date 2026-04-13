@@ -249,6 +249,9 @@ export function formatContextForPrompt(ctx: ContextPackage): string {
       reviewing: '검토중 — 메모의 의견을 고려하세요',
       deferred: '보류 — 이 주제는 건너뛰세요',
       dismissed: '삭제 — 이 이슈를 재생산하지 마세요',
+      candidate: 'Build 후보 — 다음 버전에 포함 검토 대상입니다',
+      promoted: '승격 — 다음 버전에 확정 반영합니다',
+      archived: '보관 — 현재는 제외하고 기록만 남깁니다',
     };
     const lines = ctx.userFeedback.map(f =>
       `- [${f.issueId}] "${f.title}" → ${STATUS_GUIDE[f.status] ?? f.status}: ${f.memo}`
