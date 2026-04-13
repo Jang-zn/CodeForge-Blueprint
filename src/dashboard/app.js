@@ -668,6 +668,13 @@ function updateCounts() {
     counts[s.status] = (counts[s.status] || 0) + 1;
     if (s.memo.trim()) counts['has-memo']++;
   });
+  // grace 이슈는 현재 필터에 계속 표시되므로 카운트에 포함
+  if (currentFilter !== 'all' && currentFilter !== 'has-memo' && changedInFilter.size > 0) {
+    changedInFilter.forEach(id => {
+      const s = getIssueState(id);
+      if (s.status !== currentFilter) counts[currentFilter]++;
+    });
+  }
   Object.entries(counts).forEach(([k, v]) => {
     const el = document.getElementById(`count-${k}`);
     if (el) el.textContent = v;
@@ -1334,6 +1341,7 @@ document.getElementById('btn-analyze')?.addEventListener('click', async () => {
     pollJob(jobId, (err) => {
       if (err) { showRecovery(err); showToast('분석 실패: ' + err.message, 'error'); return; }
       showToast('분석 완료!');
+      clearGrace();
       loadIssues(activeTab);
     });
   } catch (e) { showRecovery(e); hideJobStream(); showToast('오류: ' + e.message, 'error'); }
@@ -1347,7 +1355,8 @@ document.getElementById('btn-apply')?.addEventListener('click', async () => {
     pollJob(jobId, (err) => {
       if (err) { showRecovery(err); showToast('반영 실패: ' + err.message, 'error'); return; }
       showToast('반영 완료!');
-      currentTabHasDrafts = false; // 즉시 상태 클리어
+      currentTabHasDrafts = false;
+      clearGrace();
       loadIssues(activeTab);
     });
   } catch (e) { showRecovery(e); hideJobStream(); showToast('오류: ' + e.message, 'error'); }
