@@ -174,6 +174,12 @@ body {
 h3.issue-resolved { opacity: 0.4; }
 h3.issue-deferred { opacity: 0.4; text-decoration: line-through; }
 h3.issue-dismissed { opacity: 0.25; text-decoration: line-through; }
+.status-changed-grace { opacity: 0.5; }
+.status-transition-badge {
+  display: inline-block; margin-left: 8px; padding: 1px 7px;
+  font-size: 0.72em; font-weight: 500; color: var(--blue);
+  background: rgba(96, 165, 250, 0.12); border-radius: 4px; vertical-align: middle;
+}
 
 /* Sidebar status indicators */
 .sidebar a .status-dot {

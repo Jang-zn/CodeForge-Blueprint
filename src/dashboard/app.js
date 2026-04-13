@@ -177,6 +177,15 @@ let state = {};
 let activeTab = 'review';
 let currentFilter = 'all';
 let currentTabHasDrafts = false;
+let changedInFilter = new Set();
+
+function clearGrace() {
+  changedInFilter.forEach(id => {
+    const h3 = document.getElementById(id);
+    if (h3) h3.querySelector('.status-transition-badge')?.remove();
+  });
+  changedInFilter.clear();
+}
 
 function setSessionId(sessionId) {
   workspaceSessionId = sessionId || '';
@@ -401,6 +410,7 @@ function switchTab(tabId) {
   document.getElementById('fab-container')?.classList.remove('hidden');
 
   activeTab = tabId;
+  clearGrace();
   buildStatusSidebar();
   if (typeof mermaid !== 'undefined') {
     try { mermaid.run({ querySelector: `#panel-${tabId} pre.mermaid:not([data-processed])` }); } catch (e) { /* ignore */ }
@@ -436,6 +446,10 @@ function injectIssueControls(tab = activeTab) {
         btn.textContent = label;
         btn.dataset.status = key;
         btn.addEventListener('click', () => {
+          if (currentFilter !== 'all' && currentFilter !== 'has-memo') {
+            if (key !== currentFilter) changedInFilter.add(id);
+            else changedInFilter.delete(id);
+          }
           setIssueState(id, { status: key });
           renderControls(id);
           applyFilter();
@@ -501,6 +515,15 @@ function renderControls(id) {
     h3.classList.remove('issue-resolved', 'issue-deferred', 'issue-dismissed');
     const cls = { resolved: 'issue-resolved', deferred: 'issue-deferred', dismissed: 'issue-dismissed' }[s.status];
     if (cls) h3.classList.add(cls);
+
+    const existingBadge = h3.querySelector('.status-transition-badge');
+    if (existingBadge) existingBadge.remove();
+    if (changedInFilter.has(id)) {
+      const badge = document.createElement('span');
+      badge.className = 'status-transition-badge';
+      badge.textContent = `→ ${STATUS_MAP[s.status]?.label ?? s.status}`;
+      h3.appendChild(badge);
+    }
   }
 }
 
@@ -607,6 +630,7 @@ function buildStatusSidebar() {
 document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
   btn.addEventListener('click', () => {
     currentFilter = btn.dataset.filter;
+    clearGrace();
     document.querySelectorAll('.filter-btn[data-filter]').forEach(b => b.classList.remove('filter-active'));
     btn.classList.add('filter-active');
     applyFilter();
@@ -622,13 +646,17 @@ function applyFilter() {
     let show = true;
     if (currentFilter === 'has-memo') show = s.memo.trim().length > 0;
     else if (currentFilter !== 'all') show = s.status === currentFilter;
+
+    const inGrace = changedInFilter.has(id);
+    if (inGrace) show = true;
+
     let el = h3;
     while (el) {
       el.style.display = show ? '' : 'none';
+      el.classList.toggle('status-changed-grace', inGrace);
       el = el.nextElementSibling;
       if (!el || el.tagName === 'H3' || el.tagName === 'H2') break;
     }
-    h3.style.display = show ? '' : 'none';
   });
 }
 
