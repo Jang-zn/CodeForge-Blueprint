@@ -133,14 +133,15 @@ export function reconcileAnalyzeIssues(
     let matched: Issue | null = null;
     let finalId: string;
 
-    // Tier 1: AI가 명시한 basis_issue_id 기반 매칭 (카테고리 일치 또는 유사도 ≥ 0.35 안전 검사)
+    // Tier 1: AI가 명시한 basis_issue_id 기반 매칭 (유사도 ≥ 0.35 안전 검사 — 카테고리 일치만으론 통과 불가)
     const basisTarget = issue.basis_issue_id ? existingMap.get(issue.basis_issue_id) : undefined;
     const basisSafe = basisTarget
       && isMatchableStatus(basisTarget.status, tab)
-      && (basisTarget.category === issue.category || titleSimilarity(issue.title, basisTarget.title) >= 0.35);
+      && titleSimilarity(issue.title, basisTarget.title) >= 0.35;
     if (basisSafe) {
       matched = basisTarget!;
-      finalId = issue.id === issue.basis_issue_id
+      // 계승(같은 ID): usedIds에 이미 있으면 분기 처리로 새 ID 할당
+      finalId = (issue.id === issue.basis_issue_id && !usedIds.has(matched.id))
         ? matched.id
         : nextAvailableId(issue.id, usedIds, allIds);
     }

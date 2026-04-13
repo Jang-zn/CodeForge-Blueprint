@@ -47,7 +47,6 @@ function normalizeConfidence(v: unknown, priority?: string): number {
 }
 
 export function validateAnalyzeResults(items: AnalyzeResultInput[], tab: Tab): { issues: ValidAnalyzeIssue[]; refItems: string[] } {
-  const issueIds = new Set<string>();
   const validIssues: ValidAnalyzeIssue[] = [];
   const refItems: string[] = [];
 
@@ -69,11 +68,8 @@ export function validateAnalyzeResults(items: AnalyzeResultInput[], tab: Tab): {
       const priority = normalizeString(raw.priority) ?? 'P2';
 
       if (!id || !category || !title || !description) continue;
-      if (issueIds.has(id)) continue;
 
       const basis_issue_id = normalizeString(raw.basis_issue_id) ?? null;
-
-      issueIds.add(id);
       validIssues.push({
         id,
         basis_issue_id,

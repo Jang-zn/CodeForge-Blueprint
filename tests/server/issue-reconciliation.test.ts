@@ -91,6 +91,29 @@ describe('reconcileAnalyzeIssues', () => {
     assert.equal(reconciled[0].memo, '기존 메모');
   });
 
+  // Tier 1 안전 검사: 같은 카테고리라도 제목 유사도가 낮으면 차단
+  test('Tier 1 안전 검사: 카테고리가 같아도 제목 유사도가 낮으면 basis_issue_id를 무시한다', () => {
+    existing = [
+      makeIssue({ id: 'a1', tab: 'review', category: 'A', title: '온보딩 UX 문제', status: 'resolved', memo: '중요 결정' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'a1',
+        basis_issue_id: 'a1',
+        category: 'A',           // 같은 카테고리지만
+        title: '버전 관리 정책',  // 완전히 다른 제목
+        description: '카테고리만 같고 제목이 전혀 다름',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-same-cat', html);
+    // 카테고리 같아도 유사도 낮음 → Tier 1 차단 → 신규 생성
+    assert.equal(reconciled[0].id, 'a2');
+    assert.equal(reconciled[0].status, 'pending');
+    assert.equal(reconciled[0].memo, '');
+  });
+
   // Tier 1 안전 검사: 잘못된 basis_issue_id는 차단
   test('Tier 1 안전 검사: 카테고리도 다르고 제목 유사도도 낮으면 basis_issue_id를 무시한다', () => {
     existing = [
@@ -385,5 +408,18 @@ describe('reconcileAnalyzeIssues', () => {
     assert.equal(reconciled[0].memo, '');
     // a1과 충돌하므로 a2 또는 그 이상
     assert.notEqual(reconciled[0].id, 'a1');
+  });
+
+  // 중복 raw id — reconciliation이 usedIds로 충돌 해소 (validateAnalyzeResults가 드롭하지 않음)
+  test('중복 raw id: AI가 같은 id로 여러 이슈를 내면 두 번째부터 새 id를 할당한다', () => {
+    const analyzed: ValidAnalyzeIssue[] = [
+      { id: 'a1', category: 'A', title: '이슈 1', description: '첫 번째' },
+      { id: 'a1', category: 'A', title: '이슈 2', description: '두 번째 — 드롭되면 안 됨' },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, [], 'review', 'job-dup', html);
+    assert.equal(reconciled.length, 2);
+    assert.equal(reconciled[0].id, 'a1');
+    assert.equal(reconciled[1].id, 'a2');
   });
 });

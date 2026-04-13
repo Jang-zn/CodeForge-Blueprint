@@ -105,6 +105,10 @@ applyRoute.post('/', async (c) => {
       const cycle = getCurrentCycle(db, tab);
       const existingFeatures = tab !== 'features' ? getIssues(db, 'features') : [];
       const allIssues = tab !== 'features' ? getIssues(db) : [];
+      // ft-defN 최대 인덱스를 미리 계산하여 번호 충돌 방지
+      const maxFtDefIndex = existingFeatures
+        .map(i => Number(i.id.match(/^ft-def(\d+)$/)?.[1] ?? '0'))
+        .reduce((max, n) => Math.max(max, n), 0);
       const lastLogs = getLastDecisionLogsBulk(db, issues.map(issue => issue.id));
 
       for (const issueState of issues) {
@@ -135,8 +139,7 @@ applyRoute.post('/', async (c) => {
         });
 
         if (issueState.status === 'deferred' && tab !== 'features') {
-          const nextDeferredIndex = existingFeatures.length + deferredCount + 1;
-          const defId = `ft-def${nextDeferredIndex}`;
+          const defId = `ft-def${maxFtDefIndex + deferredCount + 1}`;
           const original = allIssues.find(issue => issue.id === issueState.id);
           const existingDeferred = existingFeatures.find(issue => issue.origin_id === issueState.id);
           if (original) {
@@ -151,7 +154,7 @@ applyRoute.post('/', async (c) => {
               badge: null,
               status: 'pending',
               memo: issueState.memo || '',
-              sort_order: existingDeferred?.sort_order ?? nextDeferredIndex,
+              sort_order: existingDeferred?.sort_order ?? (maxFtDefIndex + deferredCount),
               origin_id: issueState.id,
               assignee: null,
               updated_by: 'system',
