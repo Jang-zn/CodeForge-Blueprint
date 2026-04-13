@@ -215,7 +215,7 @@ export function buildContextPackage(
         const feedbackItems = nonPending
           .map(i => {
             const log = lastLogs[i.id];
-            const memo = log?.memo?.trim() || i.memo?.trim() || '';
+            const memo = (log?.status === i.status ? log?.memo?.trim() : null) || i.memo?.trim() || '';
             if (!memo && i.status !== 'dismissed') return null;
             return {
               issueId: i.id,

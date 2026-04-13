@@ -701,7 +701,8 @@ async function loadIssues(tab) {
 
     // Sync local state from server (status + memo)
     issues.forEach(issue => {
-      state[issue.id] = { status: issue.status || 'pending', memo: issue.memo || '', serverStatus: issue.status || 'pending' };
+      const lastAppliedStatus = issue.logs?.at(-1)?.status ?? 'pending';
+      state[issue.id] = { status: issue.status || 'pending', memo: issue.memo || '', serverStatus: lastAppliedStatus };
     });
 
     // Get or create issue-content area (preserves filter-bar / action-bar siblings)

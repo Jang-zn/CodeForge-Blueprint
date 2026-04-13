@@ -264,6 +264,10 @@ CREATE TABLE IF NOT EXISTS issue_snapshots (
 CREATE INDEX IF NOT EXISTS idx_snapshots_issue ON issue_snapshots(issue_id);
 `;
 
+// V39 이전 중간 브랜치에서 status/memo 없이 issue_snapshots가 생성된 경우 보정 (컬럼별 독립 실행)
+export const MIGRATION_V40_SQL = `ALTER TABLE issue_snapshots ADD COLUMN status TEXT;`;
+export const MIGRATION_V40B_SQL = `ALTER TABLE issue_snapshots ADD COLUMN memo TEXT;`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;
