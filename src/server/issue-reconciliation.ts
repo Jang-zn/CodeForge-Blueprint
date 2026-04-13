@@ -32,6 +32,13 @@ function normalizeText(value: string): string {
     .trim();
 }
 
+// features 탭은 deferred 이슈를 보관하므로 매칭 허용. archived는 모든 탭에서 제외.
+function isMatchableStatus(status: IssueStatus, tab: Tab): boolean {
+  if (status === 'dismissed' || status === 'archived') return false;
+  if (status === 'deferred') return tab === 'features';
+  return true;
+}
+
 function extractIdPrefix(id: string): string {
   const match = id.match(/^(.*?)(\d+)$/);
   return (match?.[1] ?? id).trim();
@@ -119,8 +126,8 @@ export function reconcileAnalyzeIssues(
   const usedIds = new Set<string>();
   // 전체 테이블 ID로 충돌 방지 (다른 탭 이슈 보호)
   const allIds = options?.globalIssueIds ?? new Set(existingMap.keys());
-  // dismissed 이슈는 어느 티어에서도 매칭 불가 — 루프 외부에서 선필터
-  const activeExisting = existingIssues.filter(e => e.status !== 'dismissed');
+  // dismissed/archived는 어느 탭에서도, deferred는 features 탭 외에서 매칭 불가
+  const activeExisting = existingIssues.filter(e => isMatchableStatus(e.status, tab));
 
   return issues.map((issue, idx) => {
     let matched: Issue | null = null;
@@ -129,7 +136,7 @@ export function reconcileAnalyzeIssues(
     // Tier 1: AI가 명시한 basis_issue_id 기반 매칭 (카테고리 일치 또는 유사도 ≥ 0.35 안전 검사)
     const basisTarget = issue.basis_issue_id ? existingMap.get(issue.basis_issue_id) : undefined;
     const basisSafe = basisTarget
-      && basisTarget.status !== 'dismissed'
+      && isMatchableStatus(basisTarget.status, tab)
       && (basisTarget.category === issue.category || titleSimilarity(issue.title, basisTarget.title) >= 0.35);
     if (basisSafe) {
       matched = basisTarget!;
@@ -140,7 +147,7 @@ export function reconcileAnalyzeIssues(
     // Tier 2: 직접 ID 매칭 + 안전 검사 폴백
     else if (existingMap.has(issue.id) && isSafeDirectIdMatch(issue, existingMap.get(issue.id)!)) {
       const direct = existingMap.get(issue.id)!;
-      if (direct.status !== 'dismissed') {
+      if (isMatchableStatus(direct.status, tab)) {
         matched = direct;
         finalId = matched.id;
       } else {

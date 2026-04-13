@@ -1,6 +1,6 @@
 import { type ContextPackage, formatContextForPrompt } from '../context-package.js';
 import { type Perspective } from '../../db/repository.js';
-import { ID_CONTINUITY_RULES } from './index.js';
+import { ID_CONTINUITY_RULES, FEEDBACK_RULES } from './index.js';
 
 // 기본 관점 (DB 없을 때 폴백)
 const DEFAULT_PERSPECTIVES = [
@@ -76,7 +76,7 @@ ${ID_CONTINUITY_RULES}
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
 - 각 관점당 최소 2개, 최대 5개 이슈
 - refItems: FE 구현 시 고려할 참고사항 (이슈가 아닌 구현 힌트)
-- <context:user-feedback>가 있다면 반드시 반영: "확정" 방향을 따르고, "삭제"된 이슈는 재생산 금지, "보류" 주제는 건너뛰세요
+${FEEDBACK_RULES}
 - <context:ai-guide>가 있다면 그 원칙을 분석 기준에 반영하세요
 - <context:glossary>가 있다면 용어를 동일하게 사용하세요
 - 실제 발견된 이슈만 포함 (억지로 이슈를 만들지 말 것)

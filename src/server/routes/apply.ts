@@ -162,6 +162,8 @@ applyRoute.post('/', async (c) => {
               decision_quality: null,
             });
             if (!existingDeferred) deferredCount++;
+            // features로 이관 완료 — 원래 탭에서 archived로 보존 (decision_logs 접근 유지)
+            updateIssueStatus(db, issueState.id, 'archived', '', { updated_by: 'system' });
           }
         }
       }
@@ -178,6 +180,19 @@ applyRoute.post('/', async (c) => {
 
       const changelogDesc = `v${newVersion} 리뷰 반영 (${changeLines.length}건)\n${changeLines.join('\n')}`;
       addChangelog(db, { tab, version: newVersion, date: todayStr, description: changelogDesc });
+
+      // features 탭에 보류 이슈를 이관한 경우 features 버전도 bump
+      if (deferredCount > 0) {
+        const featuresVersion = getTabVersion(db, 'features');
+        const newFeaturesVersion = bumpMinorVersion(featuresVersion);
+        setTabVersion(db, 'features', newFeaturesVersion);
+        addChangelog(db, {
+          tab: 'features',
+          version: newFeaturesVersion,
+          date: todayStr,
+          description: `v${newFeaturesVersion} 보류 이슈 ${deferredCount}건 이관 (from ${tab})`,
+        });
+      }
 
       // 사이클 상태를 'applied'로 업데이트
       if (cycle) {

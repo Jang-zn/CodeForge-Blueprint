@@ -114,6 +114,63 @@ describe('reconcileAnalyzeIssues', () => {
     assert.equal(reconciled[0].memo, '');
   });
 
+  // Tier 3 풀 매칭에서 deferred 제외
+  test('Tier 3 풀 매칭: deferred 이슈는 풀에서 제외되어 매칭되지 않는다', () => {
+    existing = [
+      makeIssue({ id: 'a1', tab: 'review', category: 'A', title: '동일한 제목의 이슈', status: 'deferred', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'a2',
+        category: 'A',
+        title: '동일한 제목의 이슈',
+        description: '같은 제목이지만 deferred라 풀 매칭 제외',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-pool-deferred', html);
+    // deferred는 풀에서 제외 → a2로 신규 생성
+    assert.equal(reconciled[0].id, 'a2');
+    assert.equal(reconciled[0].status, 'pending');
+  });
+
+  // features 탭에서는 deferred 이슈도 풀 매칭 가능
+  test('Tier 3 풀 매칭: features 탭에서는 deferred 이슈가 매칭된다', () => {
+    existing = [
+      makeIssue({ id: 'ft-def1', tab: 'features', category: 'FT-DEF', title: '보류 기능 재검토', status: 'deferred', memo: '다음 버전에 검토' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'ft1',
+        category: 'FT-DEF',
+        title: '보류 기능 재검토',
+        description: 'features 탭이라 deferred도 매칭됨',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'features', 'job-feat-def', html);
+    // features 탭 → deferred 매칭 허용
+    assert.equal(reconciled[0].id, 'ft-def1');
+    assert.equal(reconciled[0].status, 'deferred');
+  });
+
+  // archived 이슈는 어느 탭에서도 매칭 불가
+  test('Tier 3 풀 매칭: archived 이슈는 features 탭에서도 매칭되지 않는다', () => {
+    existing = [
+      makeIssue({ id: 'a1', tab: 'features', category: 'A', title: '동일한 제목의 이슈', status: 'archived', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      { id: 'a2', category: 'A', title: '동일한 제목의 이슈', description: 'archived는 제외' },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'features', 'job-archived', html);
+    assert.equal(reconciled[0].id, 'a2');
+    assert.equal(reconciled[0].status, 'pending');
+  });
+
   // Tier 3 풀 매칭에서 dismissed 제외
   test('Tier 3 풀 매칭: dismissed 이슈는 풀에서 제외되어 매칭되지 않는다', () => {
     existing = [
@@ -135,8 +192,8 @@ describe('reconcileAnalyzeIssues', () => {
     assert.equal(reconciled[0].status, 'pending');
   });
 
-  // Tier 2: 직접 ID 매칭 (basis_issue_id 없이도 같은 id + 같은 제목이면 계승)
-  test('Tier 2 직접 매칭: basis_issue_id 없이 id와 제목이 일치하면 기존 상태를 유지한다', () => {
+  // Tier 2: 직접 ID 매칭 — deferred 이슈는 매칭 불가, 신규 생성
+  test('Tier 2 직접 매칭: id와 제목이 같아도 deferred 이슈는 계승하지 않고 신규 생성된다', () => {
     existing = [
       makeIssue({ id: 'p1', tab: 'review', category: 'P', title: '핵심 가치 전달이 약함', status: 'deferred', memo: '다음 사이클에서 검토' }),
     ];
@@ -151,9 +208,10 @@ describe('reconcileAnalyzeIssues', () => {
     ];
 
     const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-4', html);
-    assert.equal(reconciled[0].id, 'p1');
-    assert.equal(reconciled[0].status, 'deferred');
-    assert.equal(reconciled[0].memo, '다음 사이클에서 검토');
+    // deferred는 매칭 불가 → p1 충돌 → p2 신규 생성
+    assert.equal(reconciled[0].id, 'p2');
+    assert.equal(reconciled[0].status, 'pending');
+    assert.equal(reconciled[0].memo, '');
   });
 
   // Tier 3: 신규 이슈 — id가 기존과 충돌하면 다음 번호 할당
@@ -192,6 +250,27 @@ describe('reconcileAnalyzeIssues', () => {
     ];
 
     const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-6', html);
+    assert.equal(reconciled[0].id, 'a2');
+    assert.equal(reconciled[0].status, 'pending');
+  });
+
+  // deferred 이슈는 Tier 1에서도 계승 불가
+  test('deferred basis_issue_id: AI가 deferred 이슈를 가리켜도 매칭하지 않는다', () => {
+    existing = [
+      makeIssue({ id: 'a1', tab: 'review', category: 'A', title: '보류된 이슈', status: 'deferred', memo: '' }),
+    ];
+
+    const analyzed: ValidAnalyzeIssue[] = [
+      {
+        id: 'a1',
+        basis_issue_id: 'a1',
+        category: 'A',
+        title: '보류된 이슈 재활용 시도',
+        description: '이것은 차단되어야 함',
+      },
+    ];
+
+    const reconciled = reconcileAnalyzeIssues(analyzed, existing as any, 'review', 'job-def1', html);
     assert.equal(reconciled[0].id, 'a2');
     assert.equal(reconciled[0].status, 'pending');
   });

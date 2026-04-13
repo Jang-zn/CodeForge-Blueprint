@@ -275,9 +275,9 @@ export function formatContextForPrompt(ctx: ContextPackage): string {
   }
   if (ctx.userFeedback?.length) {
     const STATUS_GUIDE: Record<string, string> = {
-      resolved: '확정 — 이 방향을 따르세요',
-      reviewing: '검토중 — 메모의 의견을 고려하세요',
-      deferred: '보류 — 이 주제는 건너뛰세요',
+      resolved: '확정 — 메모의 구체적 결정사항을 이슈의 description/conclusion에 직접 반영하여 재구성',
+      reviewing: '검토중 — 메모의 의견을 고려하여 분석 보완',
+      deferred: '보류 — 이 주제를 분석에서 완전히 제외',
       dismissed: '삭제 — 이 이슈를 재생산하지 마세요',
       candidate: 'Build 후보 — 다음 버전에 포함 검토 대상입니다',
       promoted: '승격 — 다음 버전에 확정 반영합니다',
