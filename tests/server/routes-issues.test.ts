@@ -1,7 +1,7 @@
 import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Hono } from 'hono';
-import { upsertIssue, addDecisionLog, getIssue } from '../../src/db/repository.js';
+import { upsertIssue, addDecisionLog, getIssue, getIssuePreview } from '../../src/db/repository.js';
 import issuesRoute from '../../src/server/routes/issues.js';
 
 import { setupTestWorkspace, makeIssue, withSession, jsonPut, type TestWorkspace } from '../helpers.js';
@@ -76,7 +76,7 @@ describe('issuesRoute', () => {
 
   // ─── PUT /:id ──────────────────────────────────────────────────
 
-  test('PUT /:id — 이슈 상태/메모 업데이트 후 DB에 반영 확인', async () => {
+  test('PUT /:id — 이슈 상태/메모 업데이트 후 draft(issue_preview)에 저장 확인', async () => {
     upsertIssue(tw.db, makeIssue({ id: 'i1', status: 'pending', memo: '' }));
 
     const res = await app.request(
@@ -86,10 +86,14 @@ describe('issuesRoute', () => {
     assert.equal(res.status, 200);
     assert.equal((await res.json()).ok, true);
 
-    // DB에서 직접 읽어 실제 반영 확인
-    const updated = getIssue(tw.db, 'i1');
-    assert.equal(updated?.status, 'resolved');
-    assert.equal(updated?.memo, '해결 완료');
+    // issues 테이블은 applied 상태 유지 (draft는 issue_preview에 저장)
+    const applied = getIssue(tw.db, 'i1');
+    assert.equal(applied?.status, 'pending');
+
+    // draft가 issue_preview에 저장됨
+    const draft = getIssuePreview(tw.db, 'i1');
+    assert.equal(draft?.preview_status, 'resolved');
+    assert.equal(draft?.preview_memo, '해결 완료');
   });
 
   test('PUT /:id — 존재하지 않는 이슈 업데이트는 에러 없이 완료', async () => {

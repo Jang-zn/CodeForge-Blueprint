@@ -15,6 +15,7 @@ import {
   addDocumentRecord,
   getDocuments,
   getLastDecisionLogsBulk,
+  hasPendingDrafts,
   type Tab,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
@@ -183,6 +184,17 @@ generateRoute.post('/', async (c) => {
     return c.json({ error: 'PRD 경로가 설정되지 않았습니다.', recovery: '먼저 PRD를 생성하거나 불러오세요.' }, 400);
   }
   const prdPath = meta.prd_path;
+
+  // pending draft가 있으면 반영하기를 먼저 실행해야 함
+  if (hasPendingDrafts(db, tab)) {
+    return c.json(
+      {
+        error: '반영하지 않은 변경사항이 있습니다. "반영하기"를 먼저 실행하세요.',
+        recovery: '"반영하기" 버튼을 클릭하여 변경사항을 반영한 후 다시 시도하세요.',
+      },
+      400
+    );
+  }
 
   const jobId = crypto.randomUUID();
   const providerModel = getProviderModel(db);

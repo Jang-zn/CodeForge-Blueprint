@@ -1,6 +1,10 @@
 import { Hono } from 'hono';
 import {
   getIssues,
+  getIssue,
+  getIssuesWithDrafts,
+  createIssuePreview,
+  deleteIssuePreview,
   updateIssueStatus,
   getDecisionLogs,
   getDecisionLogsBulk,
@@ -16,9 +20,13 @@ const issuesRoute = new Hono();
 issuesRoute.get('/', (c) => {
   const { db } = requireRequestContext(c);
   const tab = c.req.query('tab') as Tab | undefined;
-  const issues = getIssues(db, tab);
+  const issues = getIssuesWithDrafts(db, tab);
   const logsByIssue = getDecisionLogsBulk(db, issues.map(issue => issue.id));
-  return c.json({ issues: issues.map(issue => ({ ...issue, logs: logsByIssue[issue.id] ?? [] })) });
+  const has_pending_drafts = issues.some(i => i.draft_status != null);
+  return c.json({
+    issues: issues.map(issue => ({ ...issue, logs: logsByIssue[issue.id] ?? [] })),
+    has_pending_drafts,
+  });
 });
 
 issuesRoute.get('/:id/logs', (c) => {
@@ -46,7 +54,23 @@ issuesRoute.put('/:id', async (c) => {
   const { db } = requireRequestContext(c);
   const id = c.req.param('id');
   const body = await c.req.json<{ status: IssueStatus; memo: string }>();
-  updateIssueStatus(db, id, body.status, body.memo ?? '', { updated_by: 'user' });
+
+  const issue = getIssue(db, id);
+  const appliedStatus = issue?.status ?? 'pending';
+  const memoEmpty = !body.memo?.trim();
+
+  if (body.status === appliedStatus && memoEmpty) {
+    deleteIssuePreview(db, id);
+  } else {
+    createIssuePreview(db, id, body.status, body.memo ?? '');
+  }
+
+  return c.json({ ok: true });
+});
+
+issuesRoute.delete('/:id/draft', (c) => {
+  const { db } = requireRequestContext(c);
+  deleteIssuePreview(db, c.req.param('id'));
   return c.json({ ok: true });
 });
 

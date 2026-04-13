@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 import { Hono } from 'hono';
 import { openDb, resetDb, getDb, closeAllDbs } from '../../src/db/index.js';
-import { upsertIssue, getIssue, getIssues } from '../../src/db/repository.js';
+import { upsertIssue, getIssue, getIssues, createIssuePreview } from '../../src/db/repository.js';
 import { openWorkspace, type WorkspaceContext } from '../../src/workspace.js';
 import { initAppDb, closeAppDb } from '../../src/db/app-db.js';
 import applyRoute from '../../src/server/routes/apply.js';
@@ -35,6 +35,8 @@ describe('applyRoute', () => {
 
   test('메모 없이 상태만 바꿔도 이슈 상태가 DB에 저장된다', async () => {
     upsertIssue(getDb(), makeIssue({ id: 'a1' }));
+    // draft를 issue_preview에 미리 저장 (PUT /issues/:id 동작과 동일)
+    createIssuePreview(getDb(), 'a1', 'resolved', '');
 
     const app = new Hono();
     app.route('/apply', applyRoute);
@@ -42,7 +44,7 @@ describe('applyRoute', () => {
     const res = await app.request('/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-codeforge-session': ws.sessionId },
-      body: JSON.stringify({ tab: 'review', issues: [{ id: 'a1', status: 'resolved', memo: '' }] }),
+      body: JSON.stringify({ tab: 'review' }),
     });
 
     assert.equal(res.status, 200);
@@ -59,20 +61,22 @@ describe('applyRoute', () => {
     const app = new Hono();
     app.route('/apply', applyRoute);
 
-    const requestBody = { tab: 'review', issues: [{ id: 'a1', status: 'deferred', memo: '다음 버전 검토' }] };
-
+    // 첫 번째 apply: draft 세팅 후 apply
+    createIssuePreview(getDb(), 'a1', 'deferred', '다음 버전 검토');
     const res1 = await app.request('/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-codeforge-session': ws.sessionId },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({ tab: 'review' }),
     });
     const { jobId: jobId1 } = await res1.json();
     await waitForJob(getDb(), jobId1);
 
+    // 두 번째 apply: 동일한 draft 재세팅 후 apply
+    createIssuePreview(getDb(), 'a1', 'deferred', '다음 버전 검토');
     const res2 = await app.request('/apply', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-codeforge-session': ws.sessionId },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({ tab: 'review' }),
     });
     const { jobId: jobId2 } = await res2.json();
     await waitForJob(getDb(), jobId2);

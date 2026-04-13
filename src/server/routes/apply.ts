@@ -3,6 +3,8 @@ import crypto from 'crypto';
 import {
   getIssues,
   getIssue,
+  getAllIssuePreviews,
+  clearAllPreviewsForTab,
   addDecisionLog,
   updateIssueStatus,
   upsertIssue,
@@ -47,11 +49,34 @@ function today(): string {
 
 applyRoute.post('/', async (c) => {
   const { db, workspace, sessionId } = requireRequestContext(c);
-  const body = await c.req.json<{ tab: Tab; issues: IssueState[] }>();
-  const { tab, issues } = body;
+  const body = await c.req.json<{ tab: Tab }>();
+  const { tab } = body;
 
-  if (!tab || !issues?.length) {
-    return c.json({ error: '탭과 이슈 목록이 필요합니다.' }, 400);
+  if (!tab) {
+    return c.json({ error: '탭이 필요합니다.' }, 400);
+  }
+
+  // 서버의 draft에서 처리 대상 읽기
+  const drafts = getAllIssuePreviews(db, tab);
+  const issues: IssueState[] = drafts.map(d => ({
+    id: d.issue_id,
+    status: d.preview_status as IssueStatus,
+    memo: d.preview_memo,
+  }));
+
+  if (issues.length === 0) {
+    // draft가 없으면 즉시 완료
+    const jobId = crypto.randomUUID();
+    createJob(db, jobId, `apply-${tab}`, {
+      tab,
+      session_id: sessionId,
+      capability: 'apply',
+      run_key: tab,
+      source_version: getTabVersion(db, tab),
+      workspace_root: workspace.rootPath,
+    });
+    updateJob(db, jobId, 'completed');
+    return c.json({ jobId });
   }
 
   const jobId = crypto.randomUUID();
@@ -135,6 +160,7 @@ applyRoute.post('/', async (c) => {
       }
 
       if (changeLines.length === 0) {
+        clearAllPreviewsForTab(db, tab);
         updateJob(db, jobId, 'completed');
         return;
       }
@@ -146,6 +172,7 @@ applyRoute.post('/', async (c) => {
       const changelogDesc = `v${newVersion} 리뷰 반영 (${changeLines.length}건)\n${changeLines.join('\n')}`;
       addChangelog(db, { tab, version: newVersion, date: todayStr, description: changelogDesc });
 
+      clearAllPreviewsForTab(db, tab);
       updateJob(db, jobId, 'completed');
     } catch (e) {
       updateJob(db, jobId, 'failed', String(e));

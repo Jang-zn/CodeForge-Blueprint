@@ -170,6 +170,7 @@ function timeAgo(isoStr) {
 let state = {};
 let activeTab = 'review';
 let currentFilter = 'all';
+let currentTabHasDrafts = false;
 
 function setSessionId(sessionId) {
   workspaceSessionId = sessionId || '';
@@ -653,9 +654,11 @@ function updateActionButtonStates() {
   const issues = collectCurrentTabState();
   const anyMemo = issues.some(i => (i.memo || '').trim() !== '');
   const anyStatusChanged = issues.some(i => i.status !== i.serverStatus);
+  // 서버가 알려준 draft 여부 + client-side 계산 모두 고려
+  const hasPendingChanges = currentTabHasDrafts || anyMemo || anyStatusChanged;
 
-  setButtonEnabled('btn-apply',    anyMemo || anyStatusChanged,   '변경사항 메모를 작성해주세요');
-  setButtonEnabled('btn-generate', !(anyMemo || anyStatusChanged),  '반영하기를 먼저 눌러 변경사항을 반영하세요');
+  setButtonEnabled('btn-apply',    hasPendingChanges,   '변경사항 메모를 작성해주세요');
+  setButtonEnabled('btn-generate', !hasPendingChanges,  '반영하기를 먼저 눌러 변경사항을 반영하세요');
 
   const tabVersions = currentWorkflow?.tabVersions || {};
   const latestDoc = (currentWorkflow?.documents || []).find(d => d.tab === activeTab);
@@ -691,6 +694,7 @@ function showIssueSkeleton(tab) {
 
 // ========== Issue Loading ==========
 async function loadIssues(tab) {
+  currentTabHasDrafts = false; // 로딩 시작 시 초기화 (서버 응답에서 갱신됨)
   showIssueSkeleton(tab);
   try {
     const data = await API.get('/issues?tab=' + tab);
@@ -699,10 +703,18 @@ async function loadIssues(tab) {
     const panel = document.getElementById(`panel-${tab}`);
     if (!panel) return;
 
+    // has_pending_drafts 플래그를 탭 상태로 저장
+    currentTabHasDrafts = data.has_pending_drafts ?? false;
+
     // Sync local state from server (status + memo)
     issues.forEach(issue => {
       const lastAppliedStatus = issue.logs?.at(-1)?.status ?? 'pending';
-      state[issue.id] = { status: issue.status || 'pending', memo: issue.memo || '', serverStatus: lastAppliedStatus };
+      state[issue.id] = {
+        status: issue.draft_status ?? issue.status ?? 'pending',
+        memo: issue.draft_memo ?? issue.memo ?? '',
+        serverStatus: lastAppliedStatus,
+        hasDraft: !!issue.draft_status,
+      };
     });
 
     // Get or create issue-content area (preserves filter-bar / action-bar siblings)
@@ -1274,14 +1286,14 @@ document.getElementById('btn-analyze')?.addEventListener('click', async () => {
 });
 
 document.getElementById('btn-apply')?.addEventListener('click', async () => {
-  const issues = collectCurrentTabState();
   showJobStream('AI 반영 중...');
   showJobStatus('반영하기 처리 중...');
   try {
-    const { jobId } = await API.post('/apply', { tab: activeTab, issues });
+    const { jobId } = await API.post('/apply', { tab: activeTab });
     pollJob(jobId, (err) => {
       if (err) { showRecovery(err); showToast('반영 실패: ' + err.message, 'error'); return; }
       showToast('반영 완료!');
+      currentTabHasDrafts = false; // 즉시 상태 클리어
       loadIssues(activeTab);
     });
   } catch (e) { showRecovery(e); hideJobStream(); showToast('오류: ' + e.message, 'error'); }

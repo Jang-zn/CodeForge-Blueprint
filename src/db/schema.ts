@@ -268,6 +268,9 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_issue ON issue_snapshots(issue_id);
 export const MIGRATION_V40_SQL = `ALTER TABLE issue_snapshots ADD COLUMN status TEXT;`;
 export const MIGRATION_V40B_SQL = `ALTER TABLE issue_snapshots ADD COLUMN memo TEXT;`;
 
+// V41: 마커 마이그레이션 (실제 데이터 이전은 openDb()에서 TypeScript로 처리)
+export const MIGRATION_V41_SQL = `CREATE TABLE IF NOT EXISTS _migration_v41_done (id INTEGER PRIMARY KEY)`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;

@@ -229,6 +229,27 @@ export function getIssues(db: any, tab?: Tab): Issue[] {
   return db.prepare('SELECT * FROM issues ORDER BY sort_order ASC').all();
 }
 
+export function getIssuesWithDrafts(db: any, tab?: Tab): (Issue & { draft_status?: string; draft_memo?: string })[] {
+  const where = tab ? 'WHERE i.tab = ?' : '';
+  const args = tab ? [tab] : [];
+  return db.prepare(`
+    SELECT i.*, ip.preview_status as draft_status, ip.preview_memo as draft_memo
+    FROM issues i
+    LEFT JOIN issue_preview ip ON i.id = ip.issue_id
+    ${where}
+    ORDER BY i.sort_order ASC
+  `).all(...args);
+}
+
+export function hasPendingDrafts(db: any, tab: Tab): boolean {
+  const row = db.prepare(`
+    SELECT COUNT(*) as cnt
+    FROM issue_preview ip
+    WHERE ip.issue_id IN (SELECT id FROM issues WHERE tab = ?)
+  `).get(tab) as { cnt: number };
+  return row.cnt > 0;
+}
+
 export function getIssue(db: any, id: string): Issue | null {
   return db.prepare('SELECT * FROM issues WHERE id = ?').get(id) ?? null;
 }

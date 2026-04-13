@@ -42,6 +42,7 @@ import {
   MIGRATION_V39_SQL,
   MIGRATION_V40_SQL,
   MIGRATION_V40B_SQL,
+  MIGRATION_V41_SQL,
   seedPerspectives,
 } from './schema.js';
 
@@ -160,6 +161,47 @@ export function openDb(dbPath: string): any {
   try { db.exec(MIGRATION_V39_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V40_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V40B_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V41_SQL); } catch { /* ignore */ }
+
+  // V41 데이터 마이그레이션: 미반영 변경사항을 issue_preview로 이전
+  try {
+    const migrated = db.prepare('SELECT COUNT(*) as cnt FROM _migration_v41_done').get() as { cnt: number };
+    if (migrated.cnt === 0) {
+      const tx = db.transaction(() => {
+        // 마지막 decision_log 기준으로 상태가 다른 이슈 또는 memo가 있는 이슈를 draft로 이전
+        // status가 다르거나 memo가 있는 이슈를 draft로 이전
+        // pending + memo 있는 케이스도 포함 (status='pending'이어도 memo는 사용자 편집)
+        db.exec(`
+          INSERT OR IGNORE INTO issue_preview (issue_id, preview_status, preview_memo)
+          SELECT i.id, i.status, i.memo
+          FROM issues i
+          LEFT JOIN (
+            SELECT dl.issue_id, dl.status
+            FROM decision_logs dl
+            WHERE dl.id IN (SELECT MAX(id) FROM decision_logs GROUP BY issue_id)
+          ) last_log ON last_log.issue_id = i.id
+          WHERE
+            i.status != COALESCE(last_log.status, 'pending')
+            OR (i.memo != '' AND i.memo IS NOT NULL)
+        `);
+        // issues.status를 마지막 applied 상태로 복원, memo는 비움
+        db.exec(`
+          UPDATE issues SET
+            status = COALESCE(
+              (SELECT dl.status FROM decision_logs dl
+               WHERE dl.issue_id = issues.id
+               AND dl.id = (SELECT MAX(id) FROM decision_logs WHERE issue_id = issues.id)),
+              'pending'
+            ),
+            memo = '',
+            updated_by = 'system'
+          WHERE id IN (SELECT issue_id FROM issue_preview)
+        `);
+        db.prepare('INSERT INTO _migration_v41_done VALUES (1)').run();
+      });
+      tx();
+    }
+  } catch { /* 마이그레이션 실패 시 무시 (기존 데이터 보존) */ }
 
   // doc_types 시드 데이터 (INSERT OR IGNORE)
   const seedStmt = db.prepare(
