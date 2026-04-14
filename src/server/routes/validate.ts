@@ -2,8 +2,6 @@ import { Hono } from 'hono';
 import {
   getIssues,
   getAllActiveBaselines,
-  getScreens,
-  getUserFlows,
   PIPELINE_REQUIRED_BASELINES,
   type Tab,
 } from '../../db/repository.js';
@@ -63,9 +61,28 @@ validateRoute.post('/final-delivery', (c) => {
     issues.push(`활성 baseline이 없는 탭: ${missingTabs.join(', ')}`);
   }
 
-  // screen의 flowIds가 실제 user_flows에 존재하는지 검증 (배치 조회)
-  const allScreens = allDeliveryTabs.flatMap(tab => getScreens(db, tab));
-  const allFlowIds = new Set(allDeliveryTabs.flatMap(tab => getUserFlows(db, tab).map((f: any) => f.flow_id)));
+  // screen/flow 참조 검증 — frozen baseline의 doc_snapshot에서 읽어야 delivery와 일치
+  const allScreens: any[] = [];
+  const allFlowIds = new Set<string>();
+  for (const tab of allDeliveryTabs) {
+    const baseline = activeBaselines[tab];
+    if (!baseline) continue;
+    if (!baseline.doc_snapshot) {
+      if (requiredTabs.includes(tab as Tab)) {
+        issues.push(`${tab} 탭의 baseline에 스냅샷 데이터가 없습니다. 다시 freeze하세요.`);
+      }
+      continue;
+    }
+    try {
+      const sd = JSON.parse(baseline.doc_snapshot).structuredData ?? {};
+      for (const screen of sd.screens ?? []) allScreens.push(screen);
+      for (const flow of sd.flows ?? []) allFlowIds.add(flow.flow_id);
+    } catch {
+      if (requiredTabs.includes(tab as Tab)) {
+        issues.push(`${tab} 탭의 baseline 스냅샷을 파싱할 수 없습니다. 다시 freeze하세요.`);
+      }
+    }
+  }
 
   for (const screen of allScreens) {
     if (screen.flow_ids_json && Array.isArray(screen.flow_ids_json)) {

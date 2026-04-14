@@ -96,7 +96,7 @@ baselinesRoute.post('/freeze', async (c) => {
   // 문서 스냅샷 가져오기 — 실제 파일 내용 + 구조화 데이터 포함
   let docSnapshot: string | null = null;
   const latestDoc = db.prepare(
-    `SELECT * FROM documents WHERE tab = ? ORDER BY created_at DESC LIMIT 1`
+    `SELECT * FROM documents WHERE tab = ? AND kind = 'generated-doc' ORDER BY created_at DESC LIMIT 1`
   ).get(tab);
   if (latestDoc) {
     let content: string | null = null;
