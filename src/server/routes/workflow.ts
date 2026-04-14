@@ -14,14 +14,22 @@ const TAB_LABELS: Record<Tab, string> = {
   features: '다음버전',
 };
 
+type StageStatus =
+  | 'locked'           // 선행 baseline 부족
+  | 'not_ready'        // 잠기지 않았지만 freeze 불가 (문서 없음 등)
+  | 'ready_to_freeze'  // 처음 freeze 가능
+  | 'frozen'           // active baseline 있음, re-freeze 불가
+  | 'ready_to_refreeze'; // active baseline 있음, re-freeze 가능
+
 interface StageInfo {
   tab: Tab;
   label: string;
+  status: StageStatus;
   isLocked: boolean;
   activeBaseline: any | null;
   requiredBaselines: Tab[];
   missingBaselines: Tab[];
-  freezeReadiness?: { ready: boolean; blockingReasons: string[]; warnings: string[] };
+  freezeReadiness: { ready: boolean; blockingReasons: string[]; warnings: string[] } | null;
 }
 
 // GET /api/workflow/stages — 전체 파이프라인 상태
@@ -34,17 +42,28 @@ workflowRoute.get('/stages', (c) => {
     const missing = required.filter((t) => !activeMap[t]);
     const isLocked = missing.length > 0;
 
-    // freeze 가능 상태 체크: 잠기지 않았고 아직 baseline이 없는 탭에만 표시
-    // activeMap을 그대로 전달해 getAllActiveBaselines 재조회 방지
-    let freezeReadiness: StageInfo['freezeReadiness'];
-    if (!isLocked && !activeMap[tab]) {
+    // 잠기지 않은 탭은 항상 freeze readiness 체크 (초기/re-freeze 모두)
+    let freezeReadiness: StageInfo['freezeReadiness'] = null;
+    let status: StageStatus;
+
+    if (isLocked) {
+      status = 'locked';
+    } else {
       const r = checkFreezeReadiness(db, tab, activeMap);
       freezeReadiness = { ready: r.ready, blockingReasons: r.blockingReasons, warnings: r.warnings };
+
+      const hasFrozen = !!activeMap[tab];
+      if (hasFrozen) {
+        status = r.ready ? 'ready_to_refreeze' : 'frozen';
+      } else {
+        status = r.ready ? 'ready_to_freeze' : 'not_ready';
+      }
     }
 
     return {
       tab,
       label: TAB_LABELS[tab],
+      status,
       isLocked,
       activeBaseline: activeMap[tab] ?? null,
       requiredBaselines: required,

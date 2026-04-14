@@ -202,4 +202,53 @@ describe('workflowRoute', () => {
     assert.ok(review.activeBaseline !== null);
     assert.equal(review.activeBaseline.version, '2.1.0');
   });
+
+  // ─── status 필드 ──────────────────────────────────────────────────
+
+  test('GET /workflow/stages — 잠긴 탭은 status=locked, freezeReadiness=null', async () => {
+    const res = await app.request('/workflow/stages', withSession(tw.sessionId));
+    const json = await res.json();
+    for (const stage of json.stages) {
+      if (stage.tab === 'review') continue;
+      assert.equal(stage.status, 'locked', `${stage.tab} should be locked`);
+      assert.equal(stage.freezeReadiness, null);
+    }
+  });
+
+  test('GET /workflow/stages — review 탭: 문서 없으면 status=not_ready', async () => {
+    const res = await app.request('/workflow/stages', withSession(tw.sessionId));
+    const json = await res.json();
+    const review = json.stages.find((s: any) => s.tab === 'review');
+    assert.equal(review.status, 'not_ready');
+    assert.ok(review.freezeReadiness !== null);
+    assert.equal(review.freezeReadiness.ready, false);
+  });
+
+  test('GET /workflow/stages — review 탭: 문서 있으면 status=ready_to_freeze', async () => {
+    addDocumentRecord(tw.db, { tab: 'review', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/review/index.md', source_version: null, source_job_id: null });
+    const res = await app.request('/workflow/stages', withSession(tw.sessionId));
+    const json = await res.json();
+    const review = json.stages.find((s: any) => s.tab === 'review');
+    assert.equal(review.status, 'ready_to_freeze');
+    assert.equal(review.freezeReadiness.ready, true);
+  });
+
+  test('GET /workflow/stages — review baseline 있고 재-freeze 문서 없으면 status=frozen', async () => {
+    createBaseline(tw.db, 'review', '1.0.0', null);
+    const res = await app.request('/workflow/stages', withSession(tw.sessionId));
+    const json = await res.json();
+    const review = json.stages.find((s: any) => s.tab === 'review');
+    assert.equal(review.status, 'frozen');
+    assert.equal(review.freezeReadiness.ready, false);
+  });
+
+  test('GET /workflow/stages — review baseline 있고 재-freeze 문서도 있으면 status=ready_to_refreeze', async () => {
+    createBaseline(tw.db, 'review', '1.0.0', null);
+    addDocumentRecord(tw.db, { tab: 'review', version: '1.0.1', kind: 'generated-doc', file_path: '/tmp/review/index.md', source_version: null, source_job_id: null });
+    const res = await app.request('/workflow/stages', withSession(tw.sessionId));
+    const json = await res.json();
+    const review = json.stages.find((s: any) => s.tab === 'review');
+    assert.equal(review.status, 'ready_to_refreeze');
+    assert.equal(review.freezeReadiness.ready, true);
+  });
 });
