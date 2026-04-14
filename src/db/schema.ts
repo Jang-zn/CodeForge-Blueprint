@@ -382,6 +382,11 @@ ALTER TABLE documents ADD COLUMN baseline_id INTEGER REFERENCES stage_baselines(
 ALTER TABLE documents ADD COLUMN structured_data TEXT;
 `;
 
+// V49: documents 테이블에 source_cycle_id 컬럼 추가 (cycle-aware freeze 지원)
+export const MIGRATION_V49_SQL = `
+ALTER TABLE documents ADD COLUMN source_cycle_id INTEGER REFERENCES review_cycles(id);
+`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;

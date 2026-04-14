@@ -6,7 +6,7 @@ import os from 'os';
 import path from 'path';
 import { createRequire } from 'module';
 import { Hono } from 'hono';
-import { SCHEMA_SQL, MIGRATION_V2_SQL, MIGRATION_V39_SQL, MIGRATION_V42_SQL, MIGRATION_V43_SQL, MIGRATION_V44_SQL, MIGRATION_V45_SQL, MIGRATION_V46_SQL, MIGRATION_V47_SQL, MIGRATION_V48_SQL, seedPerspectives } from '../src/db/schema.js';
+import { SCHEMA_SQL, MIGRATION_V2_SQL, MIGRATION_V39_SQL, MIGRATION_V42_SQL, MIGRATION_V43_SQL, MIGRATION_V44_SQL, MIGRATION_V45_SQL, MIGRATION_V46_SQL, MIGRATION_V47_SQL, MIGRATION_V48_SQL, MIGRATION_V49_SQL, seedPerspectives } from '../src/db/schema.js';
 import { openDb, resetDb, closeAllDbs, getDb } from '../src/db/index.js';
 import { initAppDb, closeAppDb } from '../src/db/app-db.js';
 import { openWorkspace, type WorkspaceContext } from '../src/workspace.js';
@@ -42,6 +42,7 @@ export function createTestDb(): any {
   try { db.exec(MIGRATION_V46_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V47_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V48_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V49_SQL); } catch { /* ignore */ }
   seedPerspectives(db);
   return db;
 }

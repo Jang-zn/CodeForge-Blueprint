@@ -279,7 +279,7 @@ generateRoute.post('/', async (c) => {
       }
 
       const indexPath = path.join(outputDir, 'index.md');
-      const docId = addDocumentRecord(db, { tab, version, kind: 'generated-doc', file_path: indexPath, source_version: version, source_job_id: jobId });
+      const docId = addDocumentRecord(db, { tab, version, kind: 'generated-doc', file_path: indexPath, source_version: version, source_job_id: jobId, source_cycle_id: cycleId ?? null });
 
       if (cycleId) {
         updateCycleStatus(db, cycleId, 'completed', docId);
@@ -434,6 +434,7 @@ generateRoute.get('/final-delivery/preview', (c) => {
   return c.json({
     ready: true,
     baselines: baselineInfo,
+    featuresIncluded: !!activeBaselines['features'],
     flows: Object.fromEntries(ALL_PREVIEW_TABS.map(t => [t, (delivery.flows[t] ?? []).length])),
     screens: Object.fromEntries(ALL_PREVIEW_TABS.map(t => [t, (delivery.screens[t] ?? []).length])),
     scopeItems: Object.fromEntries(ALL_PREVIEW_TABS.map(t => [t, (delivery.scopeItems[t] ?? []).length])),

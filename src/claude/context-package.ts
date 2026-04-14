@@ -12,6 +12,7 @@ import {
   assembleMarkdown,
   getDocuments,
   getAllActiveBaselines,
+  parseBaselineSnapshot,
   PIPELINE_REQUIRED_BASELINES,
   type DocumentRecord,
   type Tab,
@@ -183,6 +184,8 @@ export function buildContextPackage(
   const ctx: ContextPackage = {};
   const includes = PROFILE_DOCS[profile as ContextProfile] ?? PROFILE_DOCS.default;
   const profileTab = (profile as ContextProfile) as Tab;
+  // baseline 조회는 한 번만 — generated:* 블록과 frozenBaselines 블록에서 공유
+  const allBaselines = getAllActiveBaselines(db);
 
   for (const item of includes) {
     if (item === 'project-overview') {
@@ -241,6 +244,7 @@ export function buildContextPackage(
       }
     } else if (item.startsWith('generated:')) {
       // 첫 번째 generated-* 항목에서만 baseDocument 설정 (중복 방지)
+      // 현재 탭 분석에는 항상 최신 disk 문서를 사용 — frozen baseline은 dependency 탭에만 주입
       if (!ctx.baseDocument) {
         ctx.baseDocument = readGeneratedDocSet(db, profileTab, docsPath);
       }
@@ -250,21 +254,12 @@ export function buildContextPackage(
   // baseline-aware 컨텍스트: 이전 단계 frozen baseline을 프롬프트에 포함
   const requiredBaselineTabs = PIPELINE_REQUIRED_BASELINES[profileTab as Tab] ?? [];
   if (requiredBaselineTabs.length > 0) {
-    const allBaselines = getAllActiveBaselines(db);
     const baselines: Record<string, string> = {};
 
     for (const depTab of requiredBaselineTabs) {
-      const baseline = allBaselines[depTab];
-      if (baseline?.doc_snapshot) {
-        try {
-          const parsed = JSON.parse(baseline.doc_snapshot);
-          const content = parsed.content;
-          if (content && typeof content === 'string') {
-            baselines[depTab] = content;
-          }
-        } catch {
-          // JSON 파싱 실패 시 무시
-        }
+      const snapshot = parseBaselineSnapshot(allBaselines[depTab]?.doc_snapshot ?? null);
+      if (snapshot?.content && typeof snapshot.content === 'string') {
+        baselines[depTab] = snapshot.content;
       }
     }
 

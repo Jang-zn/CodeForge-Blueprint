@@ -9,6 +9,7 @@ import {
   createBaseline,
   supersedeBaseline,
   checkFreezeReadiness,
+  getFreezeCandidateDoc,
   getUserFlows,
   getScreens,
   getScopeItems,
@@ -93,11 +94,9 @@ baselinesRoute.post('/freeze', async (c) => {
     }
   }
 
-  // 문서 스냅샷 가져오기 — 실제 파일 내용 + 구조화 데이터 포함
+  // 문서 스냅샷 가져오기 — cycle 연결 문서 우선, 실제 파일 내용 + 구조화 데이터 포함
   let docSnapshot: string | null = null;
-  const latestDoc = db.prepare(
-    `SELECT * FROM documents WHERE tab = ? AND kind = 'generated-doc' ORDER BY created_at DESC LIMIT 1`
-  ).get(tab);
+  const latestDoc = getFreezeCandidateDoc(db, tab);
   if (latestDoc) {
     let content: string | null = null;
     try {
@@ -125,7 +124,19 @@ baselinesRoute.post('/freeze', async (c) => {
       if (scopeItems.length > 0) structuredData.scopeItems = scopeItems;
     } catch { /* 구조화 데이터 없으면 무시 */ }
 
-    docSnapshot = JSON.stringify({ document: latestDoc, content, structuredData });
+    // getFreezeCandidateDoc이 _cycle_id, _cycle_number를 LEFT JOIN으로 첨부함
+    const sourceCycle = latestDoc._cycle_id
+      ? { id: latestDoc._cycle_id as number, cycleNumber: latestDoc._cycle_number as number }
+      : null;
+
+    docSnapshot = JSON.stringify({
+      schemaVersion: '1.0.0',
+      tab,
+      document: { id: latestDoc.id, filePath: latestDoc.file_path, createdAt: latestDoc.created_at },
+      content,
+      structuredData,
+      sourceCycle,
+    });
   }
 
   // 새 baseline 생성 + 이전 baseline supersede를 단일 트랜잭션으로 처리

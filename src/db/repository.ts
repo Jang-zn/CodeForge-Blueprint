@@ -100,6 +100,7 @@ export interface DocumentRecord {
   doc_type: string | null;
   summary: string | null;
   created_at: string;
+  source_cycle_id: number | null;
 }
 
 export interface DocType {
@@ -622,12 +623,12 @@ export function getRunningJobs(db: any): Job[] {
 
 export function addDocumentRecord(
   db: any,
-  doc: Omit<DocumentRecord, 'id' | 'created_at' | 'doc_type' | 'summary'> & { doc_type?: string | null; summary?: string | null },
+  doc: Omit<DocumentRecord, 'id' | 'created_at' | 'doc_type' | 'summary' | 'source_cycle_id'> & { doc_type?: string | null; summary?: string | null; source_cycle_id?: number | null },
 ): number {
   const result = db.prepare(`
-    INSERT INTO documents (tab, version, kind, file_path, source_version, source_job_id, doc_type, summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(doc.tab, doc.version, doc.kind, doc.file_path, doc.source_version ?? null, doc.source_job_id ?? null, doc.doc_type ?? null, doc.summary ?? null);
+    INSERT INTO documents (tab, version, kind, file_path, source_version, source_job_id, doc_type, summary, source_cycle_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(doc.tab, doc.version, doc.kind, doc.file_path, doc.source_version ?? null, doc.source_job_id ?? null, doc.doc_type ?? null, doc.summary ?? null, doc.source_cycle_id ?? null);
   return Number(result.lastInsertRowid);
 }
 
@@ -1252,27 +1253,112 @@ export function supersedeBaseline(db: any, oldBaselineId: number, newBaselineId:
   ).run(newBaselineId, oldBaselineId);
 }
 
-/** freeze 준비 상태 확인 */
-export function checkFreezeReadiness(db: any, tab: Tab): { ready: boolean; reasons: string[] } {
-  const reasons: string[] = [];
+/** freeze 대상 문서 선택 — 항상 최신 generated-doc, cycle 연결 정보는 LEFT JOIN으로 첨부 */
+export function getFreezeCandidateDoc(db: any, tab: Tab): any | null {
+  // 최신 generated-doc을 기준으로 선택하되, 해당 문서가 cycle과 연결돼 있으면 메타 첨부
+  return db.prepare(`
+    SELECT d.*, rc.id AS _cycle_id, rc.cycle_number AS _cycle_number
+    FROM documents d
+    LEFT JOIN review_cycles rc
+      ON d.id = rc.result_doc_id AND rc.status IN ('applied', 'completed')
+    WHERE d.tab = ? AND d.kind = 'generated-doc'
+    ORDER BY d.created_at DESC LIMIT 1
+  `).get(tab) ?? null;
+}
 
-  // 1) 선행 baseline 체크 (review 제외)
+export interface FreezeReadinessCheck {
+  name: string;
+  passed: boolean;
+  message?: string;
+}
+
+export interface FreezeReadinessResult {
+  ready: boolean;
+  /** 하위호환 유지 — blockingReasons와 동일 */
+  reasons: string[];
+  checks: FreezeReadinessCheck[];
+  blockingReasons: string[];
+  warnings: string[];
+}
+
+/** freeze 준비 상태 확인 — prefetchedActiveMap을 넘기면 DB 재조회 없이 재사용 */
+export function checkFreezeReadiness(
+  db: any,
+  tab: Tab,
+  prefetchedActiveMap?: Record<Tab, any>,
+): FreezeReadinessResult {
+  const blockingReasons: string[] = [];
+  const warnings: string[] = [];
+  const checks: FreezeReadinessCheck[] = [];
+
+  /** 체크 항목 추가 + blocking이면 blockingReasons에도 기록 */
+  function addCheck(name: string, passed: boolean, failMessage: string, blocking = true) {
+    checks.push({ name, passed, message: passed ? undefined : failMessage });
+    if (!passed && blocking) blockingReasons.push(failMessage);
+  }
+
+  // 1) 선행 baseline 체크 (review는 선행 없음)
   if (tab !== 'review') {
     const required = PIPELINE_REQUIRED_BASELINES[tab] || [];
-    const activeMap = getAllActiveBaselines(db);
+    const activeMap = prefetchedActiveMap ?? getAllActiveBaselines(db);
     const missing = required.filter(t => !activeMap[t]);
-    reasons.push(...missing.map(t => `${t} 탭의 활성 baseline이 필요합니다.`));
+    addCheck(
+      '선행 baseline',
+      missing.length === 0,
+      `${missing.join(', ')} 탭의 활성 baseline이 필요합니다.`,
+    );
+  } else {
+    checks.push({ name: '선행 baseline', passed: true });
   }
 
   // 2) 해당 탭 generated-doc 문서 존재 확인
   const doc = db.prepare(
     `SELECT id FROM documents WHERE tab = ? AND kind = 'generated-doc' ORDER BY created_at DESC LIMIT 1`
   ).get(tab);
-  if (!doc) {
-    reasons.push(`${tab} 탭의 생성된 문서가 없습니다. 먼저 문서를 생성하세요.`);
+  addCheck(
+    '생성 문서',
+    !!doc,
+    `${tab} 탭의 생성된 문서가 없습니다. 먼저 문서를 생성하세요.`,
+  );
+
+  // 3) P0 이슈 없음 체크
+  const p0Count = (db.prepare(
+    `SELECT COUNT(*) as cnt FROM issues WHERE tab = ? AND status = 'pending' AND priority = 'P0'`
+  ).get(tab) as { cnt: number } | undefined)?.cnt ?? 0;
+  addCheck(
+    'P0 이슈',
+    p0Count === 0,
+    `미해결 P0 이슈가 ${p0Count}건 있습니다. freeze 전에 처리하세요.`,
+  );
+
+  // 4) 미완료 cycle — blocking이 아닌 경고
+  const activeCycle = db.prepare(
+    `SELECT id, cycle_number FROM review_cycles WHERE tab = ? AND status NOT IN ('completed', 'applied') ORDER BY id DESC LIMIT 1`
+  ).get(tab);
+  if (activeCycle) {
+    warnings.push(`진행 중인 리뷰 사이클(#${(activeCycle as { id: number; cycle_number: number }).cycle_number})이 있습니다.`);
   }
 
-  return { ready: reasons.length === 0, reasons };
+  return { ready: blockingReasons.length === 0, reasons: blockingReasons, checks, blockingReasons, warnings };
+}
+
+/** baseline doc_snapshot 파싱 유틸 — 구버전(schemaVersion 없음) 호환 */
+export function parseBaselineSnapshot(raw: string | null): {
+  schemaVersion: string;
+  tab?: string;
+  document?: any;
+  content?: string | null;
+  structuredData?: { flows?: any[]; screens?: any[]; scopeItems?: any[] };
+  sourceCycle?: { id: number; cycleNumber: number } | null;
+} | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      schemaVersion: parsed.schemaVersion ?? '0.0.0',
+      ...parsed,
+    };
+  } catch { return null; }
 }
 
 // ===== Structured Data =====
