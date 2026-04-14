@@ -45,6 +45,8 @@ import {
   MIGRATION_V41_SQL,
   MIGRATION_V42_SQL,
   MIGRATION_V43_SQL,
+  MIGRATION_V44_SQL,
+  MIGRATION_V45_SQL,
   seedPerspectives,
 } from './schema.js';
 
@@ -166,6 +168,8 @@ export function openDb(dbPath: string): any {
   try { db.exec(MIGRATION_V41_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V42_SQL); } catch { /* ignore */ }
   try { db.exec(MIGRATION_V43_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V44_SQL); } catch { /* ignore */ }
+  try { db.exec(MIGRATION_V45_SQL); } catch { /* ignore */ }
 
   // V41 데이터 마이그레이션: 미반영 변경사항을 issue_preview로 이전
   try {

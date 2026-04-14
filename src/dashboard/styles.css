@@ -134,6 +134,53 @@ body {
   background: rgba(var(--accent-rgb), 0.08);
 }
 
+/* ===== Baseline 배지 & 잠금 스타일 ===== */
+.tab-btn-locked {
+  opacity: 0.5;
+  position: relative;
+}
+.tab-btn-locked::after {
+  content: '🔒';
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.7;
+}
+.tab-btn.tab-btn-locked:hover {
+  opacity: 0.7;
+}
+
+.baseline-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--green);
+  color: #000;
+  font-family: var(--font-mono, monospace);
+  margin-left: 4px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.freeze-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.freeze-btn:hover {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
 /* Tab panels */
 .tab-panel { display: none; }
 .tab-panel.active {

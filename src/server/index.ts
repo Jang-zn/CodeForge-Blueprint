@@ -19,6 +19,8 @@ import decisionsRoute from './routes/decisions.js';
 import documentsRoute from './routes/documents.js';
 import glossaryRoute from './routes/glossary.js';
 import perspectivesRoute from './routes/perspectives.js';
+import baselinesRoute from './routes/baselines.js';
+import workflowRoute from './routes/workflow.js';
 import { getRequestContext } from './context.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +67,8 @@ export async function startServer(port: number): Promise<number> {
   api.route('/documents', documentsRoute);
   api.route('/glossary', glossaryRoute);
   api.route('/perspectives', perspectivesRoute);
+  api.route('/baselines', baselinesRoute);
+  api.route('/workflow', workflowRoute);
 
   app.route('/api', api);
 

@@ -277,6 +277,60 @@ export const MIGRATION_V42_SQL = `ALTER TABLE review_cycles ADD COLUMN result_do
 // V43: decision_logs에 cycle_id 컬럼 추가 (사이클 추적)
 export const MIGRATION_V43_SQL = `ALTER TABLE decision_logs ADD COLUMN cycle_id INTEGER REFERENCES review_cycles(id);`;
 
+// V44: tab_versions와 issues 테이블의 CHECK 제약 확장 ('ux' 탭 추가)
+export const MIGRATION_V44_SQL = `
+DROP TABLE IF EXISTS tab_versions_new;
+CREATE TABLE tab_versions_new (
+  tab TEXT PRIMARY KEY CHECK(tab IN ('review','ux','backend','frontend','features')),
+  version TEXT DEFAULT '1.0.0'
+);
+INSERT OR IGNORE INTO tab_versions_new SELECT * FROM tab_versions;
+DROP TABLE tab_versions;
+ALTER TABLE tab_versions_new RENAME TO tab_versions;
+
+DROP TABLE IF EXISTS issues_new;
+CREATE TABLE issues_new (
+  id TEXT PRIMARY KEY,
+  tab TEXT NOT NULL CHECK(tab IN ('review','ux','backend','frontend','features')),
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  html_content TEXT NOT NULL,
+  tag TEXT,
+  priority TEXT,
+  badge TEXT,
+  status TEXT DEFAULT 'pending',
+  memo TEXT DEFAULT '',
+  sort_order INTEGER DEFAULT 0,
+  origin_id TEXT,
+  assignee TEXT,
+  updated_by TEXT,
+  applied_at TEXT,
+  source_run_id TEXT,
+  confidence REAL,
+  decision_at TEXT,
+  decision_quality TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+INSERT OR IGNORE INTO issues_new SELECT * FROM issues;
+DROP TABLE issues;
+ALTER TABLE issues_new RENAME TO issues;
+`;
+
+// V45: stage_baselines 테이블 추가 (Phase 1 기능)
+export const MIGRATION_V45_SQL = `
+CREATE TABLE IF NOT EXISTS stage_baselines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tab TEXT NOT NULL,
+  version TEXT NOT NULL,
+  doc_snapshot TEXT,
+  frozen_at TEXT DEFAULT (datetime('now')),
+  superseded_at TEXT,
+  superseded_by INTEGER REFERENCES stage_baselines(id)
+);
+CREATE INDEX IF NOT EXISTS idx_stage_baselines_tab ON stage_baselines(tab);
+`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;
@@ -349,6 +403,12 @@ export const PERSPECTIVE_SEEDS: PerspectiveSeed[] = [
   { id: 'frontend-core-action', tab: 'frontend', name: '핵심 액션 가시성', description: '가장 중요한 사용자 액션이 UI에서 눈에 띄는지', category: 'optional', is_locked: 0, prompt_instruction: '각 화면에서 가장 중요한 핵심 액션(CTA)이 시각적으로 충분히 두드러지는지 평가하라. 핵심 액션이 묻혀있거나 경쟁하는 요소가 있으면 지적하라', skill_checklist: JSON.stringify(['각 화면의 주요 CTA가 시각적으로 가장 눈에 띄는가?', 'CTA가 여러 개로 사용자를 혼란스럽게 하지 않는가?', '핵심 기능이 네비게이션의 깊은 곳에 숨겨져 있지 않은가?']), id_prefix: 'fe-action', sort_order: 22 },
   { id: 'frontend-mobile-first', tab: 'frontend', name: '모바일 우선', description: '모바일 환경 우선 설계 여부', category: 'optional', is_locked: 0, prompt_instruction: '모바일 환경에서의 사용성을 우선으로 평가하라. 터치 타겟 크기, 스크롤 패턴, 모바일 특유의 UX 패턴이 반영되었는지 확인하라', skill_checklist: JSON.stringify(['터치 타겟이 44x44px 이상으로 설계되었는가?', '핵심 기능이 엄지손가락 닿는 범위(thumb zone) 내에 있는가?', '모바일에서 불필요한 정보를 숨기는 전략이 있는가?', '모바일 키보드가 UI를 가리는 상황이 처리되었는가?']), id_prefix: 'fe-mobile', sort_order: 23 },
   { id: 'frontend-effort-vs-ux', tab: 'frontend', name: '구현 공수 vs UX 효과', description: '개발 공수 대비 UX 개선 효과 평가', category: 'optional', is_locked: 0, prompt_instruction: '각 UI 결정의 구현 공수와 실제 UX 개선 효과를 평가하라. 공수가 크지만 UX 효과가 작은 결정을 지적하고, 더 간단한 대안을 제안하라', skill_checklist: JSON.stringify(['구현하는 데 시간이 많이 걸리지만 UX 개선 효과가 미미한 기능이 있는가?', '더 단순한 구현으로 비슷한 UX를 달성할 수 있는가?', '애니메이션/마이크로인터랙션이 개발 시간 대비 가치가 있는가?']), id_prefix: 'fe-effort', sort_order: 24 },
+  // ===== UX TAB — 기본 5개 (locked) =====
+  { id: 'ux-user-segments', tab: 'ux', name: '사용자 세그먼트', description: '주요 사용자 유형과 역할 정의, 관리자 분리 여부', category: 'default', is_locked: 1, prompt_instruction: '서비스 사용자를 세그먼트로 분류하라. 일반 사용자, 관리자, 게스트 등 역할과 권한 차이를 명확히 정의하라. 누락된 사용자 유형이 없는지 확인하라', skill_checklist: JSON.stringify(['주요 사용자 세그먼트가 2개 이상 정의되었는가?', '관리자 역할이 별도로 정의되었는가?', '각 세그먼트별 핵심 목표가 명확한가?', '게스트/비로그인 사용자 경험이 고려되었는가?']), id_prefix: 'ux-seg', sort_order: 0 },
+  { id: 'ux-core-flows', tab: 'ux', name: '핵심 플로우', description: '사용자 여정 맵, 핵심 경로, 플로우 갭 식별', category: 'default', is_locked: 1, prompt_instruction: '각 사용자 세그먼트의 핵심 플로우를 정의하라. 첫 가치 경험까지의 최단 경로, 반복 행동 루프, 플로우 단절 지점을 식별하라', skill_checklist: JSON.stringify(['각 세그먼트의 핵심 플로우가 단계별로 정의되었는가?', '플로우 간 연결이 끊기는 지점이 있는가?', '오류/예외 플로우가 정의되었는가?', '첫 가치 경험까지의 단계가 최소화되었는가?']), id_prefix: 'ux-flow', sort_order: 1 },
+  { id: 'ux-screen-inventory', tab: 'ux', name: '화면 인벤토리', description: '전체 화면 목록, 화면 누락 식별, 화면 복잡도 평가', category: 'default', is_locked: 1, prompt_instruction: '플로우에서 필요한 모든 화면을 식별하라. 누락된 화면, 중복 화면, MVP에서 제외할 화면을 분류하라. 각 화면의 핵심 역할을 한 줄로 정의하라', skill_checklist: JSON.stringify(['모든 플로우 단계에 대응하는 화면이 있는가?', '중복 기능의 화면이 통합 가능한가?', '각 화면의 단일 책임이 명확한가?', 'MVP에서 제외 가능한 화면이 식별되었는가?']), id_prefix: 'ux-screen', sort_order: 2 },
+  { id: 'ux-states-exceptions', tab: 'ux', name: '상태/예외 설계', description: '화면별 상태 정의, 에러 상태, 빈 상태, 로딩 상태', category: 'default', is_locked: 1, prompt_instruction: '각 화면의 모든 상태를 정의하라: 정상 상태, 로딩, 빈 상태, 에러, 권한 없음, 네트워크 오류. 예외 상황에서 사용자 경험이 무너지지 않도록 설계하라', skill_checklist: JSON.stringify(['모든 화면에 로딩/빈/에러 상태가 정의되었는가?', '권한 없는 사용자 접근 처리가 정의되었는가?', '네트워크 오류 시 사용자 피드백이 설계되었는가?', '폼 입력 유효성 실패 상태가 정의되었는가?']), id_prefix: 'ux-state', sort_order: 3 },
+  { id: 'ux-admin-ux', tab: 'ux', name: '관리자 UX', description: '어드민 화면 필요성, 운영 도구 설계, 관리자 플로우', category: 'default', is_locked: 1, prompt_instruction: '서비스 운영에 필요한 관리자 도구를 정의하라. 사용자 관리, 콘텐츠 관리, 설정 관리 등 운영 화면이 누락되지 않도록 확인하라. 관리자 UX가 운영 부담을 줄이는 방향으로 설계되었는지 검토하라', skill_checklist: JSON.stringify(['관리자 전용 화면이 정의되었는가?', '운영에 필수적인 어드민 기능이 포함되었는가?', '관리자 권한 제어가 설계되었는가?', '운영 모니터링 화면이 계획되었는가?']), id_prefix: 'ux-admin', sort_order: 4 },
   // ===== FEATURES TAB — 기본 4개 (locked) =====
   { id: 'features-marketing', tab: 'features', name: '마케팅/성장', description: '핵심 가치가 검증된 이후에만 적용. 공유/초대 루프, SEO, 초기 트랙션', category: 'default', is_locked: 1, prompt_instruction: '핵심 가치가 검증된 이후에 의미 있는 마케팅/성장 기능을 제안하라. 검증 전에는 바이럴 루프보다 직접 연결이 더 효과적임을 판단하라', skill_checklist: JSON.stringify(['바이럴 루프를 만드는 기능이 있는가?', '레퍼럴 프로그램이 계획되어 있는가?', 'SEO/ASO 최적화 기능이 로드맵에 있는가?', 'PLG(Product-Led Growth) 전략이 반영되었는가?']), id_prefix: 'ft-mkt', sort_order: 0 },
   { id: 'features-operations', tab: 'features', name: '운영 효율화', description: '기능 추가가 솔로 운영 부담을 늘리는지 판단. 자동화 먼저 해야 하는지', category: 'default', is_locked: 1, prompt_instruction: '각 기능 제안이 솔로 개발자의 운영 부담을 늘리는지 판단하라. 자동화로 먼저 해결 가능한 운영 문제를 우선 제안하라', skill_checklist: JSON.stringify(['반복적인 운영 작업을 자동화하는 기능이 있는가?', '관리자 도구(어드민 패널)가 계획되어 있는가?', 'CS 응대를 줄이는 자동화 기능이 있는가?']), id_prefix: 'ft-ops', sort_order: 1 },
@@ -404,13 +464,13 @@ CREATE TABLE IF NOT EXISTS workspace (
 );
 
 CREATE TABLE IF NOT EXISTS tab_versions (
-  tab TEXT PRIMARY KEY CHECK(tab IN ('review','backend','frontend','features')),
+  tab TEXT PRIMARY KEY CHECK(tab IN ('review','ux','backend','frontend','features')),
   version TEXT DEFAULT '1.0.0'
 );
 
 CREATE TABLE IF NOT EXISTS issues (
   id TEXT PRIMARY KEY,
-  tab TEXT NOT NULL CHECK(tab IN ('review','backend','frontend','features')),
+  tab TEXT NOT NULL CHECK(tab IN ('review','ux','backend','frontend','features')),
   category TEXT NOT NULL,
   title TEXT NOT NULL,
   html_content TEXT NOT NULL,

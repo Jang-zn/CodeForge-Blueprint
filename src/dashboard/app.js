@@ -111,13 +111,21 @@ const CAT_LABELS = {
   'FT-MONEY': '수익화',
   'FT-LEARN': '데이터 학습',
   'FT-EFFORT': '공수 vs 효과',
+  'UX-FLOW': '유저 플로우',
+  'UX-SCREEN': '화면 인벤토리',
+  'UX-STATE': '상태/예외',
+  'UX-ADMIN': '관리자 UX',
+  'UX-SEG': '사용자 세그먼트',
+  'UX-RISK': 'UX 리스크',
+  'UX-GAP': '플로우 갭',
 };
 
 const TAB_ID_PATTERNS = {
   review:   /^[a-z][-a-z0-9]*\d+$/,
-  features: /^[a-z][-a-z0-9]*\d+$/,
+  ux:       /^[a-z][-a-z0-9]*\d+$/,
   backend:  /^[a-z][-a-z0-9]*\d+$/,
   frontend: /^[a-z][-a-z0-9]*\d+$/,
+  features: /^[a-z][-a-z0-9]*\d+$/,
 };
 
 function escapeHtml(s) {
@@ -252,6 +260,68 @@ function renderWorkflowSummary(workflow) {
   el.classList.remove('hidden');
   requestAnimationFrame(() => el.classList.add('animate'));
   setTimeout(() => el.classList.remove('animate'), 1500);
+}
+
+// ========== Workflow Stages & Baseline Management ==========
+async function loadWorkflowStages() {
+  try {
+    const data = await API.get('/workflow/stages');
+    for (const stage of data.stages) {
+      const btn = document.querySelector(`.tab-btn[data-tab="${stage.tab}"]`);
+      if (!btn) continue;
+      if (stage.isLocked) {
+        btn.classList.add('tab-btn-locked');
+        btn.title = `이전 단계 baseline을 먼저 확정하세요 (필요: ${stage.missingBaselines.join(', ')})`;
+      } else {
+        btn.classList.remove('tab-btn-locked');
+        btn.title = '';
+      }
+      // baseline 배지 업데이트
+      updateBaselineBadge(stage.tab, stage.activeBaseline);
+    }
+  } catch (e) {
+    // 워크플로우 로드 실패는 조용히 무시
+  }
+}
+
+function updateBaselineBadge(tab, baseline) {
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (!btn) return;
+  let badge = btn.querySelector('.baseline-badge');
+  if (baseline) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'baseline-badge';
+      btn.appendChild(badge);
+    }
+    badge.textContent = `v${baseline.version}`;
+    badge.title = `Frozen: ${new Date(baseline.frozen_at).toLocaleDateString('ko-KR')}`;
+  } else if (badge) {
+    badge.remove();
+  }
+}
+
+async function freezeBaseline(tab) {
+  try {
+    const readiness = await API.get(`/baselines/freeze-readiness?tab=${tab}`);
+    if (!readiness.ready) {
+      await appAlert('아직 확정할 수 없습니다:\n' + readiness.reasons.join('\n'));
+      return;
+    }
+    const ok = await appConfirm(`${tab} 탭의 현재 상태를 baseline으로 확정하시겠습니까?\n이후 다음 단계 분석의 기준이 됩니다.`);
+    if (!ok) return;
+    const result = await API.post('/baselines/freeze', { tab });
+    await appAlert(`Baseline v${result.version}이 확정되었습니다.`);
+    loadWorkflowStages();
+  } catch (e) {
+    await appAlert('확정 실패: ' + e.message);
+  }
+}
+
+function renderFreezeButton(tab) {
+  return `<button class="freeze-btn" onclick="freezeBaseline('${tab}')" title="현재 상태를 기준선으로 확정">
+    🔒 Baseline 확정
+  </button>`;
 }
 
 function applyStatusDot(dot, status) {
@@ -412,6 +482,7 @@ function switchTab(tabId) {
   activeTab = tabId;
   clearGrace();
   buildStatusSidebar();
+  loadWorkflowStages();
   if (typeof mermaid !== 'undefined') {
     try { mermaid.run({ querySelector: `#panel-${tabId} pre.mermaid:not([data-processed])` }); } catch (e) { /* ignore */ }
   }
@@ -1591,6 +1662,7 @@ function renderApp(workspace) {
     document.querySelector('.tab-content')?.classList.remove('hidden');
     document.getElementById('fab-container')?.classList.remove('hidden');
     document.getElementById('btn-history')?.removeAttribute('disabled');
+    loadWorkflowStages();
     loadIssues(activeTab);
     loadPerspectivesPanel(activeTab);
     setupScrollAnimations();

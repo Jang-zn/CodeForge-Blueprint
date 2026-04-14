@@ -58,9 +58,10 @@ const PROFILE_DOCS: Record<ContextProfile, string[]> = {
  */
 const GENERATED_DOC_FALLBACK: Record<Tab, Tab[]> = {
   review: ['review'],
-  backend: ['backend', 'review'],
-  frontend: ['frontend', 'backend', 'review'],
-  features: ['features', 'backend', 'review'],
+  ux: ['ux', 'review'],
+  backend: ['backend', 'ux', 'review'],
+  frontend: ['frontend', 'backend', 'ux', 'review'],
+  features: ['features', 'backend', 'ux', 'review'],
 };
 
 function readDocContent(db: any, docType: string, docsPath: string): string | undefined {

@@ -71,9 +71,10 @@
 
   <div class="tab-nav">
     <button class="tab-btn active" data-tab="review" role="tab" aria-selected="true" aria-controls="panel-review" onclick="switchTab('review')">기획 리뷰</button>
-    <button class="tab-btn" data-tab="features" role="tab" aria-selected="false" aria-controls="panel-features" onclick="switchTab('features')">다음버전</button>
-    <button class="tab-btn" data-tab="backend" role="tab" aria-selected="false" aria-controls="panel-backend" onclick="switchTab('backend')">BE 설계</button>
-    <button class="tab-btn" data-tab="frontend" role="tab" aria-selected="false" aria-controls="panel-frontend" onclick="switchTab('frontend')">FE 설계</button>
+    <button class="tab-btn tab-btn-locked" data-tab="ux" role="tab" aria-selected="false" aria-controls="panel-ux" onclick="switchTab('ux')">UX 설계</button>
+    <button class="tab-btn tab-btn-locked" data-tab="backend" role="tab" aria-selected="false" aria-controls="panel-backend" onclick="switchTab('backend')">BE 설계</button>
+    <button class="tab-btn tab-btn-locked" data-tab="frontend" role="tab" aria-selected="false" aria-controls="panel-frontend" onclick="switchTab('frontend')">FE 설계</button>
+    <button class="tab-btn tab-btn-locked" data-tab="features" role="tab" aria-selected="false" aria-controls="panel-features" onclick="switchTab('features')">다음버전</button>
     <div class="sidebar-nav-divider"></div>
     <button class="tab-btn" data-tab="docs" role="tab" aria-selected="false" aria-controls="panel-docs" onclick="switchTab('docs')">문서 관리</button>
     <button class="tab-btn" data-tab="timeline" role="tab" aria-selected="false" aria-controls="panel-timeline" onclick="switchTab('timeline')">결정 타임라인</button>
@@ -402,10 +403,10 @@
   <!-- Issues will be rendered by JS -->
 </div><!-- panel-review -->
 
-<!-- ===== Tab: 다음버전 ===== -->
-<div class="tab-panel" id="panel-features" role="tabpanel">
-  <h1>다음버전</h1>
-</div>
+<!-- ===== Tab: UX 설계 ===== -->
+<div class="tab-panel" id="panel-ux" role="tabpanel">
+  <h1>UX 설계</h1>
+</div><!-- panel-ux -->
 
 <!-- ===== Tab: BE 설계 ===== -->
 <div class="tab-panel" id="panel-backend" role="tabpanel">
@@ -415,6 +416,11 @@
 <!-- ===== Tab: FE 설계 ===== -->
 <div class="tab-panel" id="panel-frontend" role="tabpanel">
   <h1>FE 설계</h1>
+</div>
+
+<!-- ===== Tab: 다음버전 ===== -->
+<div class="tab-panel" id="panel-features" role="tabpanel">
+  <h1>다음버전</h1>
 </div>
 
 <!-- ===== Tab: 문서 관리 ===== -->

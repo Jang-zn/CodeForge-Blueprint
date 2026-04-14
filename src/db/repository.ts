@@ -1,7 +1,7 @@
 // ===== Types =====
 import type { UsageTotals } from '../claude/spawner.js';
 
-export type Tab = 'review' | 'backend' | 'frontend' | 'features';
+export type Tab = 'review' | 'ux' | 'backend' | 'frontend' | 'features';
 export type IssueStatus = 'pending' | 'reviewing' | 'resolved' | 'deferred' | 'dismissed' | 'candidate' | 'promoted' | 'archived';
 export type JobStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'superseded';
 
@@ -1174,4 +1174,104 @@ export function updateCycleStatus(db: any, cycleId: number, status: CycleStatus,
   db.prepare(
     `UPDATE review_cycles SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN datetime('now') ELSE completed_at END, result_doc_id = COALESCE(?, result_doc_id) WHERE id = ?`
   ).run(status, status, resultDocId ?? null, cycleId);
+}
+
+// ===== Baselines =====
+
+export const PIPELINE_REQUIRED_BASELINES: Record<Tab, Tab[]> = {
+  review: [],
+  ux: ['review'],
+  backend: ['review', 'ux'],
+  frontend: ['review', 'ux', 'backend'],
+  features: ['review', 'ux', 'backend', 'frontend'],
+};
+
+export interface StageBaseline {
+  id: number;
+  tab: Tab;
+  version: string;
+  doc_snapshot: string | null;
+  frozen_at: string;
+  superseded_at: string | null;
+  superseded_by: number | null;
+}
+
+/** 해당 탭의 모든 baseline 조회 */
+export function listBaselines(db: any, tab: Tab): StageBaseline[] {
+  return db.prepare(`SELECT * FROM stage_baselines WHERE tab = ? ORDER BY frozen_at DESC`).all(tab);
+}
+
+/** 전체 baseline 조회 (tab 필터 없음) */
+export function getAllBaselines(db: any): StageBaseline[] {
+  return db.prepare(`SELECT * FROM stage_baselines ORDER BY tab ASC, frozen_at DESC`).all();
+}
+
+/** 해당 탭의 활성(superseded되지 않은) baseline 조회 */
+export function getActiveBaseline(db: any, tab: Tab): StageBaseline | null {
+  return db.prepare(
+    `SELECT * FROM stage_baselines WHERE tab = ? AND superseded_at IS NULL ORDER BY frozen_at DESC LIMIT 1`
+  ).get(tab) ?? null;
+}
+
+/** 모든 탭의 활성 baseline을 맵으로 반환 */
+export function getAllActiveBaselines(db: any): Record<string, StageBaseline | null> {
+  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+  const result: Record<string, StageBaseline | null> = {};
+  for (const tab of tabs) {
+    result[tab] = getActiveBaseline(db, tab);
+  }
+  return result;
+}
+
+/** 새 baseline 생성 */
+export function createBaseline(
+  db: any,
+  tab: Tab,
+  version: string,
+  docSnapshot: string | null = null
+): StageBaseline {
+  const info = db.prepare(
+    `INSERT INTO stage_baselines (tab, version, doc_snapshot) VALUES (?, ?, ?)`
+  ).run(tab, version, docSnapshot);
+
+  return {
+    id: Number(info.lastInsertRowid),
+    tab,
+    version,
+    doc_snapshot: docSnapshot,
+    frozen_at: new Date().toISOString(),
+    superseded_at: null,
+    superseded_by: null,
+  };
+}
+
+/** 기존 활성 baseline을 supersede 처리 (oldBaselineId: 교체될 이전 baseline) */
+export function supersedeBaseline(db: any, oldBaselineId: number, newBaselineId: number): void {
+  db.prepare(
+    `UPDATE stage_baselines SET superseded_at = datetime('now'), superseded_by = ? WHERE id = ?`
+  ).run(newBaselineId, oldBaselineId);
+}
+
+/** freeze 준비 상태 확인 */
+export function checkFreezeReadiness(db: any, tab: Tab): { ready: boolean; reasons: string[] } {
+  const reasons: string[] = [];
+
+  // review는 항상 준비됨
+  if (tab === 'review') {
+    return { ready: true, reasons: [] };
+  }
+
+  // ux, backend, frontend, features는 이전 단계의 활성 baseline이 필요
+  const required = PIPELINE_REQUIRED_BASELINES[tab] || [];
+  for (const requiredTab of required) {
+    const baseline = getActiveBaseline(db, requiredTab);
+    if (!baseline) {
+      reasons.push(`${requiredTab} 탭의 활성 baseline이 필요합니다.`);
+    }
+  }
+
+  return {
+    ready: reasons.length === 0,
+    reasons,
+  };
 }

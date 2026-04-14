@@ -42,6 +42,15 @@ const TAB_SECTIONS: Record<Tab, { filename: string; title: string }[]> = {
     { filename: '09-kpi.md', title: '성공 지표' },
     { filename: '10-deferred.md', title: '향후 검토 사항 (보류 항목)' },
   ],
+  ux: [
+    { filename: '01-user-flows.md', title: '사용자 여정 및 플로우' },
+    { filename: '02-wireframes.md', title: '와이어프레임 (주요 화면)' },
+    { filename: '03-information-architecture.md', title: '정보 아키텍처' },
+    { filename: '04-interaction-design.md', title: '인터랙션 설계' },
+    { filename: '05-design-system.md', title: '디자인 시스템 (색상, 타이포그래피)' },
+    { filename: '06-needs-review.md', title: '검토 필요 항목' },
+    { filename: '07-deferred.md', title: '다음 Phase 이관' },
+  ],
   backend: [
     { filename: '01-api-design.md', title: 'API 설계' },
     { filename: '02-db-schema.md', title: 'DB 스키마 + ERD (Mermaid)' },
@@ -128,6 +137,7 @@ function buildWriteDocPrompt(
 
   const docType = {
     review: 'PRD (기획 리뷰 반영본)',
+    ux: 'UX/UI 설계서',
     backend: '백엔드 설계서',
     frontend: '프론트엔드 설계서',
     features: '다음 버전 기능 제안서',
