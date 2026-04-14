@@ -2260,6 +2260,7 @@ function renderDocsGrid(panel, types, docs) {
             <div class="delivery-section-title">최종 납품 패키지</div>
             <div class="delivery-section-desc">모든 탭의 baseline이 확정되면 구조화 데이터 패키지를 생성할 수 있습니다.</div>
           </div>
+          <button class="delivery-preview-btn" onclick="openDeliveryPreviewModal()">조합 프리뷰</button>
           <button class="delivery-gen-btn" onclick="generateFinalDelivery(this)">패키지 생성</button>
         </div>
         <div class="delivery-runs-list" id="delivery-runs-list"></div>
@@ -2599,6 +2600,88 @@ async function generateFinalDelivery(btn) {
     showToast('생성 실패: ' + e.message, 'error');
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function openDeliveryPreviewModal() {
+  document.getElementById('delivery-preview-overlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'delivery-preview-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+  const container = document.createElement('div');
+  container.className = 'modal-container';
+  container.style.maxWidth = '640px';
+  container.innerHTML = `
+    <div class="modal-header">
+      <h3>납품 패키지 프리뷰</h3>
+      <button class="modal-close-btn" id="delivery-preview-close">&times;</button>
+    </div>
+    <div class="delivery-preview-body">
+      <div class="delivery-empty">로딩 중...</div>
+    </div>`;
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+  container.querySelector('#delivery-preview-close').addEventListener('click', () => overlay.remove());
+
+  const TAB_LABELS = { review: '기획 리뷰', ux: 'UX 설계', backend: '백엔드', frontend: '프론트엔드', features: '기능 제안' };
+  const body = container.querySelector('.delivery-preview-body');
+
+  try {
+    const data = await API.get('/generate/final-delivery/preview');
+    if (!body) return;
+
+    const rows = data.baselines.map(b => {
+      const statusCls = b.ready ? 'ready' : 'missing';
+      const statusText = b.ready ? '확정됨' : '미확정';
+      const version = b.version ? escapeHtml(b.version) : '-';
+      const dt = b.frozen_at ? escapeHtml(b.frozen_at.replace('T', ' ').slice(0, 16)) : '-';
+      let countsHtml = '';
+      if (data.ready && b.ready) {
+        const fc = data.flows?.[b.tab] ?? 0;
+        const sc = data.screens?.[b.tab] ?? 0;
+        const si = data.scopeItems?.[b.tab] ?? 0;
+        const parts = [fc && `플로우 ${fc}`, sc && `화면 ${sc}`, si && `범위 ${si}`].filter(Boolean);
+        if (parts.length) countsHtml = `<span class="delivery-preview-counts">${parts.map(escapeHtml).join(' · ')}</span>`;
+      }
+      return `<div class="delivery-preview-row ${statusCls}">
+        <span class="delivery-preview-tab">${escapeHtml(TAB_LABELS[b.tab] || b.tab)}</span>
+        <span class="delivery-preview-version">${version}</span>
+        <span class="delivery-preview-date">${dt}</span>
+        <span class="delivery-preview-status">${statusText}</span>
+        ${countsHtml}
+      </div>`;
+    }).join('');
+
+    const warningHtml = !data.ready
+      ? `<div class="delivery-preview-warning">미확정 탭: ${data.missing.map(t => escapeHtml(TAB_LABELS[t] || t)).join(', ')}</div>`
+      : '';
+
+    body.innerHTML = `
+      <div class="delivery-preview-table">${rows}</div>
+      ${warningHtml}
+      <div class="delivery-preview-actions">
+        <button class="delivery-gen-btn" id="delivery-preview-gen" ${data.ready ? '' : 'disabled'}>
+          ${data.ready ? '패키지 생성' : '모든 탭을 확정하세요'}
+        </button>
+      </div>`;
+
+    if (data.ready) {
+      body.querySelector('#delivery-preview-gen').addEventListener('click', async function () {
+        this.disabled = true;
+        try {
+          await generateFinalDelivery(null);
+          overlay.remove();
+        } catch (e) {
+          showToast('생성 실패: ' + e.message, 'error');
+          this.disabled = false;
+        }
+      });
+    }
+  } catch (e) {
+    if (body) body.innerHTML = `<div class="delivery-empty">프리뷰 로드 실패: ${escapeHtml(String(e))}</div>`;
   }
 }
 

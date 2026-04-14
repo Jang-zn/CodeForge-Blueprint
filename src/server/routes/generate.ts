@@ -410,6 +410,34 @@ generateRoute.post('/final-delivery', async (c) => {
   return c.json(deliveryRun, 201);
 });
 
+/* ── GET /api/generate/final-delivery/preview — 패키지 프리뷰 (dry-run) ── */
+generateRoute.get('/final-delivery/preview', (c) => {
+  const { db } = requireRequestContext(c);
+  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+  const activeBaselines = getAllActiveBaselines(db);
+  const missing = tabs.filter(t => !activeBaselines[t]);
+
+  const baselineInfo = tabs.map(t => ({
+    tab: t,
+    ready: !!activeBaselines[t],
+    version: activeBaselines[t]?.version ?? null,
+    frozen_at: activeBaselines[t]?.frozen_at ?? null,
+  }));
+
+  if (missing.length > 0) {
+    return c.json({ ready: false, missing, baselines: baselineInfo });
+  }
+
+  const delivery = assembleFinalDelivery(db, activeBaselines);
+  return c.json({
+    ready: true,
+    baselines: baselineInfo,
+    flows: Object.fromEntries(tabs.map(t => [t, (delivery.flows[t] ?? []).length])),
+    screens: Object.fromEntries(tabs.map(t => [t, (delivery.screens[t] ?? []).length])),
+    scopeItems: Object.fromEntries(tabs.map(t => [t, (delivery.scopeItems[t] ?? []).length])),
+  });
+});
+
 /* ── GET /api/generate/final-delivery — 모든 delivery runs 조회 ── */
 
 generateRoute.get('/final-delivery', (c) => {

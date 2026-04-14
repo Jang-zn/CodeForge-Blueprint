@@ -7,6 +7,8 @@ import {
   appendJobLog,
   bulkUpsertIssues,
   bulkSetRefItems,
+  saveUserFlows,
+  saveScreens,
   getProviderModel,
   markSupersededJobs,
   isJobRunnable,
@@ -243,7 +245,7 @@ analyzeRoute.post('/', async (c) => {
 
       const combinedText = fulfilled.map(r => r.value.result).join('\n');
       const parsed = extractCandidates(combinedText);
-      const { issues: validIssues, refItems } = validateAnalyzeResults(parsed, tab);
+      const { issues: validIssues, refItems, flows, screens, screenStates } = validateAnalyzeResults(parsed, tab);
 
       if (validIssues.length === 0) {
         updateJob(db, jobId, 'failed', '분석 결과가 유효한 JSON 스키마를 만족하지 않습니다.');
@@ -259,6 +261,57 @@ analyzeRoute.post('/', async (c) => {
 
       if (refItems.length > 0) {
         bulkSetRefItems(db, refItems.map(content => ({ content })));
+      }
+
+      if (tab === 'ux') {
+        const mappedFlows = (flows ?? []).map((f: any) => ({
+          flow_id: f.id,
+          title: f.name ?? null,
+          actor: f.actor ?? null,
+          steps_json: {
+            goal: f.goal ?? null,
+            priority: f.priority ?? null,
+            entryCondition: f.entryCondition ?? null,
+            successOutcome: f.successOutcome ?? null,
+            steps: f.steps ?? [],
+          },
+        }));
+
+        const statesByScreenId: Record<string, any[]> = {};
+        for (const st of (screenStates ?? []) as any[]) {
+          if (!st.screenId) continue;
+          (statesByScreenId[st.screenId] ??= []).push({
+            stateType: st.stateType ?? null,
+            condition: st.condition ?? null,
+            userMessage: st.userMessage ?? null,
+            operatorAction: st.operatorAction ?? null,
+          });
+        }
+
+        const mappedScreens = (screens ?? []).map((s: any) => ({
+          screen_id: s.id,
+          flow_ids_json: s.flowIds ?? [],
+          title: s.name ?? null,
+          description: s.purpose ?? null,
+          complexity: s.complexity ?? null,
+          states_json: {
+            type: s.type ?? null,
+            role: s.role ?? null,
+            priority: s.priority ?? null,
+            entryPoints: s.entryPoints ?? [],
+            primaryActions: s.primaryActions ?? [],
+            requiredData: s.requiredData ?? [],
+            apiCandidates: s.apiCandidates ?? [],
+            states: statesByScreenId[s.id] ?? [],
+          },
+        }));
+
+        // 단일 트랜잭션으로 저장 — 부분 쓰기 방지, 빈 배열도 저장(구형 데이터 제거)
+        const saveUxStructured = db.transaction(() => {
+          saveUserFlows(db, tab, mappedFlows);
+          saveScreens(db, tab, mappedScreens);
+        });
+        saveUxStructured();
       }
 
       // Sum token usage across all successful results
