@@ -15,6 +15,8 @@ import {
   updateCycleStatus,
   hasPendingDrafts,
   getIssues,
+  PIPELINE_REQUIRED_BASELINES,
+  getAllActiveBaselines,
   type Tab,
   type Perspective,
 } from '../../db/repository.js';
@@ -22,6 +24,7 @@ import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
 import { createLogExtractor } from '../../claude/log-extractor.js';
 import { buildReviewPlanPrompt } from '../../claude/prompts/review-plan.js';
+import { buildUxPrompt } from '../../claude/prompts/design-ux.js';
 import { buildBackendPrompt } from '../../claude/prompts/design-backend.js';
 import { buildFrontendPrompt } from '../../claude/prompts/design-frontend.js';
 import { buildFeaturesPrompt } from '../../claude/prompts/plan-features.js';
@@ -123,6 +126,18 @@ analyzeRoute.post('/', async (c) => {
     );
   }
 
+  // Stage gate: 이전 단계 frozen baseline 없으면 차단
+  if (tab !== 'review') {
+    const required = PIPELINE_REQUIRED_BASELINES[tab] || [];
+    if (required.length > 0) {
+      const activeMap = getAllActiveBaselines(db);
+      const missing = required.filter(t => !activeMap[t]);
+      if (missing.length > 0) {
+        return c.json({ error: '이전 단계 baseline이 필요합니다', missingBaselines: missing }, 400);
+      }
+    }
+  }
+
   const meta = getWorkspaceMeta(db);
   const promptIssues = getIssues(db, tab);
   const ctxPackage = buildContextPackage(db, workspace.docsPath, tab as any, meta?.prd_path ?? null, { prefetchedIssues: promptIssues });
@@ -161,6 +176,8 @@ analyzeRoute.post('/', async (c) => {
       let promptBuilder: (ctx: typeof ctxPackage, perspectives?: Perspective[]) => string;
       if (tab === 'review') {
         promptBuilder = buildReviewPlanPrompt;
+      } else if (tab === 'ux') {
+        promptBuilder = buildUxPrompt;
       } else if (tab === 'backend') {
         promptBuilder = buildBackendPrompt;
       } else if (tab === 'frontend') {

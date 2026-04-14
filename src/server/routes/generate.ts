@@ -18,6 +18,11 @@ import {
   hasPendingDrafts,
   getCurrentCycle,
   updateCycleStatus,
+  getActiveBaseline,
+  getAllActiveBaselines,
+  createDeliveryRun,
+  listDeliveryRuns,
+  assembleFinalDelivery,
   type Tab,
 } from '../../db/repository.js';
 import { spawnProviderWithHandle } from '../../claude/provider.js';
@@ -368,6 +373,49 @@ generateRoute.get('/download/*', (c) => {
   c.header('Content-Type', 'text/markdown; charset=utf-8');
   c.header('Content-Disposition', `attachment; filename="${path.basename(resolved)}"`);
   return c.body(content);
+});
+
+/* ── POST /api/generate/final-delivery — Final delivery 생성 ── */
+
+generateRoute.post('/final-delivery', async (c) => {
+  const { db } = requireRequestContext(c);
+
+  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+
+  // 모든 5개 탭 frozen baseline 확인
+  const activeBaselines = getAllActiveBaselines(db);
+  const missingTabs = tabs.filter(tab => !activeBaselines[tab]);
+
+  if (missingTabs.length > 0) {
+    return c.json(
+      { error: '모든 탭이 frozen되어야 합니다', missing: missingTabs },
+      400
+    );
+  }
+
+  // final delivery assembly (activeBaselines 재사용)
+  const delivery = assembleFinalDelivery(db, activeBaselines);
+
+  // baseline refs 맵 생성
+  const baselineRefs = Object.fromEntries(
+    tabs.flatMap(tab => activeBaselines[tab] ? [[tab, activeBaselines[tab]!.id]] : [])
+  ) as Record<string, number>;
+
+  // delivery run 생성
+  const version = new Date().toISOString();
+  const output = JSON.stringify(delivery);
+
+  const deliveryRun = createDeliveryRun(db, version, baselineRefs, output);
+
+  return c.json(deliveryRun, 201);
+});
+
+/* ── GET /api/generate/final-delivery — 모든 delivery runs 조회 ── */
+
+generateRoute.get('/final-delivery', (c) => {
+  const { db } = requireRequestContext(c);
+  const runs = listDeliveryRuns(db);
+  return c.json(runs);
 });
 
 export default generateRoute;

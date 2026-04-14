@@ -18,7 +18,7 @@ import {
 import { spawnProviderWithHandle } from '../../claude/provider.js';
 import { registerProcess, unregisterProcess } from '../../claude/process-registry.js';
 import { createLogExtractor } from '../../claude/log-extractor.js';
-import { buildInitPrompt, buildCodebasePrdPrompt, type InitFormData } from '../../claude/prompts/init.js';
+import { buildInitPrompt, buildCodebasePrdPrompt, type InitFormData, getInterviewBlock, getInterviewBlocks } from '../../claude/prompts/init.js';
 import { scanCodebase, buildScanContext } from '../../codebase-scanner.js';
 import { requireRequestContext } from '../context.js';
 
@@ -70,6 +70,90 @@ async function _pickFileViaElectron(): Promise<string | null> {
 }
 
 const initRoute = new Hono();
+
+// ===== Interview Flow (Phase 4) =====
+
+initRoute.get('/interview', (c) => {
+  // GET /api/init/interview — 모든 블록 목록 반환
+  const blocks = getInterviewBlocks();
+  const list = blocks.map(block => ({
+    blockIndex: block.blockIndex,
+    title: block.title,
+    questionCount: block.questions.length,
+  }));
+  return c.json({ blocks: list, totalBlocks: blocks.length });
+});
+
+initRoute.get('/interview/:blockIndex', (c) => {
+  // GET /api/init/interview/:blockIndex — 특정 블록의 질문 목록 반환
+  const blockIndex = parseInt(c.req.param('blockIndex'), 10);
+  if (isNaN(blockIndex) || blockIndex < 0 || blockIndex > 6) {
+    return c.json({ error: '유효하지 않은 블록 인덱스입니다.' }, 400);
+  }
+
+  const block = getInterviewBlock(blockIndex);
+  if (!block) {
+    return c.json({ error: '블록을 찾을 수 없습니다.' }, 404);
+  }
+
+  return c.json({
+    blockIndex: block.blockIndex,
+    totalBlocks: 7,
+    title: block.title,
+    description: block.description,
+    questions: block.questions,
+    hint: block.hint,
+  });
+});
+
+initRoute.post('/interview/:blockIndex', async (c) => {
+  // POST /api/init/interview/:blockIndex — 블록 답변 수신
+  // body: { answers: Record<questionId, string | string[]> }
+  // 마지막 블록(6)에 도달하면 전체 답변을 취합하여 PRD 생성 (선택적)
+
+  const blockIndex = parseInt(c.req.param('blockIndex'), 10);
+  if (isNaN(blockIndex) || blockIndex < 0 || blockIndex > 6) {
+    return c.json({ error: '유효하지 않은 블록 인덱스입니다.' }, 400);
+  }
+
+  const block = getInterviewBlock(blockIndex);
+  if (!block) {
+    return c.json({ error: '블록을 찾을 수 없습니다.' }, 404);
+  }
+
+  const body = await c.req.json<{ answers?: Record<string, string | string[]> }>().catch(() => ({ answers: {} as Record<string, string | string[]> }));
+  const answers: Record<string, string | string[]> = body.answers ?? {};
+
+  // 검증: 필수 항목 확인
+  const missingRequired = block.questions
+    .filter(q => q.required && !answers[q.id]?.toString().trim())
+    .map(q => q.id);
+
+  if (missingRequired.length > 0) {
+    return c.json(
+      { error: '필수 답변이 누락되었습니다.', missing: missingRequired },
+      400,
+    );
+  }
+
+  // 다음 블록이 있으면 다음 블록의 첫 질문 정보 반환
+  const nextBlockIndex = blockIndex + 1;
+  const nextBlock = nextBlockIndex <= 6 ? getInterviewBlock(nextBlockIndex) : null;
+
+  return c.json({
+    blockIndex,
+    totalBlocks: 7,
+    answered: true,
+    answers,
+    nextBlockIndex: nextBlock ? nextBlockIndex : null,
+    nextUrl: nextBlock ? `/api/init/interview/${nextBlockIndex}` : null,
+    message: nextBlock
+      ? `Block ${blockIndex + 1} 완료. 다음 단계로 진행합니다.`
+      : `모든 인터뷰 블록 완료! PRD 생성 준비가 되었습니다.`,
+  });
+});
+
+// ===== Original Init Flow (유지) =====
 
 initRoute.post('/', async (c) => {
   const { db, workspace, sessionId } = requireRequestContext(c);

@@ -39,6 +39,14 @@ ${activePerspectives.length}개 관점으로 병렬 분석을 수행하세요. �
 
 ${sectionLines}
 
+## 다음 단계 준비 상태 평가
+
+UX 단계로 넘어가기 위한 준비 상태를 판단하세요:
+- readyForNextStage: true일 조건 → P0 blocking issue 없을 때만
+- MVP 경계와 운영 범위가 명확하게 분리되었을 때
+- 핵심 사용자 여정이 정의되었을 때
+- blockingIssueIds: 다음 단계를 방해하는 이슈의 ID 목록
+
 ## 출력 형식
 
 반드시 아래 JSON 형식으로 출력하세요:
@@ -60,9 +68,14 @@ ${sectionLines}
       "callout_type": "red"
     }
   ],
+  "readiness": {
+    "readyForNextStage": false,
+    "blockingIssueIds": ["a1", "c2"],
+    "summary": "MVP 경계와 운영 범위가 아직 섞여 있어 UX 단계로 넘기기 이르다."
+  },
   "refItems": [
-    "FE 구현 시 고려할 참고사항 1",
-    "FE 구현 시 고려할 참고사항 2"
+    "UX 단계에서 첫 기록 생성 플로우를 먼저 고정할 것",
+    "운영 리스크 항목은 v2에서 검토할 것"
   ]
 }
 \`\`\`

@@ -30,11 +30,24 @@ export function buildBackendPrompt(ctx: ContextPackage, perspectives?: Perspecti
   }).join(', ');
 
   return `당신은 시니어 백엔드 아키텍트입니다.
-아래 문서들을 분석하여 백엔드 아키텍처를 ${activePerspectives.length}개 섹션으로 설계하세요.
+아래 frozen 검토(review), UX 설계(design-ux), 그리고 현재 요청 문서들을 분석하여 백엔드 아키텍처를 ${activePerspectives.length}개 섹션으로 설계하세요.
 
 ## 설계 섹션
 
 ${sectionLines}
+
+## 구조화된 설계 출력 규칙
+
+다음 3개 섹션의 구조화된 데이터를 생성하세요:
+
+### Entities (데이터 모델)
+각 엔티티는 id(entity-xxx), name, description, fields(name, type, required)로 구성
+
+### State Machines (상태 전이)
+각 상태 머신은 id(sm-xxx), entityId, states 목록, transitions(from, to, trigger)로 구성
+
+### Endpoints (API 계약)
+각 엔드포인트는 id(ep-xxx), method, path, purpose, requestBody, responseBody, auth, roles, relatedScreenIds, relatedEntityIds로 구성
 
 ## 출력 형식
 
@@ -42,6 +55,43 @@ ${sectionLines}
 
 \`\`\`json
 {
+  "entities": [
+    {
+      "id": "entity-record",
+      "name": "Record",
+      "description": "사용자의 기록 데이터",
+      "fields": [
+        { "name": "id", "type": "string", "required": true },
+        { "name": "title", "type": "string", "required": true },
+        { "name": "createdAt", "type": "datetime", "required": true }
+      ]
+    }
+  ],
+  "stateMachines": [
+    {
+      "id": "sm-record",
+      "entityId": "entity-record",
+      "states": ["draft", "saved", "archived"],
+      "transitions": [
+        { "from": "draft", "to": "saved", "trigger": "submit" },
+        { "from": "saved", "to": "archived", "trigger": "archive" }
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "ep-create-record",
+      "method": "POST",
+      "path": "/records",
+      "purpose": "새 기록 생성",
+      "requestBody": ["title", "rating"],
+      "responseBody": ["id", "title", "createdAt"],
+      "auth": "required",
+      "roles": ["end-user"],
+      "relatedScreenIds": ["screen-record-form"],
+      "relatedEntityIds": ["entity-record"]
+    }
+  ],
   "issues": [
     {
       "id": "be-api1",
@@ -67,6 +117,12 @@ ${ID_CONTINUITY_RULES}
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
 - 각 섹션당 최소 2개, 최대 5개 항목
+- **엔티티 ID 규칙**: entity- prefix (예: entity-record, entity-user)
+- **상태머신 ID 규칙**: sm- prefix (예: sm-record, sm-workflow)
+- **엔드포인트 ID 규칙**: ep- prefix (예: ep-create-record, ep-list-records)
+- UX에서 요구하지 않는 API를 과하게 만들지 말 것
+- auth/role/error 규약은 생략하지 말 것
+- MVP 구현 가능을 우선하고 과도한 미래 확장성 지향 금지
 ${FEEDBACK_RULES}
 - <context:ai-guide>의 기술 제약/원칙을 설계에 반영하세요
 - <context:glossary>가 있다면 용어를 일관되게 사용하세요

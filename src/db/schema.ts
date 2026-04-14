@@ -331,6 +331,57 @@ CREATE TABLE IF NOT EXISTS stage_baselines (
 CREATE INDEX IF NOT EXISTS idx_stage_baselines_tab ON stage_baselines(tab);
 `;
 
+// V46: delivery_runs 테이블 추가 (Phase 3 final delivery)
+export const MIGRATION_V46_SQL = `
+CREATE TABLE IF NOT EXISTS delivery_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  version TEXT NOT NULL,
+  baseline_refs TEXT,
+  output TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+`;
+
+// V47: UX 구조화 데이터 테이블 추가 (Phase 3 structured data)
+export const MIGRATION_V47_SQL = `
+CREATE TABLE IF NOT EXISTS user_flows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tab TEXT NOT NULL,
+  flow_id TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  actor TEXT,
+  steps_json TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS screens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tab TEXT NOT NULL,
+  screen_id TEXT NOT NULL UNIQUE,
+  flow_ids_json TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  complexity TEXT,
+  states_json TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS scope_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tab TEXT NOT NULL,
+  scope_item_id TEXT NOT NULL UNIQUE,
+  screen_id TEXT,
+  title TEXT NOT NULL,
+  complexity TEXT,
+  estimate_metadata TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+`;
+
+// V48: documents 테이블에 baseline_id, structured_data 컬럼 추가
+export const MIGRATION_V48_SQL = `
+ALTER TABLE documents ADD COLUMN baseline_id INTEGER REFERENCES stage_baselines(id);
+ALTER TABLE documents ADD COLUMN structured_data TEXT;
+`;
+
 export interface PerspectiveSeed {
   id: string;
   tab: string;

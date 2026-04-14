@@ -17,6 +17,9 @@ export interface AnalyzeIssueInput {
 export interface AnalyzeResultInput {
   issues?: unknown;
   refItems?: unknown;
+  flows?: unknown;
+  screens?: unknown;
+  screenStates?: unknown;
 }
 
 export interface ValidAnalyzeIssue {
@@ -46,15 +49,49 @@ function normalizeConfidence(v: unknown, priority?: string): number {
   return 0.55;
 }
 
-export function validateAnalyzeResults(items: AnalyzeResultInput[], tab: Tab): { issues: ValidAnalyzeIssue[]; refItems: string[] } {
+export function validateAnalyzeResults(items: AnalyzeResultInput[], tab: Tab): {
+  issues: ValidAnalyzeIssue[];
+  refItems: string[];
+  flows?: unknown[];
+  screens?: unknown[];
+  screenStates?: unknown[];
+} {
   const validIssues: ValidAnalyzeIssue[] = [];
   const refItems: string[] = [];
+  const flows: unknown[] = [];
+  const screens: unknown[] = [];
+  const screenStates: unknown[] = [];
 
   for (const item of items) {
     if (Array.isArray(item.refItems)) {
       for (const ref of item.refItems) {
         const normalized = normalizeString(ref);
         if (normalized) refItems.push(normalized);
+      }
+    }
+
+    // UX 탭: flows, screens, screenStates 추출
+    if (tab === 'ux') {
+      if (Array.isArray(item.flows)) {
+        for (const flow of item.flows) {
+          if (flow && typeof flow === 'object' && 'id' in flow && 'name' in flow) {
+            flows.push(flow);
+          }
+        }
+      }
+      if (Array.isArray(item.screens)) {
+        for (const screen of item.screens) {
+          if (screen && typeof screen === 'object' && 'id' in screen && 'name' in screen) {
+            screens.push(screen);
+          }
+        }
+      }
+      if (Array.isArray(item.screenStates)) {
+        for (const state of item.screenStates) {
+          if (state && typeof state === 'object' && 'screenId' in state && 'stateType' in state) {
+            screenStates.push(state);
+          }
+        }
       }
     }
 
@@ -90,5 +127,22 @@ export function validateAnalyzeResults(items: AnalyzeResultInput[], tab: Tab): {
     validIssues.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
   }
 
-  return { issues: validIssues, refItems: Array.from(new Set(refItems)) };
+  const result: {
+    issues: ValidAnalyzeIssue[];
+    refItems: string[];
+    flows?: unknown[];
+    screens?: unknown[];
+    screenStates?: unknown[];
+  } = {
+    issues: validIssues,
+    refItems: Array.from(new Set(refItems)),
+  };
+
+  if (tab === 'ux') {
+    result.flows = flows;
+    result.screens = screens;
+    result.screenStates = screenStates;
+  }
+
+  return result;
 }

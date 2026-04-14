@@ -1254,24 +1254,223 @@ export function supersedeBaseline(db: any, oldBaselineId: number, newBaselineId:
 
 /** freeze 준비 상태 확인 */
 export function checkFreezeReadiness(db: any, tab: Tab): { ready: boolean; reasons: string[] } {
-  const reasons: string[] = [];
-
   // review는 항상 준비됨
   if (tab === 'review') {
     return { ready: true, reasons: [] };
   }
 
-  // ux, backend, frontend, features는 이전 단계의 활성 baseline이 필요
   const required = PIPELINE_REQUIRED_BASELINES[tab] || [];
-  for (const requiredTab of required) {
-    const baseline = getActiveBaseline(db, requiredTab);
-    if (!baseline) {
-      reasons.push(`${requiredTab} 탭의 활성 baseline이 필요합니다.`);
-    }
-  }
+  const activeMap = getAllActiveBaselines(db);
+  const missing = required.filter(t => !activeMap[t]);
+  const reasons = missing.map(t => `${t} 탭의 활성 baseline이 필요합니다.`);
 
   return {
     ready: reasons.length === 0,
     reasons,
   };
+}
+
+// ===== Structured Data =====
+
+export interface DeliveryRun {
+  id: number;
+  version: string;
+  baseline_refs: string | null;
+  output: string | null;
+  created_at: string;
+}
+
+export interface UserFlow {
+  id: number;
+  tab: Tab;
+  flow_id: string;
+  title: string;
+  actor: string | null;
+  steps_json: string | null;
+  created_at: string;
+}
+
+export interface Screen {
+  id: number;
+  tab: Tab;
+  screen_id: string;
+  flow_ids_json: string | null;
+  title: string;
+  description: string | null;
+  complexity: string | null;
+  states_json: string | null;
+  created_at: string;
+}
+
+export interface ScopeItem {
+  id: number;
+  tab: Tab;
+  scope_item_id: string;
+  screen_id: string | null;
+  title: string;
+  complexity: string | null;
+  estimate_metadata: string | null;
+  created_at: string;
+}
+
+/** delivery_run 생성 */
+export function createDeliveryRun(
+  db: any,
+  version: string,
+  baselineRefs: Record<string, number>,
+  output: string
+): DeliveryRun {
+  const info = db.prepare(
+    `INSERT INTO delivery_runs (version, baseline_refs, output) VALUES (?, ?, ?)`
+  ).run(version, JSON.stringify(baselineRefs), output);
+
+  const id = Number(info.lastInsertRowid);
+  const run = db.prepare(`SELECT * FROM delivery_runs WHERE id = ?`).get(id);
+  return run as DeliveryRun;
+}
+
+/** delivery_run 조회 */
+export function getDeliveryRun(db: any, id: number): DeliveryRun | null {
+  return db.prepare(`SELECT * FROM delivery_runs WHERE id = ?`).get(id) ?? null;
+}
+
+/** 모든 delivery_run 조회 */
+export function listDeliveryRuns(db: any): DeliveryRun[] {
+  return db.prepare(`SELECT * FROM delivery_runs ORDER BY created_at DESC, id DESC`).all();
+}
+
+/** user_flows 저장 (해당 탭 기존 flows 삭제 후 재삽입) */
+export function saveUserFlows(db: any, tab: Tab, flows: any[]): void {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM user_flows WHERE tab = ?`).run(tab);
+    const stmt = db.prepare(
+      `INSERT INTO user_flows (tab, flow_id, title, actor, steps_json) VALUES (?, ?, ?, ?, ?)`
+    );
+    for (const flow of flows) {
+      stmt.run(
+        tab,
+        flow.flow_id,
+        flow.title,
+        flow.actor ?? null,
+        flow.steps_json ? JSON.stringify(flow.steps_json) : null
+      );
+    }
+  });
+  tx();
+}
+
+/** user_flows 조회 */
+export function getUserFlows(db: any, tab: Tab): any[] {
+  const rows = db.prepare(`SELECT * FROM user_flows WHERE tab = ? ORDER BY created_at`).all(tab) as UserFlow[];
+  return rows.map(row => ({
+    ...row,
+    steps_json: row.steps_json ? JSON.parse(row.steps_json) : null,
+  }));
+}
+
+/** screens 저장 (해당 탭 기존 screens 삭제 후 재삽입) */
+export function saveScreens(db: any, tab: Tab, screens: any[]): void {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM screens WHERE tab = ?`).run(tab);
+    const stmt = db.prepare(
+      `INSERT INTO screens (tab, screen_id, flow_ids_json, title, description, complexity, states_json) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const screen of screens) {
+      stmt.run(
+        tab,
+        screen.screen_id,
+        screen.flow_ids_json ? JSON.stringify(screen.flow_ids_json) : null,
+        screen.title,
+        screen.description ?? null,
+        screen.complexity ?? null,
+        screen.states_json ? JSON.stringify(screen.states_json) : null
+      );
+    }
+  });
+  tx();
+}
+
+/** screens 조회 */
+export function getScreens(db: any, tab: Tab): any[] {
+  const rows = db.prepare(`SELECT * FROM screens WHERE tab = ? ORDER BY created_at`).all(tab) as Screen[];
+  return rows.map(row => ({
+    ...row,
+    flow_ids_json: row.flow_ids_json ? JSON.parse(row.flow_ids_json) : null,
+    states_json: row.states_json ? JSON.parse(row.states_json) : null,
+  }));
+}
+
+/** scope_items 저장 (해당 탭 기존 items 삭제 후 재삽입) */
+export function saveScopeItems(db: any, tab: Tab, items: any[]): void {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM scope_items WHERE tab = ?`).run(tab);
+    const stmt = db.prepare(
+      `INSERT INTO scope_items (tab, scope_item_id, screen_id, title, complexity, estimate_metadata) VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    for (const item of items) {
+      stmt.run(
+        tab,
+        item.scope_item_id,
+        item.screen_id ?? null,
+        item.title,
+        item.complexity ?? null,
+        item.estimate_metadata ? JSON.stringify(item.estimate_metadata) : null
+      );
+    }
+  });
+  tx();
+}
+
+/** scope_items 조회 */
+export function getScopeItems(db: any, tab: Tab): any[] {
+  const rows = db.prepare(`SELECT * FROM scope_items WHERE tab = ? ORDER BY created_at`).all(tab) as ScopeItem[];
+  return rows.map(row => ({
+    ...row,
+    estimate_metadata: row.estimate_metadata ? JSON.parse(row.estimate_metadata) : null,
+  }));
+}
+
+/** Final delivery assembly — 모든 frozen baseline + 구조화 데이터 취합 */
+export function assembleFinalDelivery(
+  db: any,
+  prefetchedBaselines?: Record<string, StageBaseline | null>,
+): {
+  baselines: Record<string, StageBaseline | null>;
+  flows: Record<string, any[]>;
+  screens: Record<string, any[]>;
+  scopeItems: Record<string, any[]>;
+} {
+  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+  const baselines = prefetchedBaselines ?? getAllActiveBaselines(db);
+
+  // 구조화 데이터 배치 조회 후 Map으로 탭별 그루핑 (O(n) 단일 패스)
+  const allFlowRows: any[] = db.prepare(`SELECT * FROM user_flows ORDER BY created_at`).all();
+  const allScreenRows: any[] = db.prepare(`SELECT * FROM screens ORDER BY created_at`).all();
+  const allScopeRows: any[] = db.prepare(`SELECT * FROM scope_items ORDER BY created_at`).all();
+
+  const flowMap = new Map<string, any[]>();
+  const screenMap = new Map<string, any[]>();
+  const scopeMap = new Map<string, any[]>();
+
+  for (const r of allFlowRows) {
+    const parsed = { ...r, steps_json: r.steps_json ? JSON.parse(r.steps_json) : null };
+    if (!flowMap.has(r.tab)) flowMap.set(r.tab, []);
+    flowMap.get(r.tab)!.push(parsed);
+  }
+  for (const r of allScreenRows) {
+    const parsed = { ...r, flow_ids_json: r.flow_ids_json ? JSON.parse(r.flow_ids_json) : null, states_json: r.states_json ? JSON.parse(r.states_json) : null };
+    if (!screenMap.has(r.tab)) screenMap.set(r.tab, []);
+    screenMap.get(r.tab)!.push(parsed);
+  }
+  for (const r of allScopeRows) {
+    const parsed = { ...r, estimate_metadata: r.estimate_metadata ? JSON.parse(r.estimate_metadata) : null };
+    if (!scopeMap.has(r.tab)) scopeMap.set(r.tab, []);
+    scopeMap.get(r.tab)!.push(parsed);
+  }
+
+  const flows = Object.fromEntries(tabs.map(t => [t, flowMap.get(t) ?? []]));
+  const screens = Object.fromEntries(tabs.map(t => [t, screenMap.get(t) ?? []]));
+  const scopeItems = Object.fromEntries(tabs.map(t => [t, scopeMap.get(t) ?? []]));
+
+  return { baselines, flows, screens, scopeItems };
 }

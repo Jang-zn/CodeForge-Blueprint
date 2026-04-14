@@ -30,11 +30,27 @@ export function buildFrontendPrompt(ctx: ContextPackage, perspectives?: Perspect
   }).join(', ');
 
   return `당신은 시니어 프론트엔드 아키텍트입니다.
-아래 문서들을 분석하여 프론트엔드 아키텍처를 ${activePerspectives.length}개 섹션으로 설계하세요.
+아래 frozen 검토(review), UX 설계(design-ux), 백엔드 설계(design-backend), 그리고 현재 요청 문서들을 분석하여 프론트엔드 아키텍처를 ${activePerspectives.length}개 섹션으로 설계하세요.
 
 ## 설계 섹션
 
 ${sectionLines}
+
+## 구조화된 설계 출력 규칙
+
+다음 4개 섹션의 구조화된 데이터를 생성하세요:
+
+### Routes (라우팅)
+각 라우트는 id(route-xxx), path, viewId, auth로 구성
+
+### Views (화면 논리)
+각 뷰는 id(view-xxx), screenId, name, purpose, primaryActions, formFields로 구성
+
+### API Bindings (뷰-API 연결)
+각 바인딩은 viewId, endpointId, trigger, successAction, errorAction으로 구성
+
+### UI States (상태 표현)
+각 UI 상태는 viewId, stateType(loading|error|idle|success), behavior로 구성
 
 ## 출력 형식
 
@@ -42,6 +58,48 @@ ${sectionLines}
 
 \`\`\`json
 {
+  "routes": [
+    {
+      "id": "route-record-create",
+      "path": "/records/new",
+      "viewId": "view-record-form",
+      "auth": "required"
+    }
+  ],
+  "views": [
+    {
+      "id": "view-record-form",
+      "screenId": "screen-record-form",
+      "name": "기록 작성 페이지",
+      "purpose": "사용자가 새로운 기록을 작성하고 저장하는 페이지",
+      "primaryActions": ["submitRecord", "cancelCreate"],
+      "formFields": [
+        { "name": "title", "required": true, "validation": "min:1" },
+        { "name": "rating", "required": false, "validation": "range:1-5" }
+      ]
+    }
+  ],
+  "apiBindings": [
+    {
+      "viewId": "view-record-form",
+      "endpointId": "ep-create-record",
+      "trigger": "submitRecord",
+      "successAction": "navigate:screen-record-success",
+      "errorAction": "show-inline-error"
+    }
+  ],
+  "uiStates": [
+    {
+      "viewId": "view-record-form",
+      "stateType": "loading",
+      "behavior": "submit 버튼 비활성화와 로딩 표시"
+    },
+    {
+      "viewId": "view-record-form",
+      "stateType": "error",
+      "behavior": "입력값 유지, 에러 메시지 표시, 재시도 허용"
+    }
+  ],
   "issues": [
     {
       "id": "fe-comp1",
@@ -67,6 +125,11 @@ ${ID_CONTINUITY_RULES}
 - priority: "P0" (즉시) | "P1" (중요) | "P2" (검토)
 - callout_type: "red" (P0) | "orange" (P1) | "blue" (P2)
 - 각 섹션당 최소 2개, 최대 5개 항목
+- **라우트 ID 규칙**: route- prefix (예: route-record-create, route-list-records)
+- **뷰 ID 규칙**: view- prefix (예: view-record-form, view-record-detail)
+- backend 계약이 없는 가상 API 만들지 말 것 (endpoints와 반드시 매핑)
+- 화면 책임과 컴포넌트 내부 구조를 혼동하지 말 것
+- 폼 검증, 실패 복구, 권한 거절 상태는 필수 포함
 ${FEEDBACK_RULES}
 - <context:ref-items>가 있다면 반드시 설계에 반영하세요
 - <context:ai-guide>의 기술 제약/톤/원칙을 설계에 반영하세요

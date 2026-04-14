@@ -11,6 +11,8 @@ import {
   buildGlossaryMarkdown,
   assembleMarkdown,
   getDocuments,
+  getAllActiveBaselines,
+  PIPELINE_REQUIRED_BASELINES,
   type DocumentRecord,
   type Tab,
   type IssueStatus,
@@ -40,6 +42,7 @@ export interface ContextPackage {
   baseDocument?: string;
   userFeedback?: UserFeedbackItem[];
   existingIssues?: ExistingIssueItem[];
+  frozenBaselines?: Record<string, string>;
 }
 
 type ContextProfile = 'default' | 'review' | 'backend' | 'frontend' | 'features';
@@ -244,6 +247,29 @@ export function buildContextPackage(
     }
   }
 
+  // baseline-aware 컨텍스트: 이전 단계 frozen baseline을 프롬프트에 포함
+  const requiredBaselineTabs = PIPELINE_REQUIRED_BASELINES[profileTab as Tab] ?? [];
+  if (requiredBaselineTabs.length > 0) {
+    const allBaselines = getAllActiveBaselines(db);
+    const baselines: Record<string, string> = {};
+
+    for (const depTab of requiredBaselineTabs) {
+      const baseline = allBaselines[depTab];
+      if (baseline?.doc_snapshot) {
+        try {
+          const doc = JSON.parse(baseline.doc_snapshot);
+          baselines[depTab] = typeof doc === 'string' ? doc : JSON.stringify(doc, null, 2);
+        } catch {
+          // JSON 파싱 실패 시 무시
+        }
+      }
+    }
+
+    if (Object.keys(baselines).length > 0) {
+      ctx.frozenBaselines = baselines;
+    }
+  }
+
   return ctx;
 }
 
@@ -261,6 +287,12 @@ export function formatContextForPrompt(ctx: ContextPackage): string {
   }
   if (ctx.prd) {
     parts.push(`<context:prd>\n${ctx.prd}\n</context:prd>`);
+  }
+  if (ctx.frozenBaselines && Object.keys(ctx.frozenBaselines).length > 0) {
+    const baselineEntries = Object.entries(ctx.frozenBaselines)
+      .map(([tab, content]) => `<context:frozen-baseline:${tab}>\n${content}\n</context:frozen-baseline:${tab}>`)
+      .join('\n\n');
+    parts.push(`<context:frozen-baselines>\n${baselineEntries}\n</context:frozen-baselines>`);
   }
   if (ctx.baseDocument) {
     parts.push(`<context:base-document>\n${ctx.baseDocument}\n</context:base-document>`);

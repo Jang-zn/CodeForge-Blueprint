@@ -20,6 +20,54 @@ export interface InitFormData {
   detail: string;
 }
 
+// ===== 인터뷰 블록 구조 (Phase 4) =====
+
+export interface InterviewQuestion {
+  id: string;
+  text: string;
+  placeholder?: string;
+  required: boolean;
+  type?: 'text' | 'multiline' | 'multiselect' | 'radio';
+  options?: Array<{ value: string; label: string }>;
+}
+
+export interface InterviewBlock {
+  blockIndex: number;
+  title: string;
+  description: string;
+  questions: InterviewQuestion[];
+  hint?: string;
+}
+
+export interface InterviewResponse {
+  blockIndex: number;
+  totalBlocks: number;
+  questions: InterviewQuestion[];
+  hint?: string;
+  nextUrl?: string;
+}
+
+/** 인터뷰 메타데이터: PRD 생성 시 프롬프트에 주입되는 구조화 정보 */
+export interface InterviewMeta {
+  primaryUser?: string;           // 앱을 매일 사용하는 사람 (1순위 사용자)
+  secondaryUser?: string;         // 2순위 사용자
+  primaryGoal?: string;           // 사용자가 얻으려고 하는 주요 목표
+  firstValueMoment?: string;      // 사용자가 첫 가치를 느끼는 순간
+  repeatAction?: string;          // 가장 자주 반복할 핵심 행동
+  offlineConnection?: string;     // 오프라인 행위와의 연결고리
+  mustHaveFeatures?: string[];    // MVP에 반드시 필요한 기능
+  niceToHaveFeatures?: string[];  // 미뤄도 되는 기능
+  riskFlags?: string[];           // 불명확하거나 위험한 항목
+  adminNeeded?: boolean;          // 관리자 기능 필요 여부
+  monetizationPoint?: string;     // 돈이 들어오거나 나가는 지점
+  platformPriority?: 'mobile' | 'desktop' | 'web' | 'multi';
+}
+
+export interface InitPrdOutput {
+  prd: string;                    // PRD 마크다운
+  meta: InterviewMeta;            // 구조화 메타데이터
+}
+
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   'web-fullstack': '웹 서비스 (풀스택)',
   'web-frontend': '웹 서비스 (FE 단독 — 서버 없음)',
@@ -224,6 +272,25 @@ ${techStackSection}
 [서비스 성공을 측정할 핵심 지표]`;
 }
 
+/**
+ * Phase 4 인터뷰 답변에서 구조화 메타데이터 추출
+ * interviewAnswers: Record<questionId, string | string[]> — 각 질문 ID별 답변
+ */
+export function extractInterviewMeta(interviewAnswers: Record<string, string | string[]>): InterviewMeta {
+  return {
+    primaryUser: String(interviewAnswers['q-end-user'] ?? '').substring(0, 150),
+    secondaryUser: undefined, // Block 2의 '2순위'에서 추출 가능
+    primaryGoal: String(interviewAnswers['q-repeat-action'] ?? '').substring(0, 150),
+    firstValueMoment: String(interviewAnswers['q-first-value'] ?? '').substring(0, 150),
+    repeatAction: String(interviewAnswers['q-repeat-action'] ?? '').substring(0, 150),
+    offlineConnection: String(interviewAnswers['q-offline-link'] ?? '').substring(0, 200),
+    riskFlags: [],
+    adminNeeded: String(interviewAnswers['q-admin-needed'] ?? '').includes('yes'),
+    monetizationPoint: String(interviewAnswers['q-monetization'] ?? '').substring(0, 150),
+    platformPriority: (interviewAnswers['q-platform-priority'] ?? 'multi') as any,
+  };
+}
+
 export function buildInitPrompt(data: InitFormData): string {
   const noBackend = data.beTech.includes('no-backend') || data.serviceType === 'web-frontend';
   const isClientOnly = noBackend || ['cli', 'script', 'sdk'].includes(data.serviceType);
@@ -378,4 +445,302 @@ ${scanContext}
 \`\`\`
 
 위 구조를 채워서 완성된 PRD + 온보딩 가이드 마크다운만 출력하세요. 추가 설명이나 메타 코멘트 없이 문서 내용만 출력합니다.`;
+}
+
+// ===== 인터뷰 블록 정의 (Phase 4 — 외주 PM 대응) =====
+
+/** 7개 질문 블록을 반환 */
+export function getInterviewBlocks(): InterviewBlock[] {
+  return [
+    {
+      blockIndex: 0,
+      title: 'Block 1. 프로젝트 개요',
+      description: '서비스의 기본 정보와 목표를 파악합니다.',
+      questions: [
+        {
+          id: 'q-project-name',
+          text: '프로젝트명은 무엇인가요?',
+          placeholder: '예: 나만의 독서 기록 앱, AI 이미지 생성기',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-one-line',
+          text: '한 줄로 설명한다면?',
+          placeholder: '예: 읽은 책을 간단히 기록하고 친구들과 나눌 수 있는 앱',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-why-build',
+          text: '누가 왜 이 서비스를 만들려고 하나요?',
+          placeholder: '예: 책을 읽고 쉽게 기록하고 싶은 개인 욕구 / 책 커뮤니티 구축 사업',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-reference',
+          text: '참고할 만한 레퍼런스 서비스가 있나요?',
+          placeholder: '예: Goodreads (기능), Instagram (UI/UX), Substack (사용자 경험)',
+          required: false,
+          type: 'multiline',
+        },
+      ],
+      hint: '이 블록에서 수집한 정보는 PRD 1장(서비스 개요)으로 전개됩니다.',
+    },
+
+    {
+      blockIndex: 1,
+      title: 'Block 2. 고객과 사용자',
+      description: '누가 이 서비스를 사용할지, 누가 돈을 낼지 정의합니다.',
+      questions: [
+        {
+          id: 'q-payer',
+          text: '실제 돈을 내는 사람은 누구인가요?',
+          placeholder: '예: 개인 사용자, B2B 기업, 광고주, 또는 없음(무료)',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-end-user',
+          text: '실제로 사용하는 사람은 누구인가요?',
+          placeholder: '예: 20~35세 직장인, 학생, 기업 운영팀',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-admin-needed',
+          text: '관리자나 운영자가 필요한가요?',
+          placeholder: '예: 아니요 / 네, 콘텐츠 심사용 / 네, 사용자 관리용',
+          required: true,
+          type: 'radio',
+          options: [
+            { value: 'no', label: '아니요 (필요 없음)' },
+            { value: 'yes-moderation', label: '네, 콘텐츠 심사/관리 필요' },
+            { value: 'yes-operations', label: '네, 사용자/결제/시스템 운영 필요' },
+            { value: 'unknown', label: '미정' },
+          ],
+        },
+        {
+          id: 'q-user-priority',
+          text: '1순위와 2순위 사용자는?',
+          placeholder: '예: 1순위=개인 책 애독가, 2순위=독서 커뮤니티 운영자',
+          required: true,
+          type: 'multiline',
+        },
+      ],
+      hint: '명확한 사용자 정의가 없으면 나중에 기능 범위가 뭉개집니다.',
+    },
+
+    {
+      blockIndex: 2,
+      title: 'Block 3. 핵심 시나리오 (가장 중요)',
+      description: '사용자가 첫 가치를 느끼고, 반복할 행동을 정의합니다. 이것이 UX 설계의 기준이 됩니다.',
+      questions: [
+        {
+          id: 'q-first-value',
+          text: '사용자가 처음 들어와서 얻는 첫 가치는?',
+          placeholder: '예: 첫 책을 기록한 직후 / 다른 사람의 서평을 본 직후 / 책 추천을 받은 직후',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-repeat-action',
+          text: '사용자가 가장 자주 반복할 핵심 행동은?',
+          placeholder: '예: 읽은 책 기록 추가 / 서평 작성 / 친구 책 평가하기 / 추천 책 둘러보기',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-before-after',
+          text: '서비스 사용 전후로 무엇이 달라지나요?',
+          placeholder: '예: 전) 읽은 책을 기억하지 못함 → 후) 읽은 책 기록 + 언제든 회상 가능',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-offline-link',
+          text: '오프라인 행위와 연결되나요?',
+          placeholder: '예: 서점 방문, 대출, 모임, SNS 공유 등 오프라인/온라인 연결 지점',
+          required: false,
+          type: 'multiline',
+        },
+      ],
+      hint: '⭐ 이 블록이 가장 중요합니다. 모호하면 UX가 무너집니다. 최대한 구체적으로 작성하세요.',
+    },
+
+    {
+      blockIndex: 3,
+      title: 'Block 4. 기능과 범위',
+      description: 'MVP 범위를 명확하게 합니다. 필수/선택/위험 기능을 구분합니다.',
+      questions: [
+        {
+          id: 'q-must-have',
+          text: '첫 출시(MVP)에서 꼭 필요한 기능은?',
+          placeholder: '예: 기록 작성, 기록 조회, 기본 검색 (SNS 공유는 v2에서)',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-nice-to-have',
+          text: '있으면 좋지만 미뤄도 되는 기능은?',
+          placeholder: '예: 광고제거(유료), 고급 분석, 커뮤니티 채팅',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-danger-zone',
+          text: '절대 복잡해지면 안 되는 영역은?',
+          placeholder: '예: 로그인 (간단하게), 결제 (일단 수동 관리)',
+          required: false,
+          type: 'multiline',
+        },
+        {
+          id: 'q-admin-features',
+          text: '관리자 기능이 필요한가요? 있다면?',
+          placeholder: '예: 아니요 / 네, 사용자 차단 기능 / 네, 결제 현황 조회',
+          required: false,
+          type: 'multiline',
+        },
+      ],
+      hint: '복잡도 관리가 성공의 핵심입니다.',
+    },
+
+    {
+      blockIndex: 4,
+      title: 'Block 5. 데이터와 상태',
+      description: '무엇을 저장하고, 어떻게 표현할지 정의합니다.',
+      questions: [
+        {
+          id: 'q-data-model',
+          text: '무엇을 저장하는가?',
+          placeholder: '예: 책 제목, 저자, 읽은 날짜, 별점, 서평 텍스트, 이미지',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-critical-data',
+          text: '어떤 데이터가 가장 중요한가?',
+          placeholder: '예: 읽은 책 목록(PK), 별점/서평은 선택사항',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-write-permission',
+          text: '누가 수정할 수 있는가?',
+          placeholder: '예: 자신의 기록만 수정 가능, 관리자는 모든 것 가능',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-empty-state',
+          text: '비어 있을 때 무엇을 보여줄까?',
+          placeholder: '예: "첫 책을 기록해보세요" 가이드, 예시 데이터, 튜토리얼',
+          required: true,
+          type: 'multiline',
+        },
+        {
+          id: 'q-error-handling',
+          text: '실패했을 때 어떻게 대응하나?',
+          placeholder: '예: 오프라인 임시 저장, 재시도, 동기화 충돌 해결',
+          required: false,
+          type: 'multiline',
+        },
+      ],
+      hint: '데이터 모델이 튼튼하면 개발이 빨라집니다.',
+    },
+
+    {
+      blockIndex: 5,
+      title: 'Block 6. 수익과 운영',
+      description: '비즈니스 모델과 운영 흐름을 정의합니다.',
+      questions: [
+        {
+          id: 'q-monetization',
+          text: '돈이 들어오거나 나가는 지점은?',
+          placeholder: '예: 없음(MVP) / 구독료 $4.99/월 / 결제 수수료 / 광고 수익',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-daily-ops',
+          text: '운영자가 매일 해야 하는 일은?',
+          placeholder: '예: 콘텐츠 심사, 고객 지원, 결제 처리',
+          required: false,
+          type: 'multiline',
+        },
+        {
+          id: 'q-manual-work',
+          text: '자동화할 수 없는 수동 작업은?',
+          placeholder: '예: 신고 접수 검토, 정책 위반 계정 정지, 환불 처리',
+          required: false,
+          type: 'multiline',
+        },
+        {
+          id: 'q-notifications',
+          text: '어떤 이벤트에 알림이 필요한가?',
+          placeholder: '예: 주문 확인, 새 메시지, 배송 상태, 결제 실패',
+          required: false,
+          type: 'multiline',
+        },
+      ],
+      hint: '운영 비용과 시간 투입을 과소평가하지 마세요.',
+    },
+
+    {
+      blockIndex: 6,
+      title: 'Block 7. 플랫폼과 제약',
+      description: '기술적 제약과 플랫폼 선택을 정의합니다.',
+      questions: [
+        {
+          id: 'q-platform-priority',
+          text: '모바일 우선? 데스크톱 우선?',
+          placeholder: '예: 모바일 우선 (앱), 데스크톱 우선 (웹), 둘 다 중요 (반응형 웹)',
+          required: true,
+          type: 'radio',
+          options: [
+            { value: 'mobile', label: '모바일 우선 (iOS/Android 앱)' },
+            { value: 'mobile-web', label: '모바일 웹 우선 (반응형)' },
+            { value: 'desktop', label: '데스크톱 우선 (웹 또는 프로그램)' },
+            { value: 'multi', label: '둘 다 중요 (모바일 + 데스크톱 동시)' },
+            { value: 'unknown', label: '미정' },
+          ],
+        },
+        {
+          id: 'q-auth-constraint',
+          text: '로그인/보안 제약은?',
+          placeholder: '예: 로그인 없음 (1인용), 간단 이메일만 (비용절감), 소셜로그인 필수',
+          required: true,
+          type: 'text',
+        },
+        {
+          id: 'q-sensitivity',
+          text: '결제/개인정보/규제 민감도는?',
+          placeholder: '예: 높음(결제수단 저장) / 중간(일반 개인정보) / 낮음(공개 데이터)',
+          required: true,
+          type: 'radio',
+          options: [
+            { value: 'high', label: '높음 (결제, 금융, 의료 정보 포함)' },
+            { value: 'medium', label: '중간 (개인정보, 이메일 저장)' },
+            { value: 'low', label: '낮음 (공개 데이터만)' },
+            { value: 'unknown', label: '미정' },
+          ],
+        },
+        {
+          id: 'q-external-service',
+          text: '외부 서비스 연동이 필요한가?',
+          placeholder: '예: 없음 / 결제(Stripe), 저장소(S3), 메일(SendGrid)',
+          required: false,
+          type: 'multiline',
+        },
+      ],
+      hint: '플랫폼 선택이 기술 스택을 결정합니다.',
+    },
+  ];
+}
+
+/** 특정 블록의 질문 목록 반환 */
+export function getInterviewBlock(blockIndex: number): InterviewBlock | null {
+  const blocks = getInterviewBlocks();
+  return blocks.find(b => b.blockIndex === blockIndex) ?? null;
 }

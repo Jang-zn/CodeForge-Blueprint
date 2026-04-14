@@ -105,13 +105,22 @@ describe('end-to-end flow', () => {
     const { jobId: applyJobId } = await applyRes.json();
     assert.equal((await waitForJob(getDb(), applyJobId))?.status, 'completed');
 
+    // features 탭은 stage gate로 인해 이전 baseline 없으면 400
     const featuresRes = await app.request('/analyze', {
       method: 'POST',
       headers,
       body: JSON.stringify({ tab: 'features' }),
     });
-    const { jobId: featuresJobId } = await featuresRes.json();
-    assert.equal((await waitForJob(getDb(), featuresJobId))?.status, 'completed');
+    assert.equal(featuresRes.status, 400);
+
+    // review 탭은 gate 없이 재분석 가능
+    const reviewRes2 = await app.request('/analyze', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ tab: 'review' }),
+    });
+    const { jobId: reviewJobId2 } = await reviewRes2.json();
+    assert.equal((await waitForJob(getDb(), reviewJobId2))?.status, 'completed');
 
     const generateRes = await app.request('/generate', {
       method: 'POST',
