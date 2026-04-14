@@ -68,11 +68,11 @@ describe('baselinesRoute', () => {
     assert.equal(res.status, 400);
   });
 
-  test('GET /freeze-readiness?tab=review — review는 항상 ready', async () => {
+  test('GET /freeze-readiness?tab=review — 문서 없으면 not ready', async () => {
     const res = await app.request('/baselines/freeze-readiness?tab=review', withSession(tw.sessionId));
     assert.equal(res.status, 200);
     const json = await res.json();
-    assert.equal(json.ready, true);
+    assert.equal(json.ready, false);
   });
 
   test('GET /freeze-readiness?tab=ux — review baseline 없으면 not ready', async () => {
@@ -91,6 +91,7 @@ describe('baselinesRoute', () => {
   });
 
   test('POST /freeze — review 탭 baseline 생성 성공', async () => {
+    addDocumentRecord(tw.db, { tab: 'review', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/review/index.md', source_version: null, source_job_id: null });
     const res = await app.request('/baselines/freeze', jsonPost(tw.sessionId, { tab: 'review' }));
     assert.equal(res.status, 201);
     const json = await res.json();
@@ -99,6 +100,7 @@ describe('baselinesRoute', () => {
   });
 
   test('POST /freeze — 두 번째 freeze는 버전 +1 (1.0.1)', async () => {
+    addDocumentRecord(tw.db, { tab: 'review', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/review/index.md', source_version: null, source_job_id: null });
     await app.request('/baselines/freeze', jsonPost(tw.sessionId, { tab: 'review' }));
     const res = await app.request('/baselines/freeze', jsonPost(tw.sessionId, { tab: 'review' }));
     assert.equal(res.status, 201);
@@ -115,6 +117,7 @@ describe('baselinesRoute', () => {
 
   test('POST /freeze — ux 탭: review baseline 있으면 성공', async () => {
     createBaseline(tw.db, 'review', '1.0.0', null);
+    addDocumentRecord(tw.db, { tab: 'ux', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/ux/index.md', source_version: null, source_job_id: null });
     const res = await app.request('/baselines/freeze', jsonPost(tw.sessionId, { tab: 'ux' }));
     assert.equal(res.status, 201);
     const json = await res.json();
@@ -126,8 +129,8 @@ describe('baselinesRoute', () => {
     addDocumentRecord(tw.db, {
       tab: 'review',
       version: '1.0.0',
-      kind: 'analysis',
-      file_path: '/test/doc.md',
+      kind: 'generated-doc',
+      file_path: '/tmp/review/index.md',
       source_version: null,
       source_job_id: null,
     });

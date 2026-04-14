@@ -53,18 +53,19 @@ validateRoute.post('/final-delivery', (c) => {
   const { db } = requireRequestContext(c);
   const issues: string[] = [];
 
-  // 모든 5개 탭 active baseline 존재 여부
+  // 필수 4개 탭 active baseline 존재 여부 확인 (features는 선택)
   const activeBaselines = getAllActiveBaselines(db);
-  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
-  const missingTabs = tabs.filter(tab => !activeBaselines[tab]);
+  const requiredTabs: Tab[] = ['review', 'ux', 'backend', 'frontend'];
+  const allDeliveryTabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+  const missingTabs = requiredTabs.filter(tab => !activeBaselines[tab]);
 
   if (missingTabs.length > 0) {
     issues.push(`활성 baseline이 없는 탭: ${missingTabs.join(', ')}`);
   }
 
   // screen의 flowIds가 실제 user_flows에 존재하는지 검증 (배치 조회)
-  const allScreens = tabs.flatMap(tab => getScreens(db, tab));
-  const allFlowIds = new Set(tabs.flatMap(tab => getUserFlows(db, tab).map((f: any) => f.flow_id)));
+  const allScreens = allDeliveryTabs.flatMap(tab => getScreens(db, tab));
+  const allFlowIds = new Set(allDeliveryTabs.flatMap(tab => getUserFlows(db, tab).map((f: any) => f.flow_id)));
 
   for (const screen of allScreens) {
     if (screen.flow_ids_json && Array.isArray(screen.flow_ids_json)) {

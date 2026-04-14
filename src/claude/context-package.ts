@@ -257,8 +257,11 @@ export function buildContextPackage(
       const baseline = allBaselines[depTab];
       if (baseline?.doc_snapshot) {
         try {
-          const doc = JSON.parse(baseline.doc_snapshot);
-          baselines[depTab] = typeof doc === 'string' ? doc : JSON.stringify(doc, null, 2);
+          const parsed = JSON.parse(baseline.doc_snapshot);
+          const content = parsed.content;
+          if (content && typeof content === 'string') {
+            baselines[depTab] = content;
+          }
         } catch {
           // JSON 파싱 실패 시 무시
         }

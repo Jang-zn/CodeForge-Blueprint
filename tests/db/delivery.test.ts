@@ -236,17 +236,29 @@ describe('Delivery & Structured Data', () => {
   });
 
   test('assembleFinalDelivery — 모든 탭에 데이터가 있을 때', () => {
-    // 각 탭별로 baseline 생성
+    // ux baseline: doc_snapshot에 flows + screens 포함
+    const uxSnapshot = JSON.stringify({
+      document: { id: 1, tab: 'ux' },
+      content: '# UX Doc',
+      structuredData: {
+        flows: [{ flow_id: 'f1', title: 'Flow', actor: null, steps_json: null }],
+        screens: [{ screen_id: 's1', flow_ids_json: ['f1'], title: 'Screen', description: null, complexity: null, states_json: null }],
+      },
+    });
+    // backend baseline: doc_snapshot에 scopeItems 포함
+    const backendSnapshot = JSON.stringify({
+      document: { id: 2, tab: 'backend' },
+      content: '# Backend Doc',
+      structuredData: {
+        scopeItems: [{ scope_item_id: 'i1', screen_id: null, title: 'Item', complexity: null, estimate_metadata: null }],
+      },
+    });
+
     createBaseline(db, 'review', '1.0.0', null);
-    createBaseline(db, 'ux', '1.0.0', null);
-    createBaseline(db, 'backend', '1.0.0', null);
+    createBaseline(db, 'ux', '1.0.0', uxSnapshot);
+    createBaseline(db, 'backend', '1.0.0', backendSnapshot);
     createBaseline(db, 'frontend', '1.0.0', null);
     createBaseline(db, 'features', '1.0.0', null);
-
-    // 각 탭에 구조화 데이터 저장
-    saveUserFlows(db, 'ux', [{ flow_id: 'f1', title: 'Flow', actor: null, steps_json: null }]);
-    saveScreens(db, 'ux', [{ screen_id: 's1', flow_ids_json: ['f1'], title: 'Screen', description: null, complexity: null, states_json: null }]);
-    saveScopeItems(db, 'backend', [{ scope_item_id: 'i1', screen_id: null, title: 'Item', complexity: null, estimate_metadata: null }]);
 
     const delivery = assembleFinalDelivery(db);
 
@@ -257,7 +269,7 @@ describe('Delivery & Structured Data', () => {
     assert.ok(delivery.baselines['frontend']);
     assert.ok(delivery.baselines['features']);
 
-    // 저장한 데이터가 포함되어야 함
+    // doc_snapshot에서 읽은 데이터가 포함되어야 함
     assert.equal(delivery.flows['ux'].length, 1);
     assert.equal(delivery.screens['ux'].length, 1);
     assert.equal(delivery.scopeItems['backend'].length, 1);

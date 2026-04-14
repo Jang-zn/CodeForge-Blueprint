@@ -119,7 +119,14 @@ describe('Stage Baselines', () => {
 
   // ─── checkFreezeReadiness ─────────────────────────────────────────
 
-  test('checkFreezeReadiness — review는 항상 ready', () => {
+  test('checkFreezeReadiness — review: 문서 없으면 not ready', () => {
+    const result = checkFreezeReadiness(db, 'review');
+    assert.equal(result.ready, false);
+    assert.ok(result.reasons.length > 0);
+  });
+
+  test('checkFreezeReadiness — review: 문서 있으면 ready', () => {
+    addDocumentRecord(db, { tab: 'review', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/review/index.md', source_version: null, source_job_id: null });
     const result = checkFreezeReadiness(db, 'review');
     assert.equal(result.ready, true);
     assert.equal(result.reasons.length, 0);
@@ -133,6 +140,7 @@ describe('Stage Baselines', () => {
 
   test('checkFreezeReadiness — ux: review baseline 있으면 ready', () => {
     createBaseline(db, 'review', '1.0.0', null);
+    addDocumentRecord(db, { tab: 'ux', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/ux/index.md', source_version: null, source_job_id: null });
     const result = checkFreezeReadiness(db, 'ux');
     assert.equal(result.ready, true);
   });
@@ -143,6 +151,7 @@ describe('Stage Baselines', () => {
     assert.equal(resultWithOnlyReview.ready, false);
 
     createBaseline(db, 'ux', '1.0.0', null);
+    addDocumentRecord(db, { tab: 'backend', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/backend/index.md', source_version: null, source_job_id: null });
     const resultWithBoth = checkFreezeReadiness(db, 'backend');
     assert.equal(resultWithBoth.ready, true);
   });
@@ -154,6 +163,7 @@ describe('Stage Baselines', () => {
     assert.equal(result.ready, false);
 
     createBaseline(db, 'backend', '1.0.0', null);
+    addDocumentRecord(db, { tab: 'frontend', version: '1.0.0', kind: 'generated-doc', file_path: '/tmp/frontend/index.md', source_version: null, source_job_id: null });
     const result2 = checkFreezeReadiness(db, 'frontend');
     assert.equal(result2.ready, true);
   });

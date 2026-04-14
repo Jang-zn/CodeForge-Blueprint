@@ -380,15 +380,15 @@ generateRoute.get('/download/*', (c) => {
 generateRoute.post('/final-delivery', async (c) => {
   const { db } = requireRequestContext(c);
 
-  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+  const REQUIRED_DELIVERY_TABS: Tab[] = ['review', 'ux', 'backend', 'frontend'];
 
-  // 모든 5개 탭 frozen baseline 확인
+  // 필수 4개 탭 frozen baseline 확인 (features는 선택)
   const activeBaselines = getAllActiveBaselines(db);
-  const missingTabs = tabs.filter(tab => !activeBaselines[tab]);
+  const missingTabs = REQUIRED_DELIVERY_TABS.filter(tab => !activeBaselines[tab]);
 
   if (missingTabs.length > 0) {
     return c.json(
-      { error: '모든 탭이 frozen되어야 합니다', missing: missingTabs },
+      { error: '필수 탭이 frozen되어야 합니다', missing: missingTabs },
       400
     );
   }
@@ -396,9 +396,10 @@ generateRoute.post('/final-delivery', async (c) => {
   // final delivery assembly (activeBaselines 재사용)
   const delivery = assembleFinalDelivery(db, activeBaselines);
 
-  // baseline refs 맵 생성
+  // baseline refs 맵 생성 (features 포함, 있는 것만)
+  const ALL_DELIVERY_TABS: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
   const baselineRefs = Object.fromEntries(
-    tabs.flatMap(tab => activeBaselines[tab] ? [[tab, activeBaselines[tab]!.id]] : [])
+    ALL_DELIVERY_TABS.flatMap(tab => activeBaselines[tab] ? [[tab, activeBaselines[tab]!.id]] : [])
   ) as Record<string, number>;
 
   // delivery run 생성
@@ -413,11 +414,12 @@ generateRoute.post('/final-delivery', async (c) => {
 /* ── GET /api/generate/final-delivery/preview — 패키지 프리뷰 (dry-run) ── */
 generateRoute.get('/final-delivery/preview', (c) => {
   const { db } = requireRequestContext(c);
-  const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
+  const REQUIRED_PREVIEW_TABS: Tab[] = ['review', 'ux', 'backend', 'frontend'];
+  const ALL_PREVIEW_TABS: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
   const activeBaselines = getAllActiveBaselines(db);
-  const missing = tabs.filter(t => !activeBaselines[t]);
+  const missing = REQUIRED_PREVIEW_TABS.filter(t => !activeBaselines[t]);
 
-  const baselineInfo = tabs.map(t => ({
+  const baselineInfo = ALL_PREVIEW_TABS.map(t => ({
     tab: t,
     ready: !!activeBaselines[t],
     version: activeBaselines[t]?.version ?? null,
@@ -432,9 +434,9 @@ generateRoute.get('/final-delivery/preview', (c) => {
   return c.json({
     ready: true,
     baselines: baselineInfo,
-    flows: Object.fromEntries(tabs.map(t => [t, (delivery.flows[t] ?? []).length])),
-    screens: Object.fromEntries(tabs.map(t => [t, (delivery.screens[t] ?? []).length])),
-    scopeItems: Object.fromEntries(tabs.map(t => [t, (delivery.scopeItems[t] ?? []).length])),
+    flows: Object.fromEntries(ALL_PREVIEW_TABS.map(t => [t, (delivery.flows[t] ?? []).length])),
+    screens: Object.fromEntries(ALL_PREVIEW_TABS.map(t => [t, (delivery.screens[t] ?? []).length])),
+    scopeItems: Object.fromEntries(ALL_PREVIEW_TABS.map(t => [t, (delivery.scopeItems[t] ?? []).length])),
   });
 });
 

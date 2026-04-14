@@ -1254,20 +1254,25 @@ export function supersedeBaseline(db: any, oldBaselineId: number, newBaselineId:
 
 /** freeze 준비 상태 확인 */
 export function checkFreezeReadiness(db: any, tab: Tab): { ready: boolean; reasons: string[] } {
-  // review는 항상 준비됨
-  if (tab === 'review') {
-    return { ready: true, reasons: [] };
+  const reasons: string[] = [];
+
+  // 1) 선행 baseline 체크 (review 제외)
+  if (tab !== 'review') {
+    const required = PIPELINE_REQUIRED_BASELINES[tab] || [];
+    const activeMap = getAllActiveBaselines(db);
+    const missing = required.filter(t => !activeMap[t]);
+    reasons.push(...missing.map(t => `${t} 탭의 활성 baseline이 필요합니다.`));
   }
 
-  const required = PIPELINE_REQUIRED_BASELINES[tab] || [];
-  const activeMap = getAllActiveBaselines(db);
-  const missing = required.filter(t => !activeMap[t]);
-  const reasons = missing.map(t => `${t} 탭의 활성 baseline이 필요합니다.`);
+  // 2) 해당 탭 generated-doc 문서 존재 확인
+  const doc = db.prepare(
+    `SELECT id FROM documents WHERE tab = ? AND kind = 'generated-doc' ORDER BY created_at DESC LIMIT 1`
+  ).get(tab);
+  if (!doc) {
+    reasons.push(`${tab} 탭의 생성된 문서가 없습니다. 먼저 문서를 생성하세요.`);
+  }
 
-  return {
-    ready: reasons.length === 0,
-    reasons,
-  };
+  return { ready: reasons.length === 0, reasons };
 }
 
 // ===== Structured Data =====
@@ -1430,7 +1435,7 @@ export function getScopeItems(db: any, tab: Tab): any[] {
   }));
 }
 
-/** Final delivery assembly — 모든 frozen baseline + 구조화 데이터 취합 */
+/** Final delivery assembly — frozen baseline의 doc_snapshot에서 구조화 데이터 추출 */
 export function assembleFinalDelivery(
   db: any,
   prefetchedBaselines?: Record<string, StageBaseline | null>,
@@ -1443,34 +1448,23 @@ export function assembleFinalDelivery(
   const tabs: Tab[] = ['review', 'ux', 'backend', 'frontend', 'features'];
   const baselines = prefetchedBaselines ?? getAllActiveBaselines(db);
 
-  // 구조화 데이터 배치 조회 후 Map으로 탭별 그루핑 (O(n) 단일 패스)
-  const allFlowRows: any[] = db.prepare(`SELECT * FROM user_flows ORDER BY created_at`).all();
-  const allScreenRows: any[] = db.prepare(`SELECT * FROM screens ORDER BY created_at`).all();
-  const allScopeRows: any[] = db.prepare(`SELECT * FROM scope_items ORDER BY created_at`).all();
+  const flows: Record<string, any[]> = {};
+  const screens: Record<string, any[]> = {};
+  const scopeItems: Record<string, any[]> = {};
 
-  const flowMap = new Map<string, any[]>();
-  const screenMap = new Map<string, any[]>();
-  const scopeMap = new Map<string, any[]>();
-
-  for (const r of allFlowRows) {
-    const parsed = { ...r, steps_json: r.steps_json ? JSON.parse(r.steps_json) : null };
-    if (!flowMap.has(r.tab)) flowMap.set(r.tab, []);
-    flowMap.get(r.tab)!.push(parsed);
+  for (const tab of tabs) {
+    const baseline = baselines[tab];
+    let sd: any = {};
+    if (baseline?.doc_snapshot) {
+      try {
+        const parsed = JSON.parse(baseline.doc_snapshot);
+        sd = parsed.structuredData ?? {};
+      } catch { /* snapshot 파싱 실패 시 빈 데이터 */ }
+    }
+    flows[tab] = sd.flows ?? [];
+    screens[tab] = sd.screens ?? [];
+    scopeItems[tab] = sd.scopeItems ?? [];
   }
-  for (const r of allScreenRows) {
-    const parsed = { ...r, flow_ids_json: r.flow_ids_json ? JSON.parse(r.flow_ids_json) : null, states_json: r.states_json ? JSON.parse(r.states_json) : null };
-    if (!screenMap.has(r.tab)) screenMap.set(r.tab, []);
-    screenMap.get(r.tab)!.push(parsed);
-  }
-  for (const r of allScopeRows) {
-    const parsed = { ...r, estimate_metadata: r.estimate_metadata ? JSON.parse(r.estimate_metadata) : null };
-    if (!scopeMap.has(r.tab)) scopeMap.set(r.tab, []);
-    scopeMap.get(r.tab)!.push(parsed);
-  }
-
-  const flows = Object.fromEntries(tabs.map(t => [t, flowMap.get(t) ?? []]));
-  const screens = Object.fromEntries(tabs.map(t => [t, screenMap.get(t) ?? []]));
-  const scopeItems = Object.fromEntries(tabs.map(t => [t, scopeMap.get(t) ?? []]));
 
   return { baselines, flows, screens, scopeItems };
 }

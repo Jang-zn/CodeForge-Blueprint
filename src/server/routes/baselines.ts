@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import fs from 'fs';
+import path from 'path';
 import {
   listBaselines,
   getAllBaselines,
@@ -7,6 +9,9 @@ import {
   createBaseline,
   supersedeBaseline,
   checkFreezeReadiness,
+  getUserFlows,
+  getScreens,
+  getScopeItems,
   type Tab,
 } from '../../db/repository.js';
 import { requireRequestContext } from '../context.js';
@@ -88,13 +93,39 @@ baselinesRoute.post('/freeze', async (c) => {
     }
   }
 
-  // 문서 스냅샷 가져오기
+  // 문서 스냅샷 가져오기 — 실제 파일 내용 + 구조화 데이터 포함
   let docSnapshot: string | null = null;
   const latestDoc = db.prepare(
     `SELECT * FROM documents WHERE tab = ? ORDER BY created_at DESC LIMIT 1`
   ).get(tab);
   if (latestDoc) {
-    docSnapshot = JSON.stringify(latestDoc);
+    let content: string | null = null;
+    try {
+      if (latestDoc.file_path) {
+        if (latestDoc.file_path.endsWith('index.md')) {
+          const folderPath = path.dirname(latestDoc.file_path);
+          if (fs.statSync(folderPath).isDirectory()) {
+            const mdFiles = fs.readdirSync(folderPath).filter((f: string) => f.endsWith('.md')).sort();
+            content = mdFiles.map((f: string) => fs.readFileSync(path.join(folderPath, f), 'utf-8')).join('\n\n---\n\n');
+          }
+        }
+        if (!content) {
+          content = fs.readFileSync(latestDoc.file_path, 'utf-8');
+        }
+      }
+    } catch { /* 파일 읽기 실패 시 null */ }
+
+    const structuredData: any = {};
+    try {
+      const flows = getUserFlows(db, tab);
+      const screens = getScreens(db, tab);
+      const scopeItems = getScopeItems(db, tab);
+      if (flows.length > 0) structuredData.flows = flows;
+      if (screens.length > 0) structuredData.screens = screens;
+      if (scopeItems.length > 0) structuredData.scopeItems = scopeItems;
+    } catch { /* 구조화 데이터 없으면 무시 */ }
+
+    docSnapshot = JSON.stringify({ document: latestDoc, content, structuredData });
   }
 
   // 새 baseline 생성 + 이전 baseline supersede를 단일 트랜잭션으로 처리
