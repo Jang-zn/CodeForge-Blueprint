@@ -1253,9 +1253,22 @@ export function supersedeBaseline(db: any, oldBaselineId: number, newBaselineId:
   ).run(newBaselineId, oldBaselineId);
 }
 
-/** freeze 대상 문서 선택 — 항상 최신 generated-doc, cycle 연결 정보는 LEFT JOIN으로 첨부 */
-export function getFreezeCandidateDoc(db: any, tab: Tab): any | null {
-  // 최신 generated-doc을 기준으로 선택하되, 해당 문서가 cycle과 연결돼 있으면 메타 첨부
+/**
+ * freeze 대상 문서 선택
+ * 1차: currentCycleId가 있으면 해당 cycle의 result_doc_id 문서
+ * 2차 fallback: 탭 최신 generated-doc (cycle 메타 LEFT JOIN 첨부)
+ */
+export function getFreezeCandidateDoc(db: any, tab: Tab, currentCycleId?: number | null): any | null {
+  if (currentCycleId) {
+    const cycleDoc = db.prepare(`
+      SELECT d.*, rc.id AS _cycle_id, rc.cycle_number AS _cycle_number
+      FROM documents d
+      INNER JOIN review_cycles rc ON d.id = rc.result_doc_id
+      WHERE rc.id = ? AND d.kind = 'generated-doc'
+    `).get(currentCycleId);
+    if (cycleDoc) return cycleDoc;
+  }
+
   return db.prepare(`
     SELECT d.*, rc.id AS _cycle_id, rc.cycle_number AS _cycle_number
     FROM documents d
@@ -1321,7 +1334,14 @@ export function checkFreezeReadiness(
     `${tab} 탭의 생성된 문서가 없습니다. 먼저 문서를 생성하세요.`,
   );
 
-  // 3) P0 이슈 없음 체크
+  // 3) pending draft 없음 체크 — 미반영 결정이 있는 상태로 freeze하면 working state가 baseline으로 승격됨
+  addCheck(
+    'pending draft',
+    !hasPendingDrafts(db, tab),
+    `미적용 draft가 있습니다. apply 후 freeze하세요.`,
+  );
+
+  // 4) P0 이슈 없음 체크
   const p0Count = (db.prepare(
     `SELECT COUNT(*) as cnt FROM issues WHERE tab = ? AND status = 'pending' AND priority = 'P0'`
   ).get(tab) as { cnt: number } | undefined)?.cnt ?? 0;

@@ -10,6 +10,7 @@ import {
   supersedeBaseline,
   checkFreezeReadiness,
   getFreezeCandidateDoc,
+  getCurrentCycle,
   getUserFlows,
   getScreens,
   getScopeItems,
@@ -94,9 +95,10 @@ baselinesRoute.post('/freeze', async (c) => {
     }
   }
 
-  // 문서 스냅샷 가져오기 — cycle 연결 문서 우선, 실제 파일 내용 + 구조화 데이터 포함
+  // 문서 스냅샷 가져오기 — current cycle 문서 우선, 실제 파일 내용 + 구조화 데이터 포함
   let docSnapshot: string | null = null;
-  const latestDoc = getFreezeCandidateDoc(db, tab);
+  const currentCycle = getCurrentCycle(db, tab);
+  const latestDoc = getFreezeCandidateDoc(db, tab, currentCycle?.id);
   if (latestDoc) {
     let content: string | null = null;
     try {
