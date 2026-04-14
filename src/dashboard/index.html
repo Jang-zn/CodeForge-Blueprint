@@ -104,7 +104,11 @@
     <p class="init-import-desc">이 폴더에 이미 코드가 있나요? <span class="init-import-hint">코드를 분석해서 PRD 초안을 만들어 드립니다 (AI 토큰 사용)</span></p>
     <button id="btn-scan-codebase" class="init-btn-secondary">코드베이스에서 PRD 생성...</button>
   </div>
-  <div class="init-import-divider"><span>또는 새로 작성</span></div>
+  <div class="init-import-section">
+    <p class="init-import-desc">처음이라 막막하신가요? <span class="init-import-hint">7가지 질문으로 기획 내용을 완성해드립니다.</span></p>
+    <button class="init-btn-secondary" onclick="startInterviewFlow()">💬 인터뷰 방식으로 시작...</button>
+  </div>
+  <div class="init-import-divider"><span>또는 직접 작성</span></div>
 
   <!-- Step 1: 기본 정보 -->
   <div class="init-step">
@@ -346,6 +350,9 @@
   <div id="scan-job-status" class="scan-job-status hidden"></div>
 </div>
 
+<!-- 인터뷰 화면 (hidden) -->
+<div id="interview-screen" class="interview-screen hidden"></div>
+
 <!-- PRD 미리보기 (hidden) -->
 <div id="prd-preview" class="prd-preview hidden">
   <h2>PRD 초안이 생성되었습니다</h2>
@@ -406,6 +413,8 @@
 <!-- ===== Tab: UX 설계 ===== -->
 <div class="tab-panel" id="panel-ux" role="tabpanel">
   <h1>UX 설계</h1>
+  <div class="meta" id="ux-meta"></div>
+  <!-- Issues will be rendered by JS -->
 </div><!-- panel-ux -->
 
 <!-- ===== Tab: BE 설계 ===== -->

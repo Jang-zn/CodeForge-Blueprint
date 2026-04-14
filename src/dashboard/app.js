@@ -453,6 +453,7 @@ function scheduleRecRefresh() {
 function switchTab(tabId) {
   // init/preview 화면이 보이면 탭 컨텐츠로 복귀
   document.getElementById('init-screen')?.classList.add('hidden');
+  document.getElementById('interview-screen')?.classList.add('hidden');
   document.getElementById('prd-preview')?.classList.add('hidden');
   document.getElementById('codebase-scan-preview')?.classList.add('hidden');
   document.querySelector('.tab-content')?.classList.remove('hidden');
@@ -2253,7 +2254,18 @@ function renderDocsGrid(panel, types, docs) {
         <h1>문서 관리</h1>
       </div>
       <div class="docs-grid">${cards.join('')}</div>
+      <div class="delivery-section">
+        <div class="delivery-section-header">
+          <div>
+            <div class="delivery-section-title">최종 납품 패키지</div>
+            <div class="delivery-section-desc">모든 탭의 baseline이 확정되면 구조화 데이터 패키지를 생성할 수 있습니다.</div>
+          </div>
+          <button class="delivery-gen-btn" onclick="generateFinalDelivery(this)">패키지 생성</button>
+        </div>
+        <div class="delivery-runs-list" id="delivery-runs-list"></div>
+      </div>
     </div>`;
+  loadDeliveryRuns();
 }
 
 async function openDocEditor(docTypeSlug) {
@@ -2549,6 +2561,234 @@ async function submitCustomPerspective() {
   } catch (e) {
     showToast('추가 실패: ' + e.message, 'error');
   } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ========== Final Delivery ==========
+
+async function loadDeliveryRuns() {
+  const list = document.getElementById('delivery-runs-list');
+  if (!list) return;
+  try {
+    const runs = await API.get('/generate/final-delivery');
+    if (!runs.length) {
+      list.innerHTML = '<div class="delivery-empty">생성된 패키지가 없습니다.</div>';
+      return;
+    }
+    list.innerHTML = runs.map(run => {
+      const dt = run.created_at ? run.created_at.replace('T', ' ').slice(0, 16) : '';
+      return `<div class="delivery-run-item">
+        <span class="delivery-run-id">#${run.id}</span>
+        <span class="delivery-run-time">${escapeHtml(dt)}</span>
+        <span class="delivery-run-ver">${escapeHtml(run.version.slice(0, 10))}</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="delivery-empty">로드 실패: ${escapeHtml(String(e))}</div>`;
+  }
+}
+
+async function generateFinalDelivery(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const run = await API.post('/generate/final-delivery', {});
+    showToast(`패키지 생성 완료 (ID: ${run.id})`);
+    loadDeliveryRuns();
+  } catch (e) {
+    showToast('생성 실패: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ========== Interview Flow ==========
+
+let _interviewAnswers = {};
+const INTERVIEW_TOTAL_BLOCKS = 7;
+
+function startInterviewFlow() {
+  _interviewAnswers = {};
+  document.getElementById('init-screen')?.classList.add('hidden');
+  const screen = document.getElementById('interview-screen');
+  if (screen) screen.classList.remove('hidden');
+  loadInterviewBlock(0);
+}
+
+function cancelInterviewFlow() {
+  _interviewAnswers = {};
+  document.getElementById('interview-screen')?.classList.add('hidden');
+  document.getElementById('init-screen')?.classList.remove('hidden');
+}
+
+async function loadInterviewBlock(blockIndex) {
+  const screen = document.getElementById('interview-screen');
+  if (!screen) return;
+  screen.innerHTML = '<div class="interview-loading">불러오는 중...</div>';
+  try {
+    const block = await API.get(`/init/interview/${blockIndex}`);
+    renderInterviewBlock(screen, block);
+  } catch (e) {
+    screen.innerHTML = `<div class="interview-error">오류: ${escapeHtml(String(e))}<br><button class="interview-btn-back" onclick="cancelInterviewFlow()">돌아가기</button></div>`;
+  }
+}
+
+function renderInterviewBlock(screen, block) {
+  const pct = Math.round((block.blockIndex / INTERVIEW_TOTAL_BLOCKS) * 100);
+  const isLast = block.blockIndex === INTERVIEW_TOTAL_BLOCKS - 1;
+
+  const questionsHtml = block.questions.map(q => {
+    const saved = _interviewAnswers[q.id];
+    const req = q.required ? '<span class="interview-required">*</span>' : '';
+    let input;
+    if (q.type === 'radio' && q.options) {
+      input = `<div class="interview-radio-group">${q.options.map(o =>
+        `<label class="interview-radio-label"><input type="radio" name="iq-${escapeHtml(q.id)}" value="${escapeHtml(o.value)}" ${saved === o.value ? 'checked' : ''}> ${escapeHtml(o.label)}</label>`
+      ).join('')}</div>`;
+    } else if (q.type === 'multiline') {
+      input = `<textarea class="interview-textarea" id="iq-${escapeHtml(q.id)}" placeholder="${escapeHtml(q.placeholder || '')}" rows="3">${escapeHtml(saved || '')}</textarea>`;
+    } else {
+      input = `<input type="text" class="interview-input" id="iq-${escapeHtml(q.id)}" placeholder="${escapeHtml(q.placeholder || '')}" value="${escapeHtml(saved || '')}">`;
+    }
+    return `<div class="interview-question">
+      <label class="interview-question-text">${escapeHtml(q.text)} ${req}</label>
+      ${input}
+    </div>`;
+  }).join('');
+
+  screen.innerHTML = `
+    <div class="interview-panel">
+      <div class="interview-progress-wrap">
+        <div class="interview-progress-bar" style="width:${pct}%"></div>
+      </div>
+      <div class="interview-step-label">Block ${block.blockIndex + 1} / ${block.totalBlocks}</div>
+      <h2 class="interview-block-title">${escapeHtml(block.title)}</h2>
+      <p class="interview-block-desc">${escapeHtml(block.description)}</p>
+      ${block.hint ? `<div class="interview-hint">${escapeHtml(block.hint)}</div>` : ''}
+      <div class="interview-questions">${questionsHtml}</div>
+      <div class="interview-actions">
+        ${block.blockIndex > 0
+          ? `<button class="interview-btn-back" onclick="goPrevInterviewBlock(${block.blockIndex})">← 이전</button>`
+          : `<button class="interview-btn-back" onclick="cancelInterviewFlow()">취소</button>`}
+        <button class="interview-btn-next" onclick="submitInterviewBlock(${block.blockIndex})">${isLast ? '완료' : '다음 →'}</button>
+      </div>
+    </div>`;
+}
+
+function collectBlockAnswers() {
+  const answers = {};
+  document.querySelectorAll('#interview-screen [id^="iq-"]').forEach(el => {
+    answers[el.id.slice(3)] = el.value.trim();
+  });
+  document.querySelectorAll('#interview-screen input[type="radio"]:checked').forEach(el => {
+    answers[el.name.slice(3)] = el.value;
+  });
+  return answers;
+}
+
+function goPrevInterviewBlock(blockIndex) {
+  Object.assign(_interviewAnswers, collectBlockAnswers());
+  loadInterviewBlock(blockIndex - 1);
+}
+
+async function submitInterviewBlock(blockIndex) {
+  const answers = collectBlockAnswers();
+  Object.assign(_interviewAnswers, answers);
+
+  try {
+    await API.post(`/init/interview/${blockIndex}`, { answers });
+    if (blockIndex === INTERVIEW_TOTAL_BLOCKS - 1) {
+      showInterviewSummary();
+    } else {
+      loadInterviewBlock(blockIndex + 1);
+    }
+  } catch (e) {
+    showToast('오류: ' + e.message, 'error');
+  }
+}
+
+function showInterviewSummary() {
+  const screen = document.getElementById('interview-screen');
+  if (!screen) return;
+  const name = _interviewAnswers['q-project-name'] || '(미입력)';
+  const oneLine = _interviewAnswers['q-one-line'] || '';
+  screen.innerHTML = `
+    <div class="interview-panel">
+      <div class="interview-summary-icon">✅</div>
+      <h2 class="interview-block-title">인터뷰 완료</h2>
+      <p class="interview-block-desc">모든 블록 답변이 완료되었습니다. PRD를 생성할 준비가 되었습니다.</p>
+      <div class="interview-summary-box">
+        <div class="interview-summary-row"><strong>프로젝트명:</strong> ${escapeHtml(name)}</div>
+        ${oneLine ? `<div class="interview-summary-row"><strong>한 줄 설명:</strong> ${escapeHtml(oneLine)}</div>` : ''}
+      </div>
+      <div class="interview-actions">
+        <button class="interview-btn-back" onclick="loadInterviewBlock(${INTERVIEW_TOTAL_BLOCKS - 1})">← 수정</button>
+        <button class="interview-btn-next" onclick="generatePrdFromInterview(this)">PRD 생성하기</button>
+      </div>
+    </div>`;
+}
+
+function buildInitDataFromInterview() {
+  const a = _interviewAnswers;
+  const platform = a['q-platform-priority'] || 'multi';
+  const serviceType = platform === 'mobile' ? 'mobile' : 'web-fullstack';
+  const targetUser = [a['q-payer'], a['q-end-user']].filter(Boolean).join(' / ');
+
+  const detailParts = [
+    a['q-why-build']        && `**왜 만드나**: ${a['q-why-build']}`,
+    a['q-first-value']      && `**첫 가치**: ${a['q-first-value']}`,
+    a['q-repeat-action']    && `**핵심 반복 행동**: ${a['q-repeat-action']}`,
+    a['q-before-after']     && `**전후 변화**: ${a['q-before-after']}`,
+    a['q-must-have']        && `**MVP 필수 기능**: ${a['q-must-have']}`,
+    a['q-nice-to-have']     && `**선택 기능**: ${a['q-nice-to-have']}`,
+    a['q-data-model']       && `**저장 데이터**: ${a['q-data-model']}`,
+    a['q-monetization']     && `**수익 모델**: ${a['q-monetization']}`,
+    a['q-auth-constraint']  && `**인증 제약**: ${a['q-auth-constraint']}`,
+    a['q-external-service'] && `**외부 서비스**: ${a['q-external-service']}`,
+    a['q-reference']        && `**레퍼런스**: ${a['q-reference']}`,
+  ].filter(Boolean).join('\n');
+
+  const usageEnvMap = { mobile: ['mobile-app'], 'mobile-web': ['mobile-web'], desktop: ['desktop-web'], multi: ['desktop-web', 'mobile-web'] };
+  const targetUserLine = targetUser ? `**사용자**: ${targetUser}` : '';
+
+  return {
+    projectName: a['q-project-name'] || '새 프로젝트',
+    tagline: a['q-one-line'] || '',
+    serviceType,
+    targets: [],
+    revenues: [],
+    features: [],
+    beTech: [],
+    feTech: [],
+    storageTech: [],
+    dataStorage: 'unknown',
+    needAccount: 'unknown',
+    multiUser: 'unknown',
+    usageEnvironment: usageEnvMap[platform] || ['unknown'],
+    needNotification: 'unknown',
+    hasPayment: 'unknown',
+    detail: [a['q-one-line'], targetUserLine, detailParts].filter(Boolean).join('\n\n'),
+  };
+}
+
+async function generatePrdFromInterview(btn) {
+  if (btn) btn.disabled = true;
+  const initData = buildInitDataFromInterview();
+  try {
+    const { jobId } = await API.post('/init', initData);
+    document.getElementById('interview-screen')?.classList.add('hidden');
+    showJobStream('PRD 생성 중...', null);
+    pollJob(jobId, async (err) => {
+      hideJobStream();
+      if (err) { showToast('PRD 생성 실패: ' + err.message, 'error'); document.getElementById('interview-screen')?.classList.remove('hidden'); if (btn) btn.disabled = false; return; }
+      const workspace = await API.get('/workspace');
+      renderApp(workspace);
+      switchTab('review');
+      showToast('PRD가 생성되었습니다!');
+    });
+  } catch (e) {
+    showToast('PRD 생성 실패: ' + e.message, 'error');
+    document.getElementById('interview-screen')?.classList.remove('hidden');
     if (btn) btn.disabled = false;
   }
 }
